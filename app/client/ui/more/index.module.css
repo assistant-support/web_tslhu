@@ -1,0 +1,161 @@
+/* SidePanel.module.css */
+
+/* Sections */
+.info,
+.labelsBox,
+.form {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Labels */
+.labelsWrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* Form */
+.form {
+    padding-top: 0;
+}
+
+.formGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.formGroup textarea {
+    resize: vertical;
+    min-height: 48px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: inherit;
+    transition: border 0.25s;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+}
+
+.formGroup textarea:focus-visible {
+    border-color: var(--main_d);
+    outline: none;
+}
+
+/* Buttons */
+.saveBtn {
+    align-self: flex-start;
+    padding: 10px 26px;
+    border: none;
+    border-radius: 6px;
+    background: var(--main_d);
+    color: #fff;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.25s;
+}
+
+.saveBtn:hover,
+.saveBtn:focus-visible {
+    opacity: 0.9;
+    outline: none;
+}
+
+.secondaryBtn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+}
+
+.secondaryBtn:hover,
+.secondaryBtn:focus-visible {
+    background: var(--hover);
+    outline: none;
+}
+
+/* Care history list */
+.moreInfo h4 {
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.historyList {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.historyItem {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.historyHeader {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.historyDate {
+    padding: 4px 8px;
+    background-color: #e4ddff;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.historyLabels {
+    padding: 4px 8px;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.historyMessage {
+    margin: 4px 0;
+    color: var(--text-primary);
+}
+
+.historyStatus {
+    margin: 4px 0;
+    color: var(--text-primary);
+}
+
+/* Empty state */
+.emptyHistory {
+    width: 100%;
+    height: 100%;
+    padding: 24px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+}
+.saving{
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background: rgba(0, 0, 0, 0.5);
+}
+/* Responsive tweaks */
+@media (max-width: 480px) {
+    .labelsWrap {
+        gap: 4px;
+    }
+}

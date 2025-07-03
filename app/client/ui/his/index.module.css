@@ -1,0 +1,158 @@
+/* HistoryPopup.module.css */
+
+.historyList {
+    display: flex;
+    flex-direction: column;
+}
+
+.historyItem {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.2s;
+    cursor: pointer;
+}
+
+.historyItem:hover {
+    background: var(--hover);
+}
+
+.historyHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.dateBadge {
+    background-color: #e4ddff;
+    color: var(--main_d);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.labelsBadge {
+    background-color: #f0f0f0;
+    color: #333;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.messageBlock {
+    gap: 4px;
+    padding: 8px 0;
+    border-top: 1px solid var(--border-color);
+    margin: 8px 0;
+}
+
+.detailContainer {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+}
+
+.detailContainer.open {
+    max-height: 500px;
+    opacity: 1;
+}
+
+.statusRow {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.statusBadge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.875rem;
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.success .dot {
+    background: var(--green);
+}
+
+.error .dot {
+    background: var(--red);
+}
+
+.messageSnippet {
+    font-size: 0.875rem;
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.toggleButton {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.toggleButton:hover {
+    background: var(--hover);
+}
+
+.searchInput {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    font-size: 0.875rem;
+    box-sizing: border-box;
+}
+
+.recipientList {
+    max-height: 200px;
+    overflow-y: auto;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.recipientItem {
+    padding: 12px;
+    border-bottom: thin solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.recipientItem:first-child {
+    border-top: thin solid var(--border-color);
+}
+
+.noResults {
+    font-style: italic;
+    text-align: center;
+    color: #888;
+    padding: 16px;
+}
+
+.detail_input {
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    font-size: 14px;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.detail_list {}
