@@ -23,6 +23,7 @@ import {
 } from '@/data/client';
 import AddLabelButton from './client/ui/addlabel';
 import Loading from '@/components/(ui)/(loading)/loading';
+import Label from './client/ui/label';
 
 const PAGE_SIZE = 10;
 const ACCOUNTS = [{ id: 1, name: 'Ai Robotic' }];
@@ -171,7 +172,6 @@ const Row = memo(function Row({
 });
 
 export default function Client() {
-
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -306,9 +306,6 @@ export default function Client() {
     await Re_Label();
     window.location.reload();
   }, []);
-  const reload = () => {
-    router.refresh();
-  };
 
   const selectedCustomers = useMemo(
     () => data.filter(r => selectedIds.has(r.phone)),
@@ -346,7 +343,6 @@ export default function Client() {
     const res = await Data_Client();
     setData(res.data || []);
     router.refresh()
-
   };
 
   const headerCheckboxRef = useRef(null);
@@ -392,26 +388,32 @@ export default function Client() {
         </div>
 
         <div className={styles.filterChips}>
-          <span className="text_6">Nhãn phổ biến:</span>
-          {inlineLabels.map(lbl => {
-            const active = filters.label.includes(lbl);
-            return (
-              <button
-                key={lbl}
-                className={`${styles.chip}${active ? ` ${styles.chipActive}` : ''}`}
-                onClick={() => toggleLabel(lbl)}
-              >
-                {lbl}
-                {active && <span className={styles.chipRemove}>×</span>}
+          <div style={{ flex: 1, display: 'flex', gap: 8 }}>
+            <span className="text_6">Nhãn phổ biến:</span>
+            {inlineLabels.map(lbl => {
+              const active = filters.label.includes(lbl);
+              return (
+                <button
+                  key={lbl}
+                  className={`${styles.chip}${active ? ` ${styles.chipActive}` : ''}`}
+                  onClick={() => toggleLabel(lbl)}
+                >
+                  {lbl}
+                  {active && <span className={styles.chipRemove}>×</span>}
+                </button>
+              );
+            })}
+            {uniqueLabels.length > 6 && (
+              <button className={styles.chip} onClick={() => setShowLabelPopup(true)}>
+                …
               </button>
-            );
-          })}
-          {uniqueLabels.length > 6 && (
-            <button className={styles.chip} onClick={() => setShowLabelPopup(true)}>
-              …
-            </button>
-          )}
-          <AddLabelButton onCreated={loadLabels} />
+            )}
+            <AddLabelButton onCreated={loadLabels} />
+          </div>
+          <Label data={labelsDB} reload={() => {
+            router.refresh()
+            loadData()
+          }} />
         </div>
 
         <div className={styles.filterControls}>
