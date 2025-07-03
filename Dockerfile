@@ -37,7 +37,7 @@ ENV GOOGLE_PRIVATE_KEY='-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQE
 ENV GOOGLE_PROJECT_ID="systemair-441909"
 ENV token='sys1'
 ENV GOOGLE_CLIENT_EMAIL='air-900@systemair-441909.iam.gserviceaccount.com'
-ENV URL="http://localhost:4000/"
+ENV URL="http://localhost:4001/"
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -55,6 +55,6 @@ EXPOSE 4000
 
 # Đặt HOSTNAME và PORT
 # ENV HOSTNAME="0.0.0.0"
-ENV PORT=4000
+ENV PORT=4001
 ENV HOSTNAME="0.0.0.0"
 CMD ["node", "server.js"]
