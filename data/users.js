@@ -1,17 +1,23 @@
 'use server';
-
 import fetchApi from '@/utils/fetchApi';
 import { revalidateTag } from 'next/cache';
 
-
-export async function Data_user() {
+export async function Data_account() {
     try {
-        const res = await fetchApi(`/user`, {
+        const res = await fetchApi(`/acc`, {
             method: 'GET',
             cache: "force-cache",
-            next: { tags: [`data_user`] }
+            next: { tags: [`data_ac`] }
         });
+        return res.data || [];
+    } catch (err) {
+        return { data: [] };
+    }
+}
 
+export async function Get_user() {
+    try {
+        const res = await fetchApi(`/user`, { method: 'POST', next: { tags: ["user"] }, cache: "force-cache", body: { source: 1 } });
         return res.data || [];
     } catch (err) {
         return { data: [] };
@@ -31,3 +37,7 @@ export async function Re_user() {
     revalidateTag(`data_user`);
 }
 
+
+export async function Re_acc() {
+    revalidateTag(`data_ac`);
+}

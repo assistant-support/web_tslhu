@@ -1,0 +1,268 @@
+.popup_t {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.popup_t_first:hover {
+    background: var(--hover);
+}
+
+.limit_container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background-color: #f8f9fa;
+}
+
+.limit_row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Container cho bộ ba: nút trừ, input, nút cộng */
+.stepper_container {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.limit_input {
+    width: 60px;
+    height: 36px;
+    border: none;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--main_b);
+    background-color: white;
+    -moz-appearance: textfield;
+}
+
+.limit_input::-webkit-outer-spin-button,
+.limit_input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.limit_input:focus {
+    outline: none;
+}
+
+/* Nút tăng/giảm */
+.stepper_btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background-color: white;
+    color: var(--main_b);
+    font-size: 20px;
+    font-weight: 400;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.stepper_btn:first-child {
+    border-right: 1px solid var(--border-color);
+}
+
+.stepper_btn:last-child {
+    border-left: 1px solid var(--border-color);
+}
+
+.stepper_btn:hover {
+    background-color: #f1f3f5;
+}
+
+.stepper_btn:disabled {
+    color: #ced4da;
+    cursor: not-allowed;
+    background-color: #f8f9fa;
+}
+
+/* Thêm vào file index.module.css */
+
+/* Làm cho các mục trong popup 1 có thể bấm vào */
+.clickable {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.clickable:hover {
+    background-color: #f8f9fa;
+}
+
+
+/* Container cho popup danh sách tài khoản */
+.account_list_container {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.add_account_btn {
+    width: 100%;
+    padding: 10px;
+    background-color: var(--main_a);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.add_account_btn:hover {
+    background-color: #0056b3;
+}
+
+/* Danh sách các tài khoản */
+.account_list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.account_item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+}
+
+.account_info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.account_name {
+    font-weight: 600;
+    color: #343a40;
+}
+
+.account_status {
+    font-size: 12px;
+    color: #868e96;
+}
+
+.account_status.active {
+    color: #28a745;
+}
+
+.edit_btn {
+    padding: 6px 12px;
+    background-color: white;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.edit_btn:hover {
+    background-color: #e9ecef;
+}
+
+/* CSS cho Form thêm tài khoản */
+
+.add_account_form_container {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form_description {
+    font-size: 14px;
+    color: #495057;
+    text-align: center;
+    line-height: 1.5;
+}
+
+.token_textarea {
+    width: 100%;
+    min-height: 200px;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 13px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    resize: vertical;
+}
+
+.token_textarea:focus {
+    outline: none;
+    border-color: var(--main_a);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.form_error {
+    color: #dc3545;
+    font-size: 14px;
+    text-align: center;
+    font-weight: 500;
+}
+
+.form_actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.account_item {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background-color: #f8f9fa;
+    transition: all .3s linear;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.account_item:hover {
+    background-color: var(--hover);
+}
+
+.account_avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    /* Bo tròn ảnh */
+    margin-right: 12px;
+    object-fit: cover;
+    /* Đảm bảo ảnh không bị méo */
+}
+
+.account_info {
+    flex-grow: 1;
+    /* Cho phép phần info chiếm hết không gian còn lại */
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.account_name {
+    font-weight: 600;
+    color: #343a40;
+}
+
+.account_phone {
+    font-size: 13px;
+    color: #6c757d;
+}

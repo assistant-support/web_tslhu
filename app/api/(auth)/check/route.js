@@ -11,21 +11,6 @@ export async function POST(request) {
         { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
-
-
-    // const userone = await users.findById(user.id);
-    // if (!userone) {
-    //   return NextResponse.json(
-    //     { status: 1, mes: 'Người dùng không tồn tại!', data: [] },
-    //     { status: 404, headers: { 'Content-Type': 'application/json' } }
-    //   );
-    // }
-    // if (user.role != userone.role) {
-    //   return NextResponse.json(
-    //     { status: 1, mes: 'Phiên đăng nhập không hợp lệ!', data: [] },
-    //     { status: 403, headers: { 'Content-Type': 'application/json' } }
-    //   );
-    // }
     return NextResponse.json(
       { status: 2, mes: 'Kiểm tra phiên đăng nhập thành công!', data: user },
       {

@@ -5,6 +5,17 @@
     margin: 0 auto;
 }
 
+.p {
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all .3s linear;
+    border-radius: 5px;
+}
+
+.p:hover {
+    background-color: var(--hover);
+}
+
 /* Header trang */
 .pageHeader {
     display: flex;
