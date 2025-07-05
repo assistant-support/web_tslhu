@@ -1,6 +1,5 @@
 'use client';
 
-import Button from '@/components/(ui)/(button)/button';
 import air from './index.module.css'
 
 export default function Noti({ open, onClose, status, mes, button }) {

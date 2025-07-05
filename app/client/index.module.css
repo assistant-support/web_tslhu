@@ -601,8 +601,8 @@
 }
 
 .colSmall {
-    width: 68px;
-    min-width: 68px;
+    width: 32px;
+    min-width: 32px;
 }
 
 @media (max-width: 768px) {

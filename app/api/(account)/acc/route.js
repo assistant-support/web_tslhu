@@ -2,11 +2,18 @@ import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import connectToDatabase from '@/config/connectDB';
 import ZaloAccount from '@/models/zalo';
+import '@/models/users'
+import { Re_acc, Re_user } from '@/data/users';
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwcaXcpdsonX5eGRd0T-X_yJejKqD0krSSSV3rYDnpot23nWvXkzO3QnnvIo7UqYss1/exec';
 const SPREADSHEET_ID = '1H5Z1OJxzvk39vjtrdDYzESU61NV7DGPw6K_iD97nh7U';
 const TARGET_SHEET = 'Account';
 
+/**
+ * Creates and authenticates a Google Sheets API client.
+ * @param {boolean} isWrite - Determines if the client needs write permissions.
+ * @returns {Promise<import('googleapis').sheets_v4.Sheets>}
+ */
 async function getGoogleSheetsClient(isWrite = false) {
     const scopes = isWrite
         ? ['https://www.googleapis.com/auth/spreadsheets']
@@ -22,27 +29,36 @@ async function getGoogleSheetsClient(isWrite = false) {
     return google.sheets({ version: 'v4', auth });
 }
 
+// --- GET Handler ---
 export async function GET(request) {
     try {
         await connectToDatabase();
-        const sheets = await ZaloAccount.find({}, { __v: 0, _id: 0 }).lean();
-        return NextResponse.json({ data: sheets }, { status: 200 });
-    } catch (error) {
+        const accounts = await ZaloAccount.find({}, { __v: 0 }).populate({ path: 'user', select: 'name phone avt' }).lean();
+
+        // SUCCESS Response
         return NextResponse.json(
-            { mes: 'Lỗi khi lấy dữ liệu từ Google Sheet.', error: error.message },
+            { status: 2, mes: 'Lấy danh sách tài khoản thành công.', data: accounts },
+            { status: 200 }
+        );
+    } catch (error) {
+        // ERROR Response
+        return NextResponse.json(
+            { status: 0, mes: 'Lỗi khi lấy dữ liệu.', data: { error: error.message } },
             { status: 500 }
         );
     }
 }
 
+// --- POST Handler ---
 export async function POST(request) {
     try {
         const body = await request.json();
         const { token } = body;
 
         if (!token || typeof token !== 'string') {
+            // ERROR: Invalid Token
             return NextResponse.json(
-                { mes: 'Token không hợp lệ hoặc không được cung cấp.' },
+                { status: 0, mes: 'Token không hợp lệ hoặc không được cung cấp.', data: null },
                 { status: 400 }
             );
         }
@@ -57,14 +73,14 @@ export async function POST(request) {
         const accountData = await scriptResponse.json();
 
         if (!scriptResponse.ok || accountData.error) {
+            // ERROR: Google Apps Script failed
             return NextResponse.json(
-                { mes: 'Lỗi khi lấy dữ liệu từ Google Apps Script.', details: accountData },
-                { status: 502 }
+                { status: 0, mes: 'Lỗi khi lấy dữ liệu từ Google Apps Script.', data: accountData },
+                { status: 502 } // 502 Bad Gateway is appropriate here
             );
         }
 
-        const sheets = await getGoogleSheetsClient(true);
-        await connectToDatabase();
+        // Prepare data for Sheets and MongoDB
         const newRowForSheet = [
             accountData.phone || '',
             accountData.userId || '',
@@ -80,6 +96,11 @@ export async function POST(request) {
             avt: accountData.avatar,
         };
 
+        // Connect to DB and get Sheets client
+        await connectToDatabase();
+        const sheets = await getGoogleSheetsClient(true);
+
+        // Perform writes to Sheets and MongoDB concurrently
         await Promise.all([
             sheets.spreadsheets.values.append({
                 spreadsheetId: SPREADSHEET_ID,
@@ -95,16 +116,17 @@ export async function POST(request) {
                 { upsert: true, new: true, setDefaultsOnInsert: true }
             )
         ]);
-
+        Re_user();
+        Re_acc();
         return NextResponse.json({
-            success: true,
+            status: 2,
             mes: 'Thêm tài khoản thành công.',
             data: accountData,
-        });
+        }, { status: 201 });
 
     } catch (error) {
         return NextResponse.json(
-            { mes: 'Đã xảy ra lỗi không xác định.', error: error.message },
+            { status: 0, mes: 'Đã xảy ra lỗi không xác định.', data: { error: error.message } },
             { status: 500 }
         );
     }

@@ -1,4 +1,4 @@
-import { Schema, isValidObjectId, model, models } from 'mongoose'
+import { Schema, model, models } from 'mongoose'
 
 const postUser = new Schema({
   name: {
@@ -22,7 +22,7 @@ const postUser = new Schema({
   uid: {
     type: String,
   },
-  zalo: { type: Schema.Types.ObjectId, required: true, ref: 'zaloaccounts' }
+  zalo: { type: Schema.Types.ObjectId, required: true, ref: 'zaloaccount' }
 })
 
 const users = models.user || model('user', postUser)

@@ -34,7 +34,7 @@ export async function Data_user_report() {
 }
 
 export async function Re_user() {
-    revalidateTag(`data_user`);
+    revalidateTag(`user`);
 }
 
 

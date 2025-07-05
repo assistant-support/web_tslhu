@@ -1,7 +1,9 @@
 import { google } from 'googleapis';
+import { NextResponse } from 'next/server';
 
 const SPREADSHEET_ID = '1H5Z1OJxzvk39vjtrdDYzESU61NV7DGPw6K_iD97nh7U';
-const RANGE_DATA = 'Data!A:L';
+// Cập nhật phạm vi dữ liệu theo yêu cầu
+const RANGE_DATA = 'Data!A:O';
 
 async function getSheets(mode = 'read') {
   const scopes = mode === 'read'
@@ -21,17 +23,9 @@ async function getSheets(mode = 'read') {
 }
 
 export async function GET() {
-  console.log("==============================================");
-  console.log("--- DEBUGGING ENVIRONMENT VARIABLES ---");
-  console.log("PROJECT_ID:", process.env.GOOGLE_PROJECT_ID);
-  console.log("CLIENT_EMAIL:", process.env.GOOGLE_CLIENT_EMAIL);
-  console.log("PRIVATE_KEY:", process.env.GOOGLE_PRIVATE_KEY);
-  console.log("--- END DEBUGGING ---");
-  console.log("==============================================");
   try {
     const sheets = await getSheets('read');
 
-    /* 1. Đọc toàn bộ dữ liệu */
     const { data } = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: RANGE_DATA,
@@ -42,27 +36,38 @@ export async function GET() {
     });
 
     const rows = data.values ?? [];
-    if (rows.length < 2)
-      return Response.json({ data: [] });
+    if (rows.length < 2) {
+      return NextResponse.json({ data: [] });
+    }
 
     const headers = rows[0];
+    // Tìm vị trí của cột 'phone' một cách linh hoạt
+    const phoneColumnIndex = headers.findIndex(header => header.toLowerCase() === 'phone');
 
-    /* 2. Map mỗi hàng thành object */
-    const results = rows.slice(1).map((row) => {
-      const obj = {};
-      headers.forEach((key, idx) => {
-        let cell = row[idx] ?? '';
+    if (phoneColumnIndex === -1) {
+      return NextResponse.json({ error: "Không tìm thấy cột 'phone' trong sheet." }, { status: 500 });
+    }
 
-        if (idx === 1) {
-          const str = String(cell);
-          cell = str && !str.startsWith('0') ? '0' + str : str;
-        }
-        obj[key] = cell;
-      });
-      return obj;
+    const uniquePhoneMap = new Map();
+
+    rows.slice(1).forEach((row) => {
+      const phoneValue = row[phoneColumnIndex];
+      if (phoneValue && String(phoneValue).trim() !== '') {
+        const normalizedPhone = String(phoneValue).trim().startsWith('0') ? String(phoneValue).trim() : '0' + String(phoneValue).trim();
+
+        const rowData = {};
+        headers.forEach((key, idx) => {
+          rowData[key] = row[idx] ?? '';
+        });
+
+        rowData[headers[phoneColumnIndex]] = normalizedPhone;
+
+        uniquePhoneMap.set(normalizedPhone, rowData);
+      }
     });
 
-    /* 3. Trả về */
+    const results = Array.from(uniquePhoneMap.values());
+
     return new Response(JSON.stringify({ data: results.reverse() }), {
       status: 200,
       headers: {
@@ -93,7 +98,6 @@ export async function POST(req) {
 
     const sheets = await getSheets('write');
 
-    // 1. Lấy danh sách tất cả phone, tìm index
     const { data } = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: 'Data!B:B',
@@ -114,9 +118,8 @@ export async function POST(req) {
         { status: 404, headers: { 'Content-Type': 'application/json' } },
       );
     }
-    const rowNum = idx + 1; // dòng thực tế trên Sheet
+    const rowNum = idx + 1;
 
-    // 2. Đọc giá trị cũ của 4 ô H, I, J, K tại dòng rowNum
     const { data: oldData } = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `Data!H${rowNum}:K${rowNum}`,
@@ -127,13 +130,11 @@ export async function POST(req) {
     const oldValues = oldData.values?.[0] ?? [];
     const [oldCare = '', oldStudyTry = '', oldStudy = '', oldRemove = ''] = oldValues;
 
-    // 3. Merge giá trị: nếu có trong body thì dùng value mới, không thì giữ lại value cũ
     const newCare = care !== undefined ? care : oldCare;
     const newStudyTry = studyTry !== undefined ? studyTry : oldStudyTry;
     const newStudy = study !== undefined ? study : oldStudy;
     const newRemove = remove !== undefined ? remove : oldRemove;
 
-    // 4. Cập nhật 4 cột H–K với mảng đã merge
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: `Data!H${rowNum}:K${rowNum}`,

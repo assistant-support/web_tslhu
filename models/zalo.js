@@ -26,20 +26,29 @@ const ZaloAccountSchema = new Schema({
     },
     actionsUsedThisHour: {
         type: Number,
-        default: 0, 
+        default: 0,
     },
     rateLimitHourStart: {
         type: Date,
-        default: Date.now, 
+        default: Date.now,
+    },
+    task:{
+        type: Schema.Types.ObjectId,
+        ref: 'scheduledjob', 
     },
     isLocked: {
         type: Boolean,
-        default: false, 
+        default: false,
+    },
+    user: {
+        type: Schema.Types.ObjectId,
+        ref: 'user',
+        required: true,
     }
 }, {
     timestamps: true,
 });
 
-const ZaloAccount = models.ZaloAccount || model('ZaloAccount', ZaloAccountSchema);
+const ZaloAccount = models.zaloaccount || model('zaloaccount', ZaloAccountSchema);
 
 export default ZaloAccount;

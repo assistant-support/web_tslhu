@@ -257,6 +257,7 @@ a {
   font-size: 14px;
   outline: none;
   transition: all 0.2s;
+  font-family: 'Roboto', sans-serif;
 }
 
 .input:focus {

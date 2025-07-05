@@ -13,13 +13,14 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import HistoryPopup from './client/ui/his';
 import styles from './client/index.module.css';
 import SidePanel from './client/ui/more';
-import Senmes from './client/ui/senmes';
+import Schedule from './client/ui/schedule';
 import { Data_Client, Data_Label, Re_Client, Re_History, Re_Label } from '@/data/client';
-import { Get_user, Re_acc } from '@/data/users';
+import { Get_user } from '@/data/users';
 import AddLabelButton from './client/ui/addlabel';
 import Loading from '@/components/(ui)/(loading)/loading';
 import Label from './client/ui/label';
 import Setting from './client/ui/setting';
+import Run from './client/ui/run';
 
 const PAGE_SIZE = 10;
 
@@ -59,30 +60,49 @@ const applyFiltersToData = (data, { label, search, area, source, type }) => data
   return true;
 });
 
-const useSelection = () => {
+const useSelection = (allItems = [], idKey = 'phone') => {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
-  const toggleOne = useCallback(id => { setSelectedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; }); }, []);
-  const clear = useCallback(() => setSelectedIds(new Set()), []);
+
+  const toggleOne = useCallback(id => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clear = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [allItems]);
+
   return { selectedIds, toggleOne, clear, setSelectedIds, size: selectedIds.size };
 };
+
 
 const Row = memo(function Row({ row, rowIndex, visibleKeys, onOpen, onToggle, checked }) {
   return (
     <div className={styles.gridRow} style={{ backgroundColor: row.remove != '' ? '#ffd9dd' : 'white' }}>
-      <div className={`${styles.gridCell} ${styles.colTiny}`} style={{ textAlign: 'center', flex: 0.5 }} onClick={e => e.stopPropagation()} >
+      <div className={`${styles.gridCell} ${styles.colTiny}`} style={{ textAlign: 'center', flex: 0.2 }} onClick={e => e.stopPropagation()} >
         <input type="checkbox" className={styles.bigCheckbox} checked={checked} onChange={() => onToggle(row.phone)} />
       </div>
-      <div className={`${styles.gridCell} ${styles.colSmall}`} style={{ textAlign: 'center', fontWeight: 600, flex: 0.5 }} onClick={() => onOpen(row)} >
+      <div className={`${styles.gridCell} ${styles.colSmall}`} style={{ textAlign: 'center', fontWeight: 600, flex: 0.2 }} onClick={() => onOpen(row)} >
         {rowIndex + 1}
       </div>
       {visibleKeys.map(k => {
         if (k === 'labels') {
           const valu = parseLabels(row[k]);
-          return (<div key={k} className={styles.gridCell} onClick={() => onOpen(row)}>{valu.length}</div>);
+          return (<div key={k} className={styles.gridCell} style={{ flex: .5 }} onClick={() => onOpen(row)}>{valu.length}</div>);
         }
-        if (['source', 'care', 'studyTry', 'study', 'remove'].includes(k)) return null;
+        if (k === 'uid') {
+          return (<div key={k} className={styles.gridCell} style={{ flex: 1 }} onClick={() => onOpen(row)}>{row[k] ? JSON.parse(row[k])[0] : 'Thiếu uid'}</div>);
+        }
+        if (['source', 'care', 'studyTry', 'study', 'remove', 'age', 'nameParent', 'time', 'email'].includes(k)) return null;
         return (
-          <div key={k} className={styles.gridCell} onClick={() => onOpen(row)}>
+          <div key={k} className={styles.gridCell} style={{ flex: k == 'phone' || k == 'area' ? .5 : 1 }} onClick={() => onOpen(row)}>
             {k === 'type' ? renderCustomerTypeBadge(getCustomerType(row)) : Array.isArray(row[k]) ? row[k].join(', ') : row[k]}
           </div>
         );
@@ -104,10 +124,14 @@ export default function Client() {
   const [isReloading, setIsReloading] = useState(true);
   const [userData, setUserData] = useState(null);
   const [selectedAccount, setSelectedAccount] = useState(null);
-  const { selectedIds, size: selectedCount, toggleOne: toggleSelectRow, clear: clearSelection, setSelectedIds } = useSelection();
   const [selectedRow, setSelectedRow] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [labelsDB, setLabelsDB] = useState([]);
+  console.log(data[0]);
+  const deferredSearch = useDeferredValue(filters.search);
+  const filteredData = useMemo(() => applyFiltersToData(data, { ...filters, search: deferredSearch }), [data, filters, deferredSearch]);
+
+  const { selectedIds, size: selectedCount, toggleOne: toggleSelectRow, setSelectedIds, clear: clearSelection } = useSelection(filteredData, 'phone');
 
   const loadInitialData = useCallback(async () => {
     setIsReloading(true);
@@ -127,7 +151,6 @@ export default function Client() {
       } else {
         setSelectedAccount(null);
       }
-
     } catch (e) {
       console.error("Lỗi khi tải dữ liệu ban đầu:", e);
     } finally {
@@ -139,8 +162,6 @@ export default function Client() {
     loadInitialData();
   }, [loadInitialData]);
 
-  const deferredSearch = useDeferredValue(filters.search);
-  const filteredData = useMemo(() => applyFiltersToData(data, { ...filters, search: deferredSearch }), [data, filters, deferredSearch]);
   const totalPages = Math.max(Math.ceil(filteredData.length / PAGE_SIZE), 1);
   const currentRows = useMemo(() => { const start = (page - 1) * PAGE_SIZE; return filteredData.slice(start, start + PAGE_SIZE); }, [filteredData, page]);
   const visibleKeys = useMemo(() => (currentRows[0] ? Object.keys(currentRows[0]) : []), [currentRows]);
@@ -155,8 +176,6 @@ export default function Client() {
     const found = labelsDB.find(l => l.title === first);
     return found?.content || '';
   }, [filters.label, labelsDB]);
-
-  useEffect(() => { clearSelection(); }, [filteredData, page, clearSelection]);
 
   useEffect(() => {
     const sp = new URLSearchParams();
@@ -179,28 +198,46 @@ export default function Client() {
 
   const selectedCustomers = useMemo(() => data.filter(r => selectedIds.has(r.phone)), [data, selectedIds]);
 
-  const sendMessage = useCallback(async () => {
-    if (!selectedCustomers.length || !selectedAccount) {
-      alert("Vui lòng chọn tài khoản Zalo trong phần Cấu hình để gửi tin.");
-      return;
-    }
-    try {
-      const res = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clients: selectedCustomers, accountId: selectedAccount, defaultContent: selectedLabelContent }) });
-      if (!res.ok) throw new Error(await res.text());
-    } catch (err) { console.error(err); }
-  }, [selectedCustomers, selectedAccount, selectedLabelContent]);
+  // const sendMessage = useCallback(async () => {
+  //   if (!selectedCustomers.length || !selectedAccount) {
+  //     alert("Vui lòng chọn tài khoản Zalo trong phần Cấu hình để gửi tin.");
+  //     return;
+  //   }
+  //   try {
+  //     const res = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clients: selectedCustomers, accountId: selectedAccount, defaultContent: selectedLabelContent }) });
+  //     if (!res.ok) throw new Error(await res.text());
+  //   } catch (err) { console.error(err); }
+  // }, [selectedCustomers, selectedAccount, selectedLabelContent]);
 
   const closePanel = () => { setPanelOpen(false); setTimeout(() => { setSelectedRow(null); }, 310); };
   const saveNotes = async () => { setPanelOpen(false); await Re_Client(); const res = await Data_Client(); setData(res.data || []); router.refresh() };
+
   const headerCheckboxRef = useRef(null);
-  const allChecked = filteredData.length > 0 && filteredData.every(r => selectedIds.has(r.phone));
-  const partialChecked = !allChecked && filteredData.some(r => selectedIds.has(r.phone));
-  useEffect(() => { if (headerCheckboxRef.current) headerCheckboxRef.current.indeterminate = partialChecked; }, [partialChecked]);
+  const allOnPageChecked = useMemo(() => currentRows.length > 0 && currentRows.every(r => selectedIds.has(r.phone)), [currentRows, selectedIds]);
+  const partialOnPageChecked = useMemo(() => !allOnPageChecked && currentRows.some(r => selectedIds.has(r.phone)), [allOnPageChecked, currentRows, selectedIds]);
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = partialOnPageChecked;
+    }
+  }, [partialOnPageChecked]);
+
+  const handleTogglePage = useCallback(() => {
+    const pageIds = new Set(currentRows.map(r => r.phone));
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allOnPageChecked) {
+        pageIds.forEach(id => next.delete(id));
+      } else {
+        pageIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  }, [currentRows, setSelectedIds, allOnPageChecked]);
 
   const accountDisplayName = useMemo(() => {
     return userData?.zalo?.name || "Chưa chọn tài khoản";
   }, [userData]);
-
   return (
     <div className={styles.container}>
       <div className={styles.filterSection}>
@@ -260,10 +297,11 @@ export default function Client() {
             <div className='input' style={{ width: 150, padding: '8px 12px', color: '#495057', borderRight: 'none', borderRadius: '5px 0 0 5px', display: 'flex', alignItems: 'center' }}>
               <span className='text_6_400'>{accountDisplayName}</span>
             </div>
-            <Setting user={userData} />
+            <Setting user={userData} onUserUpdate={loadInitialData} />
           </div>
+          <Run user={userData} />
         </div>
-        <Senmes data={selectedCustomers} labelOptions={uniqueLabels} onSend={sendMessage} label={labelsDB} />
+        <Schedule data={selectedCustomers} user={userData} />
       </div>
 
       {isReloading ? (<Loading content="Đang tải dữ liệu..." />) : filteredData.length === 0 ? (
@@ -276,13 +314,13 @@ export default function Client() {
         <>
           <div className={styles.dataGrid}>
             <div className={styles.gridHeader}>
-              <div className={`${styles.gridCell} ${styles.colTiny}`} style={{ textAlign: 'center', flex: 0.5 }} >
-                <input ref={headerCheckboxRef} type="checkbox" className={styles.bigCheckbox} checked={allChecked} onChange={() => allChecked ? clearSelection() : setSelectedIds(new Set(filteredData.map(r => r.phone)))} />
-                {selectedCount > 0 && (<span style={{ fontSize: 14, marginLeft: 4, color: 'white' }}>{selectedCount} người</span>)}
+              <div className={`${styles.gridCell} ${styles.colTiny}`} style={{ textAlign: 'center', flex: 0.2 }} >
+                <input ref={headerCheckboxRef} type="checkbox" className={styles.bigCheckbox} checked={allOnPageChecked} onChange={handleTogglePage} />
+                {selectedCount > 0 && (<span style={{ fontSize: 14, marginLeft: 4, color: 'white' }}>{selectedCount}</span>)}
               </div>
-              <div className={`text_6 ${styles.colSmall}`} style={{ padding: 16, color: 'white', flex: 0.5 }}>STT</div>
-              {['Tên', 'SĐT', 'Tên học viên', 'Email', 'Tuổi', 'Khu vực', 'Số nhãn'].map(k => (
-                <div key={k} className="text_6" style={{ padding: 16, color: 'white' }}>{k}</div>
+              <div className={`text_6 ${styles.colSmall}`} style={{ padding: 16, color: 'white', flex: 0.2 }}>STT</div>
+              {['SĐT', 'Tên học sinh', 'Khu vực', 'Số nhãn', 'Uid', 'Trường'].map(k => (
+                <div key={k} className={`text_6 ${k == 'SĐT' || k == 'Số nhãn' || k == 'Khu vực' ? styles.colSmall : ''}`} style={{ padding: 16, color: 'white', flex: k == 'SĐT' || k == 'Số nhãn' || k == 'Khu vực' ? 0.5 : 1 }}>{k}</div>
               ))}
             </div>
             <div className={styles.gridBody}>
