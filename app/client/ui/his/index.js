@@ -7,91 +7,149 @@ import Title from '@/components/(features)/(popup)/title';
 import { Data_History } from '@/data/client';
 import styles from './index.module.css';
 
-export default function HistoryPopup({ open, onClose, datauser }) {
-    const [centerOpen, setCenterOpen] = useState(false);
-    const [selectedHistory, setSelected] = useState(null);
-    const [showRecipients, setShowRec] = useState(false);
-    const [filterText, setFilterText] = useState('');
-    const [historyList, setHistoryList] = useState(null);
-    useEffect(() => {
-        Data_History().then(res => setHistoryList(res.data));
-    }, []);
-    const handleItemClick = useCallback(h => {
-        setSelected(h);
-        setShowRec(false);
-        setFilterText('');
-        setCenterOpen(true);
-    }, []);
+const ACTION_TYPE_MAP = {
+    sendMessage: 'Gửi tin nhắn',
+    addFriend: 'Gửi lời mời kết bạn',
+    findUid: 'Tìm kiếm UID',
+};
 
-    const renderItemList = useCallback(histories => (
-        <div className={styles.historyList}>
-            {histories.map(h => {
-                const successCount = h.recipients.filter(r => r.status === 'success').length;
-                const errorCount = h.recipients.length - successCount;
-                return (
-                    <div
-                        key={h._id}
-                        style={{
-                            borderBottom: '1px solid var(--border-color)',
-                            padding: 16,
-                            cursor: 'pointer'
-                        }}
-                        onClick={() => handleItemClick(h)}
-                    >
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                            <div className='text_6_400' style={{ padding: '4px 8px', backgroundColor: '#e4ddff', borderRadius: 4 }}>
-                                {new Date(h.sentAt).toLocaleString()}
-                            </div>
-                            <div className='text_6_400' style={{ padding: '4px 8px', backgroundColor: '#f0f0f0', borderRadius: 4 }}>
-                                {h.labels.join(', ') || '—'}
-                            </div>
+const renderHistoryList = (histories, onItemClick) => (
+    <div className={styles.historyList}>
+        {histories.map(h => {
+            const successCount = h.recipients.filter(r => r.status === 'success').length;
+            const errorCount = h.recipients.length - successCount;
+            const actionText = ACTION_TYPE_MAP[h.actionType] || h.actionType;
+
+            return (
+                <div key={h._id} className={styles.historyItem} onClick={() => onItemClick(h)}>
+                    <div className={styles.itemHeader}>
+                        <span className={styles.jobName}>{h.jobName || 'Không có tên'}</span>
+                        <span className={styles.actionTypeBadge}>{actionText}</span>
+                    </div>
+                    <div className={styles.itemMeta}>
+                        <span>{new Date(h.createdAt).toLocaleString('vi-VN')}</span>
+                    </div>
+                    <div className={styles.itemStats}>
+                        <div className={`${styles.statusBadge} ${styles.success}`}>
+                            <span className={styles.dot} />
+                            {successCount} Thành công
                         </div>
-                        <div style={{ display: 'flex', gap: 16 }}>
-                            <div className='text_6_400' style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)' }} />
-                                {successCount} Thành công
-                            </div>
-                            <div className='text_6_400' style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--red)' }} />
-                                {errorCount} Thất bại
-                            </div>
-                        </div>
-                        <div style={{
-                            display: 'flex',
-                            gap: 4,
-                            paddingTop: 8,
-                            borderTop: '1px solid var(--border-color)',
-                            marginTop: 8
-                        }}>
-                            <p className='text_6'>Nội dung:</p>
-                            <p style={{
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                margin: 0,
-                                flex: 1
-                            }} className='text_6_400'>
-                                {h.message}
-                            </p>
+                        <div className={`${styles.statusBadge} ${styles.error}`}>
+                            <span className={styles.dot} />
+                            {errorCount} Thất bại
                         </div>
                     </div>
-                );
-            })}
-        </div>
-    ), [handleItemClick])
+                    {h.message && (
+                        <div className={styles.messageBlock}>
+                            <p className={styles.messageSnippet}>Nội dung: {h.message}</p>
+                        </div>
+                    )}
+                </div>
+            );
+        })}
+    </div>
+);
+
+const renderDetailPopup = ({ selectedHistory, onClose }) => {
+    const [showRecipients, setShowRec] = useState(false);
+    const [filterText, setFilterText] = useState('');
+
     const filteredRecipients = useMemo(() => {
         if (!selectedHistory) return [];
-        return selectedHistory.recipients
-            .map(r => {
-                const user = datauser.find(u => u.phone === r.phone) || {};
-                return { phone: r.phone, name: user.nameParent, status: r.status || '—' };
-            })
-            .filter(({ name, phone }) =>
-                
-                name.toLowerCase().includes(filterText.toLowerCase()) ||
-                phone.includes(filterText)
-            );
-    }, [selectedHistory, datauser, filterText]);
+        return selectedHistory.recipients.filter(r =>
+            (r.name && r.name.toLowerCase().includes(filterText.toLowerCase())) ||
+            (r.phone && r.phone.includes(filterText))
+        );
+    }, [selectedHistory, filterText]);
+
+    if (!selectedHistory) return null;
+
+    const successCount = selectedHistory.recipients.filter(r => r.status === 'success').length;
+    const errorCount = selectedHistory.recipients.length - successCount;
+
+    return (
+        <>
+            <Title
+                content={
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <p>Chi tiết lịch sử</p>
+                        <div className='text_6_400' style={{ padding: '4px 8px', backgroundColor: '#e4ddff', borderRadius: 4 }}>
+                            {selectedHistory.jobName}
+                        </div>
+                    </div>
+                }
+                click={onClose}
+            />
+            <div style={{ padding: 16 }}>
+                {selectedHistory.actionType === 'sendMessage' && selectedHistory.message && (
+                    <div className={styles.messageBlock} style={{ borderTop: 'none', margin: '0 0 16px 0', padding: 0 }}>
+                        <p className='text_6'>Nội dung đã gửi:</p>
+                        <p className='text_6_400' style={{ marginTop: 0, whiteSpace: 'pre-wrap' }}>
+                            {selectedHistory.message}
+                        </p>
+                    </div>
+                )}
+                <p className='text_6' style={{ borderTop: 'thin solid var(--border-color)', paddingTop: '8px' }}>
+                    Chi tiết từng người nhận:
+                </p>
+                <div style={{ display: 'flex', gap: 16, marginBottom: 8, alignItems: 'center' }}>
+                    <div className={`${styles.statusBadge} ${styles.success}`}>
+                        <span className={styles.dot} />
+                        {successCount} Thành công
+                    </div>
+                    <div className={`${styles.statusBadge} ${styles.error}`}>
+                        <span className={styles.dot} />
+                        {errorCount} Thất bại
+                    </div>
+                    <button type="button" className={styles.toggleButton} onClick={() => setShowRec(v => !v)}>
+                        {showRecipients ? 'Ẩn danh sách' : 'Hiển thị danh sách'}
+                    </button>
+                </div>
+                {showRecipients && (
+                    <div style={{ border: 'thin solid var(--border-color)', padding: '8px', borderRadius: 12 }}>
+                        <input
+                            type="text"
+                            className={styles.searchInput}
+                            placeholder="Tìm theo tên hoặc số..."
+                            value={filterText}
+                            onChange={e => setFilterText(e.target.value)}
+                        />
+                        <ul className={styles.recipientList}>
+                            {filteredRecipients.map((u, idx) => (
+                                <li key={idx} className={styles.recipientItem}>
+                                    <p className='text_6_400'>{u.name} — {u.phone}</p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span className={styles.detailText}>{u.details}</span>
+                                        <span className={`${styles.dot} ${u.status === 'success' ? styles.success : styles.error}`} />
+                                    </div>
+                                </li>
+                            ))}
+                            {filteredRecipients.length === 0 && (
+                                <li className={styles.noResults}>Không tìm thấy người phù hợp</li>
+                            )}
+                        </ul>
+                    </div>
+                )}
+            </div>
+        </>
+    );
+};
+
+export default function HistoryPopup({ open, onClose }) {
+    const [centerOpen, setCenterOpen] = useState(false);
+    const [selectedHistory, setSelected] = useState(null);
+    const [historyList, setHistoryList] = useState(null);
+
+    useEffect(() => {
+        if (open) {
+            Data_History().then(res => setHistoryList(res.data || []));
+        }
+    }, [open]);
+
+    const handleItemClick = useCallback(h => {
+        setSelected(h);
+        setCenterOpen(true);
+    }, []);
 
     return (
         <>
@@ -99,8 +157,8 @@ export default function HistoryPopup({ open, onClose, datauser }) {
                 open={open}
                 onClose={onClose}
                 data={historyList || []}
-                title="Lịch sử gửi tin nhắn"
-                renderItemList={renderItemList}
+                title="Lịch sử hành động"
+                renderItemList={(histories) => renderHistoryList(histories, handleItemClick)}
                 globalZIndex={1000}
             />
             <CenterPopup
@@ -109,101 +167,7 @@ export default function HistoryPopup({ open, onClose, datauser }) {
                 size="md"
                 globalZIndex={1001}
             >
-                {selectedHistory && (
-                    <>
-                        <Title
-                            content={
-                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                    <p>Chi tiết gửi tin</p>
-                                    <div className='text_6_400' style={{ padding: '4px 8px', backgroundColor: '#e4ddff', borderRadius: 4 }}>
-                                        {new Date(selectedHistory.sentAt).toLocaleString()}
-                                    </div>
-                                </div>
-                            }
-                            click={() => setCenterOpen(false)}
-                        />
-                        <div style={{ padding: 16 }}>
-                            <p className='text_6' style={{
-                                paddingBottom: 8
-                            }}>Nhãn gán tin nhắn:</p>
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <div className='text_6_400' style={{ padding: '4px 8px', backgroundColor: '#f0f0f0', borderRadius: 4 }}>
-                                        {selectedHistory.labels.join(', ') || '—'}
-                                    </div>
-                                </div>
-                            </div>
-                            <p className='text_6' style={{
-                                borderTop: 'thin solid var(--border-color)',
-                                padding: '8px 0'
-                            }}>Nội dung gửi đi:</p>
-                            <p className='text_6_400'
-                                style={{
-                                    margin: 0,
-                                    flex: 1,
-                                    marginBottom: 16
-                                }}>
-                                {selectedHistory.message}
-                            </p>
-                            <p className='text_6' style={{
-                                borderTop: 'thin solid var(--border-color)',
-                                padding: '8px 0'
-                            }}>
-                                Chi tiết từng người nhận:
-                            </p>
-
-                            <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
-                                <div className='text_6_400' style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)' }} />
-                                    {selectedHistory.recipients.filter(r => r.status === 'success').length} Thành công
-                                </div>
-                                <div className='text_6_400' style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--red)' }} />
-                                    {selectedHistory.recipients.length - selectedHistory.recipients.filter(r => r.status === 'success').length} Thất bại
-                                </div>
-                                <button
-                                    type="button"
-                                    className={styles.toggleButton}
-                                    onClick={() => setShowRec(v => !v)}
-                                >
-                                    <p className='text_6_400'>{showRecipients ? 'Ẩn người nhận' : 'Hiển thị tất cả'}</p>
-                                </button>
-                            </div>
-                            {showRecipients && <div style={{ border: 'thin solid var(--border-color)', padding: '8px', borderRadius: 12 }}>
-                                <input
-                                    type="text"
-                                    className={'input'}
-                                    style={{ width: 'calc(100% - 24px)', marginBottom: 8 }}
-                                    placeholder="Tìm theo tên hoặc số..."
-                                    value={filterText}
-                                    onChange={e => setFilterText(e.target.value)}
-                                />
-
-                                <ul className={styles.recipientList}>
-                                    {filteredRecipients.map((u, idx) => {
-                                        return (
-                                            <li key={idx} className={`${styles.recipientItem} text_6_400`}>
-                                                <p>
-                                                    {u.name} — {u.phone}
-                                                </p>
-                                                <div>{u.status === 'success' ?
-                                                    <p style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)' }} /> :
-                                                    <p style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--red)' }} />}</div>
-                                            </li>
-                                        )
-                                    })}
-                                    {filteredRecipients.length === 0 && (
-                                        <li className={`${styles.noResults} text_6_400`}>
-                                            Không tìm thấy người phù hợp
-                                        </li>
-                                    )}
-                                </ul>
-
-                            </div>}
-
-                        </div>
-                    </>
-                )}
+                {renderDetailPopup({ selectedHistory, onClose: () => setCenterOpen(false) })}
             </CenterPopup>
         </>
     );

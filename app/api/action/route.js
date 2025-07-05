@@ -4,6 +4,7 @@ import ScheduledJob from '@/models/tasks';
 import ZaloAccount from '@/models/zalo';
 import SendHistory from '@/models/historyClient';
 import { Re_acc, Re_user } from '@/data/users';
+import { Re_History, Re_History_User } from '@/data/client';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -35,12 +36,12 @@ async function executeActionViaAppsScript(actionType, zaloAccount, person, confi
     const result = await response.json();
 
     if (!response.ok || result.status === 'error') {
-        throw new Error(result.message || 'Lỗi không xác định từ Apps Script.');
+        throw new Error(result.mes || 'Lỗi không xác định từ Apps Script.');
     }
 
     return {
-        success: result.data?.status === 'success',
-        message: result.data?.details || 'Không có chi tiết.'
+        success: result.status === 'success',
+        message: result.mes || 'Không có chi tiết.'
     };
 }
 
@@ -118,7 +119,7 @@ export async function GET(request) {
                 },
                 { upsert: true, new: true }
             );
-
+            Re_History_User(task.person.phone)
             await Promise.all([updateJobPromise, updateZaloPromise, historyLogPromise]);
             processedCount++;
 
@@ -135,7 +136,7 @@ export async function GET(request) {
             Re_user();
             Re_acc();
         }
-
+        Re_History();
         return NextResponse.json({ message: `Cron job đã chạy. Đã xử lý ${processedCount} tác vụ.` }, { headers: corsHeaders });
 
     } catch (error) {

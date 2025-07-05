@@ -19,7 +19,6 @@ export async function GET(req, { params }) {
             .sort({ sentAt: -1 })
             .lean();
 
-        // Lọc mỗi history chỉ giữ recipient đúng số này
         const filtered = histories.map(doc => ({
             ...doc,
             recipients: doc.recipients.filter(r => r.phone === phone)

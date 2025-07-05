@@ -1,12 +1,15 @@
-/* SidePanel.module.css */
-
-/* Sections */
 .info,
-.labelsBox,
+.labelsBox {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
 .form {
     padding: 12px 16px;
     border-bottom: 1px solid var(--border-color);
     color: var(--text-primary);
+    padding-top: 0;
 }
 
 /* Labels */
@@ -18,10 +21,6 @@
 }
 
 /* Form */
-.form {
-    padding-top: 0;
-}
-
 .formGroup {
     display: flex;
     flex-direction: column;
@@ -49,16 +48,21 @@
 }
 
 /* Buttons */
-.saveBtn {
-    align-self: flex-start;
-    padding: 10px 26px;
-    border: none;
+.saveBtn,
+.secondaryBtn,
+.cancelBtn {
+    flex: 1;
+    padding: 10px;
     border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.saveBtn {
     background: var(--main_d);
     color: #fff;
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity 0.25s;
 }
 
 .saveBtn:hover,
@@ -67,17 +71,17 @@
     outline: none;
 }
 
+.saveBtn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
 .secondaryBtn {
     padding: 10px 16px;
-    border: none;
-    border-radius: 8px;
     background: none;
-    font-weight: 500;
-    cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    transition: background 0.2s;
 }
 
 .secondaryBtn:hover,
@@ -86,56 +90,178 @@
     outline: none;
 }
 
-/* Care history list */
-.moreInfo h4 {
-    margin-bottom: 12px;
-    color: var(--text-primary);
+.cancelBtn {
+    color: white;
 }
 
+/* Care history list */
 .historyList {
     list-style: none;
     margin: 0;
     padding: 0;
+    max-height: 60vh;
+    overflow-y: auto;
 }
 
 .historyItem {
-    padding: 16px 0;
+    padding: 16px;
     border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s;
+    cursor: pointer;
 }
 
-.historyHeader {
+.historyItem:hover {
+    background-color: var(--hover);
+}
+
+.itemHeader {
     display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
-.historyDate {
-    padding: 4px 8px;
-    background-color: #e4ddff;
-    border-radius: 4px;
-    font-size: 0.85rem;
-    color: var(--text-primary);
+.jobName {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 1rem;
 }
 
-.historyLabels {
-    padding: 4px 8px;
-    background-color: #f0f0f0;
-    border-radius: 4px;
-    font-size: 0.85rem;
-    color: var(--text-primary);
+.actionTypeBadge {
+    background-color: #eef2ff;
+    color: #4338ca;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
 }
 
-.historyMessage {
+.itemMeta {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 12px;
+}
+
+.itemStats {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.statusBadge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.success {
+    color: #166534;
+}
+
+.success .dot {
+    background-color: #22c55e;
+}
+
+.error {
+    color: #991b1b;
+}
+
+.error .dot {
+    background-color: #ef4444;
+}
+
+.messageBlock {
+    margin-top: 12px;
+}
+
+.messageSnippet {
+    font-size: 0.875rem;
+    color: #4b5563;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     margin: 4px 0;
-    color: var(--text-primary);
 }
 
-.historyStatus {
-    margin: 4px 0;
-    color: var(--text-primary);
+.toggleButton {
+    background: none;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-left: auto;
 }
 
-/* Empty state */
+.toggleButton:hover {
+    background-color: #f3f4f6;
+}
+
+.searchInput {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 0.875rem;
+    box-sizing: border-box;
+}
+
+.recipientList {
+    max-height: 250px;
+    overflow-y: auto;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+.recipientItem {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.recipientItem:last-child {
+    border-bottom: none;
+}
+
+.detailText {
+    font-size: 0.8rem;
+    color: #6b7280;
+    font-style: italic;
+    margin-right: 8px;
+}
+
+.noResults {
+    font-style: italic;
+    text-align: center;
+    color: #6b7280;
+    padding: 16px;
+}
+
+.detailMessage {
+    white-space: pre-wrap;
+    background-color: #f9fafb;
+    padding: 8px;
+    border-radius: 4px;
+}
+
 .emptyHistory {
     width: 100%;
     height: 100%;
@@ -145,17 +271,16 @@
     justify-content: center;
     color: var(--text-secondary);
 }
-.saving{
-    position: fixed;
+
+.saving {
+    position: absolute;
     width: 100%;
     height: 100%;
     top: 0;
     left: 0;
-    background: rgba(0, 0, 0, 0.5);
-}
-/* Responsive tweaks */
-@media (max-width: 480px) {
-    .labelsWrap {
-        gap: 4px;
-    }
+    background: rgba(255, 255, 255, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
 }

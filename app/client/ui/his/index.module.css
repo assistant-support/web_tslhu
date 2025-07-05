@@ -1,94 +1,98 @@
-/* HistoryPopup.module.css */
+/* File: components/(features)/(popup)/his/index.module.css */
 
 .historyList {
     display: flex;
     flex-direction: column;
+    max-height: 70vh;
+    overflow-y: auto;
 }
 
 .historyItem {
     padding: 16px;
-    border-bottom: 1px solid var(--border-color);
-    transition: background 0.2s;
+    border-bottom: 1px solid #e5e7eb;
+    transition: background-color 0.2s ease-in-out;
     cursor: pointer;
 }
 
 .historyItem:hover {
-    background: var(--hover);
+    background-color: #f9fafb;
 }
 
-.historyHeader {
+.itemHeader {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
-.dateBadge {
-    background-color: #e4ddff;
-    color: var(--main_d);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.875rem;
+.jobName {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 1rem;
 }
 
-.labelsBadge {
-    background-color: #f0f0f0;
-    color: #333;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.875rem;
+.actionTypeBadge {
+    background-color: #eef2ff;
+    color: #4338ca;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
 }
 
-.messageBlock {
-    gap: 4px;
-    padding: 8px 0;
-    border-top: 1px solid var(--border-color);
-    margin: 8px 0;
+.itemMeta {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 12px;
 }
 
-.detailContainer {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease, opacity 0.3s ease;
-}
-
-.detailContainer.open {
-    max-height: 500px;
-    opacity: 1;
-}
-
-.statusRow {
+.itemStats {
     display: flex;
     gap: 16px;
-    margin-bottom: 8px;
+    align-items: center;
 }
 
 .statusBadge {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     font-size: 0.875rem;
+    font-weight: 500;
 }
 
 .dot {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
 }
 
+.success {
+    color: #166534;
+}
+
 .success .dot {
-    background: var(--green);
+    background-color: #22c55e;
+}
+
+.error {
+    color: #991b1b;
 }
 
 .error .dot {
-    background: var(--red);
+    background-color: #ef4444;
+}
+
+.messageBlock {
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #f3f4f6;
 }
 
 .messageSnippet {
     font-size: 0.875rem;
-    color: #555;
+    color: #4b5563;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -96,63 +100,61 @@
 
 .toggleButton {
     background: none;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
     padding: 6px 12px;
     font-size: 0.875rem;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background-color 0.2s;
+    margin-left: auto;
 }
 
 .toggleButton:hover {
-    background: var(--hover);
+    background-color: #f3f4f6;
 }
 
 .searchInput {
     width: 100%;
     padding: 8px 12px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
     margin-bottom: 12px;
     font-size: 0.875rem;
     box-sizing: border-box;
 }
 
 .recipientList {
-    max-height: 200px;
+    max-height: 250px;
     overflow-y: auto;
     list-style: none;
     padding: 0;
     margin: 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
 }
 
 .recipientItem {
-    padding: 12px;
-    border-bottom: thin solid var(--border-color);
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f4f6;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-.recipientItem:first-child {
-    border-top: thin solid var(--border-color);
+.recipientItem:last-child {
+    border-bottom: none;
+}
+
+.detailText {
+    font-size: 0.8rem;
+    color: #6b7280;
+    font-style: italic;
+    margin-right: 8px;
 }
 
 .noResults {
     font-style: italic;
     text-align: center;
-    color: #888;
+    color: #6b7280;
     padding: 16px;
 }
-
-.detail_input {
-    padding: 10px 12px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    background: #f8fafc;
-    font-size: 14px;
-    outline: none;
-    transition: all 0.2s;
-}
-
-.detail_list {}

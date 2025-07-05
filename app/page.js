@@ -115,7 +115,6 @@ export default function Client() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-
   const [historyOpen, setHistoryOpen] = useState(false);
   const [data, setData] = useState([]);
   const [filters, setFilters] = useState({ label: searchParams.get('label') || '', search: searchParams.get('search') || '', area: searchParams.get('area') || '', source: searchParams.get('source') || '', type: searchParams.get('type') || '' });
