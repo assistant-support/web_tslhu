@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useTransition } from 'react';
 import styles from './index.module.css';
 import FlexiblePopup from '@/components/(features)/(popup)/popup_right';
-import { Get_user } from '@/data/users'; // Import hàm lấy dữ liệu
+import { useRouter } from 'next/navigation';
 
 const renderRecipientListPopup = ({ job, removedIds, onToggleTask }) => (
     <div className={styles.taskList}>
@@ -113,37 +113,28 @@ const renderDetailPopupContent = ({ job, onEditRecipients, onSave, onStop, isSub
     );
 };
 
-export default function Run() {
-    const [userData, setUserData] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
+export default function Run({ data }) {
+    const router = useRouter();
+    const [isSubmitting, startTransition] = useTransition(); 
     const [timeLeft, setTimeLeft] = useState('');
     const [isDetailPopupOpen, setIsDetailPopupOpen] = useState(false);
     const [isRecipientPopupOpen, setIsRecipientPopupOpen] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const [removedTaskIds, setRemovedTaskIds] = useState(() => new Set());
-
-    const { runningJob } = userData || {};
-
-    const fetchData = useCallback(async () => {
-        try {
-            const data = await Get_user();
-            setUserData(data);
-        } catch (error) {
-            console.error("Failed to fetch user data:", error);
-            setUserData(null);
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
+    const { runningJob } = data || {};
     useEffect(() => {
-        fetchData(); // Gọi lần đầu khi component mount
-        const intervalId = setInterval(fetchData, 60000); // Thiết lập lặp lại mỗi 60 giây
-        return () => clearInterval(intervalId); // Dọn dẹp interval khi component unmount
-    }, [fetchData]);
+        const intervalId = setInterval(() => {
+            startTransition(() => {
+                router.refresh();
+            });
+        }, 10000);
 
+        return () => clearInterval(intervalId);
+    }, [router]);
     useEffect(() => {
-        if (!runningJob?.estimatedCompletionTime) return;
+        if (!runningJob?.estimatedCompletionTime) {
+            setTimeLeft('');
+            return;
+        };
         const timer = setInterval(() => {
             const difference = +new Date(runningJob.estimatedCompletionTime) - +new Date();
             let timeLeftString = "Hoàn thành";
@@ -157,6 +148,7 @@ export default function Run() {
         return () => clearInterval(timer);
     }, [runningJob?.estimatedCompletionTime]);
 
+    // Các hàm xử lý giữ nguyên, chỉ thay đổi cách reload dữ liệu
     const handleOpenDetailPopup = useCallback(() => {
         if (runningJob) {
             setRemovedTaskIds(new Set());
@@ -178,23 +170,29 @@ export default function Run() {
             setIsDetailPopupOpen(false);
             return;
         }
-        setIsSubmitting(true);
-        console.log("Lưu thay đổi, các task ID cần xóa:", Array.from(removedTaskIds));
-        await new Promise(r => setTimeout(r, 1000));
-        setIsSubmitting(false);
-        setIsDetailPopupOpen(false);
-        fetchData(); // Tải lại dữ liệu sau khi cập nhật
-    }, [removedTaskIds, fetchData]);
+        startTransition(async () => {
+            // Logic gọi API để cập nhật job sẽ ở đây...
+            // Ví dụ: await updateJobAPI(runningJob._id, Array.from(removedTaskIds));
+            await new Promise(r => setTimeout(r, 1000)); // Giả lập độ trễ API
+
+            setIsDetailPopupOpen(false);
+            router.refresh(); // Làm mới dữ liệu sau khi thành công
+        });
+    }, [removedTaskIds, router, runningJob]);
 
     const handleStopJob = useCallback(async () => {
-        setIsSubmitting(true);
-        console.log("Dừng lịch trình:", runningJob._id);
-        await new Promise(r => setTimeout(r, 1000));
-        setIsSubmitting(false);
-        setIsDetailPopupOpen(false);
-        fetchData();
-    }, [runningJob, fetchData]);
+        startTransition(async () => {
+            // Logic gọi API để dừng job sẽ ở đây...
+            // Ví dụ: await stopJobAPI(runningJob._id);
+            console.log("Dừng lịch trình:", runningJob._id);
+            await new Promise(r => setTimeout(r, 1000)); // Giả lập độ trễ API
 
+            setIsDetailPopupOpen(false);
+            router.refresh(); // Làm mới dữ liệu sau khi thành công
+        });
+    }, [runningJob, router]);
+
+    // Các hàm tính toán giờ cũng dùng trực tiếp `runningJob` từ prop `data`
     const truncatedJobName = useMemo(() => {
         const name = runningJob?.jobName || '';
         return name.length > 15 ? `${name.substring(0, 15)}...` : name;
@@ -205,10 +203,7 @@ export default function Run() {
         return runningJob.statistics;
     }, [runningJob?.statistics]);
 
-    if (isLoading) {
-        return <div className={styles.loadingState}>Đang tải thông tin lịch trình...</div>;
-    }
-
+    // Không cần `isLoading` nữa, chỉ cần kiểm tra `runningJob` có tồn tại không
     if (!runningJob) {
         return null;
     }

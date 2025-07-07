@@ -9,27 +9,19 @@ const recipientStatusSchema = new Schema({
 }, { _id: false });
 
 const sendHistorySchema = new Schema({
-    // --- TRƯỜNG QUAN TRỌNG ĐỂ LIÊN KẾT ---
     jobId: {
         type: Schema.Types.ObjectId,
         ref: 'scheduledjob',
         required: true,
-        unique: true // Mỗi job chỉ có một bản ghi lịch sử duy nhất
+        unique: true 
     },
-
-    // --- Các thông tin chung của Job ---
     jobName: { type: String },
     actionType: { type: String },
     sentBy: { type: Schema.Types.ObjectId, ref: 'user' },
-    message: { type: String }, // Chỉ có giá trị nếu là hành động sendMessage
-
-    // --- Danh sách kết quả ---
+    message: { type: String },
     recipients: { type: [recipientStatusSchema], default: [] },
-}, {
-    timestamps: true // Tự động thêm createdAt và updatedAt
-});
+}, { timestamps: true });
 
-sendHistorySchema.index({ jobId: 1 });
 sendHistorySchema.index({ sentBy: 1, createdAt: -1 });
 
 const SendHistory = models.SendHistory || model('SendHistory', sendHistorySchema);

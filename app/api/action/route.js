@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectToDatabase from '@/config/connectDB';
-import ScheduledJob from '@/models/tasks';
+import Customer from '@/models/client'; // Import Customer model
 import ZaloAccount from '@/models/zalo';
+import ScheduledJob from '@/models/tasks';
 import SendHistory from '@/models/historyClient';
 import { Re_acc, Re_user } from '@/data/users';
 import { Re_History, Re_History_User } from '@/data/client';
@@ -20,29 +22,27 @@ async function executeActionViaAppsScript(actionType, zaloAccount, person, confi
     const payload = {
         uid: zaloAccount.uid,
         phone: person.phone,
+        uidPerson: person.uid || '',
         actionType: actionType,
         message: config.messageTemplate || ''
     };
-
-    const response = await fetch('https://script.google.com/macros/s/AKfycbx0mC-ydmKZvQ8L2rsSgDaNhqCg-JzFs4NHyldMLfpQJmRhtn8dJBqw5gmX_iz1f7QBTQ/exec', {
+    console.log(payload, 0);
+    
+    const response = await fetch('https://script.google.com/macros/s/AKfycbxMQDy5TrIT4KL2BgUCzS4MhV69rg_3Wse2NrePMzvGU63fzcqZHoLko_6C68WWUE8zwg/exec', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'text/plain;charset=utf-8',
-        },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload),
         cache: 'no-store'
     });
-
     const result = await response.json();
-
+    console.log(result,1);
+    
     if (!response.ok || result.status === 'error') {
-        throw new Error(result.mes || 'Lỗi không xác định từ Apps Script.');
+        throw new Error(result.message || 'Lỗi không xác định từ Apps Script.');
     }
 
-    return {
-        success: result.status === 'success',
-        message: result.mes || 'Không có chi tiết.'
-    };
+    // Trả về object data chứa đầy đủ thông tin
+    return result.data;
 }
 
 export async function GET(request) {
@@ -73,29 +73,51 @@ export async function GET(request) {
 
             let result;
             try {
+                // `result` giờ là object { uidStatus, targetUid, actionStatus, actionMessage }
                 result = await executeActionViaAppsScript(actionType, zaloAccount, task.person, config);
             } catch (apiError) {
-                result = { success: false, message: apiError.message };
+                result = {
+                    uidStatus: 'unknown',
+                    targetUid: null,
+                    actionStatus: 'error',
+                    actionMessage: apiError.message
+                };
             }
 
-            const newStatus = result.success ? 'completed' : 'failed';
+            // Mảng chứa tất cả các lệnh cập nhật database
+            const promises = [];
 
+            // 1. Cập nhật UID của Customer nếu tìm được UID mới
+            if (result.uidStatus === 'found_new' && result.targetUid) {
+                const updateCustomerPromise = Customer.updateOne(
+                    { phone: task.person.phone },
+                    { $set: { uid: result.targetUid } }
+                );
+                promises.push(updateCustomerPromise);
+            }
+
+            // 2. Cập nhật trạng thái của task trong ScheduledJob
+            const newStatus = result.actionStatus === 'success' ? 'completed' : 'failed';
             const updateJobPromise = ScheduledJob.updateOne(
                 { _id: jobId, 'tasks._id': task._id },
                 {
                     $set: {
                         'tasks.$.status': newStatus,
-                        'tasks.$.resultMessage': result.message,
+                        'tasks.$.resultMessage': result.actionMessage,
                         'tasks.$.processedAt': new Date(),
                     },
                     $inc: {
-                        [result.success ? 'statistics.completed' : 'statistics.failed']: 1,
+                        [result.actionStatus === 'success' ? 'statistics.completed' : 'statistics.failed']: 1,
                     }
                 }
             );
+            promises.push(updateJobPromise);
 
+            // 3. Tăng số hành động đã dùng của tài khoản Zalo
             const updateZaloPromise = ZaloAccount.findByIdAndUpdate(zaloAccount._id, { $inc: { actionsUsedThisHour: 1 } });
+            promises.push(updateZaloPromise);
 
+            // 4. Ghi nhận lịch sử chi tiết vào SendHistory
             const historyLogPromise = SendHistory.findOneAndUpdate(
                 { jobId: jobId },
                 {
@@ -103,8 +125,8 @@ export async function GET(request) {
                         recipients: {
                             phone: task.person.phone,
                             name: task.person.name,
-                            status: result.success ? 'success' : 'failed',
-                            details: result.message
+                            status: result.actionStatus === 'success' ? 'success' : 'failed',
+                            details: result.actionMessage
                         }
                     },
                     $setOnInsert: {
@@ -113,16 +135,15 @@ export async function GET(request) {
                         actionType: actionType,
                         sentBy: createdBy,
                         message: config.messageTemplate || '',
-                        labels: [],
-                        type: 'Lịch trình'
                     }
                 },
                 { upsert: true, new: true }
             );
-            Re_History_User(task.person.phone)
-            await Promise.all([updateJobPromise, updateZaloPromise, historyLogPromise]);
-            processedCount++;
+            promises.push(historyLogPromise);
+            await Promise.all(promises);
 
+            processedCount++;
+            Re_History_User(task.person.phone);
             const updatedJob = await ScheduledJob.findById(jobId);
             if (updatedJob) {
                 const { completed, failed, total } = updatedJob.statistics;
@@ -135,8 +156,9 @@ export async function GET(request) {
         if (processedCount > 0) {
             Re_user();
             Re_acc();
+            Re_History();
         }
-        Re_History();
+
         return NextResponse.json({ message: `Cron job đã chạy. Đã xử lý ${processedCount} tác vụ.` }, { headers: corsHeaders });
 
     } catch (error) {

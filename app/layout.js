@@ -5,7 +5,6 @@ import Layout_Login from '@/app/(auth)/login';
 import Nav from '@/components/(layout)/nav';
 import '@/styles/all.css'
 import air from './layout.module.css'
-import { Data_account, Get_user } from '@/data/users';
 
 export const metadata = {
   title: "AI Robotic",
@@ -27,8 +26,7 @@ export default async function RootLayout({ children }) {
   let data = null;
   const result = await response.json();
   if (result.status === 2) { data = result.data }
-  console.log(await Data_account());
-  
+
   return (
     <html lang="en">
       <body>

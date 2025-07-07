@@ -26,7 +26,6 @@ const LabelRow = React.memo(({ label, onEdit }) => (
     </div>
 ));
 
-// Cập nhật EditLabelForm để xử lý trạng thái loading
 const EditLabelForm = React.memo(({ label, onSubmit, isLoading }) => {
     const [formData, setFormData] = useState({
         title: label?.title || '',
@@ -157,17 +156,13 @@ export default function Label({ data, onUpdateSuccess, reload }) {
             </div>
         );
     }, [handleOpenEditPopup]);
-
-    // --- RENDER ---
     return (
         <>
-            {/* Nút chính để mở popup */}
             <div className='btn' style={{ margin: 0, transform: 'none' }} onClick={handleOpenListPopup}>
                 <Svg_Label w={16} h={16} c="white" />
-                <p className='text_6' style={{ color: 'white' }}>Quản lý nhãn</p>
+                <p className='text_6' style={{ color: 'white' }}>Quản lý chiến dịch</p>
             </div>
 
-            {/* Popup quản lý và chỉnh sửa nhãn */}
             <FlexiblePopup
                 open={isListPopupOpen}
                 onClose={handleCloseAllPopups}

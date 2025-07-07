@@ -5,6 +5,7 @@ const TaskSchema = new Schema({
         type: {
             name: String,
             phone: String,
+            uid: String,
         },
         required: true,
     },

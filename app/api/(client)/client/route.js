@@ -1,15 +1,13 @@
-import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
+import { google } from 'googleapis';
+import dbConnect from '@/config/connectDB';
+import Customer from '@/models/client';
 
-const SPREADSHEET_ID = '1H5Z1OJxzvk39vjtrdDYzESU61NV7DGPw6K_iD97nh7U';
-// Cập nhật phạm vi dữ liệu theo yêu cầu
-const RANGE_DATA = 'Data!A:O';
+const tag = 'customer_data';
 
-async function getSheets(mode = 'read') {
-  const scopes = mode === 'read'
-    ? ['https://www.googleapis.com/auth/spreadsheets.readonly']
-    : ['https://www.googleapis.com/auth/spreadsheets'];
-
+async function getGoogleSheetsClient() {
+  const scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
   const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -18,140 +16,181 @@ async function getSheets(mode = 'read') {
     projectId: process.env.GOOGLE_PROJECT_ID,
     scopes,
   });
-
   return google.sheets({ version: 'v4', auth });
 }
 
-export async function GET() {
+export async function GET(request) {
+  await dbConnect();
   try {
-    const sheets = await getSheets('read');
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page')) || 1;
+    const limit = parseInt(searchParams.get('limit')) || 10;
+    const query = searchParams.get('query');
+    const status = searchParams.get('status');
+    const campaign = searchParams.get('campaign');
+    // Lấy tham số mới để lọc UID
+    const uidStatus = searchParams.get('uidStatus');
 
-    const { data } = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: RANGE_DATA,
-      valueRenderOption: 'UNFORMATTED_VALUE',
-      dateTimeRenderOption: 'FORMATTED_STRING',
-      majorDimension: 'ROWS',
-      fields: 'values',
-    });
+    const skip = (page - 1) * limit;
+    const filter = {};
 
-    const rows = data.values ?? [];
-    if (rows.length < 2) {
-      return NextResponse.json({ data: [] });
+    if (status) filter.status = status;
+    if (campaign) filter.campaign = campaign;
+
+    // --- THÊM LOGIC LỌC THEO TRẠNG THÁI UID ---
+    if (uidStatus === 'exists') {
+      // Lọc những bản ghi có trường uid tồn tại và không phải là chuỗi rỗng
+      filter.uid = { $exists: true, $ne: "" };
+    } else if (uidStatus === 'missing') {
+      // Lọc những bản ghi không có trường uid hoặc uid là chuỗi rỗng
+      filter.$or = [
+        { uid: { $exists: false } },
+        { uid: "" }
+      ];
     }
 
-    const headers = rows[0];
-    // Tìm vị trí của cột 'phone' một cách linh hoạt
-    const phoneColumnIndex = headers.findIndex(header => header.toLowerCase() === 'phone');
-
-    if (phoneColumnIndex === -1) {
-      return NextResponse.json({ error: "Không tìm thấy cột 'phone' trong sheet." }, { status: 500 });
-    }
-
-    const uniquePhoneMap = new Map();
-
-    rows.slice(1).forEach((row) => {
-      const phoneValue = row[phoneColumnIndex];
-      if (phoneValue && String(phoneValue).trim() !== '') {
-        const normalizedPhone = String(phoneValue).trim().startsWith('0') ? String(phoneValue).trim() : '0' + String(phoneValue).trim();
-
-        const rowData = {};
-        headers.forEach((key, idx) => {
-          rowData[key] = row[idx] ?? '';
-        });
-
-        rowData[headers[phoneColumnIndex]] = normalizedPhone;
-
-        uniquePhoneMap.set(normalizedPhone, rowData);
+    const trimmedQuery = query?.trim();
+    if (trimmedQuery) {
+      // Nếu đã có $or từ uidStatus, cần kết hợp điều kiện bằng $and
+      if (filter.$or) {
+        filter.$and = [
+          { $or: filter.$or },
+          {
+            $or: [
+              { name: { $regex: trimmedQuery, $options: 'i' } },
+              { phone: { $regex: trimmedQuery, $options: 'i' } },
+            ]
+          }
+        ];
+        delete filter.$or; // Xóa $or ban đầu để tránh xung đột
+      } else {
+        filter.$or = [
+          { name: { $regex: trimmedQuery, $options: 'i' } },
+          { phone: { $regex: trimmedQuery, $options: 'i' } },
+        ];
       }
-    });
+    }
 
-    const results = Array.from(uniquePhoneMap.values());
+    const [data, total] = await Promise.all([
+      Customer.find(filter)
+        .sort({ createdAt: -1, _id: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Customer.countDocuments(filter),
+    ]);
 
-    return new Response(JSON.stringify({ data: results.reverse() }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
-        'Vercel-CDN-Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
-      },
+    return NextResponse.json({
+      status: true,
+      data,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     });
-  } catch (err) {
-    console.error('Error fetching sheet data:', err);
-    return new Response(
-      JSON.stringify({ error: 'Failed to fetch data from Google Sheets' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    );
+  } catch (error) {
+    return NextResponse.json({ status: false, message: 'Server Error', error: error.message }, { status: 500 });
   }
 }
 
-export async function POST(req) {
+export async function POST(request) {
+  await dbConnect();
   try {
-    const { phone, care, studyTry, study, remove } = await req.json();
-
-    if (!phone) {
-      return new Response(
-        JSON.stringify({ status: 1, mes: 'Thiếu số điện thoại (phone)', data: [] }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } },
-      );
+    const { spreadsheetId, range } = await request.json();
+    if (!spreadsheetId || !range) {
+      return NextResponse.json({ status: false, mes: 'Vui lòng cung cấp spreadsheetId và range.', data: [] }, { status: 400 });
     }
 
-    const sheets = await getSheets('write');
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+    const rows = response.data.values ?? [];
 
-    const { data } = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'Data!B:B',
-      valueRenderOption: 'UNFORMATTED_VALUE',
-      majorDimension: 'COLUMNS',
-      fields: 'values',
-    });
-    const normalizePhone = (p) => {
-      const s = String(p).trim();
-      return s && s[0] !== '0' ? '0' + s : s;
-    };
-    const phones = (data.values?.[0] ?? []).map(normalizePhone);
-    const target = normalizePhone(phone);
-    const idx = phones.findIndex(p => p === target);
-    if (idx === -1) {
-      return new Response(
-        JSON.stringify({ status: 1, mes: 'Không tìm thấy phone trong Sheet', data: [] }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } },
-      );
+    if (rows.length < 2) {
+      return NextResponse.json({ status: true, mes: 'Google Sheet không có dữ liệu.', data: [] });
     }
-    const rowNum = idx + 1;
 
-    const { data: oldData } = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `Data!H${rowNum}:K${rowNum}`,
-      valueRenderOption: 'UNFORMATTED_VALUE',
-      majorDimension: 'ROWS',
-      fields: 'values',
-    });
-    const oldValues = oldData.values?.[0] ?? [];
-    const [oldCare = '', oldStudyTry = '', oldStudy = '', oldRemove = ''] = oldValues;
+    const headers = rows[0];
+    const dataRows = rows.slice(1);
+    const phoneIndex = headers.indexOf('phone');
+    const nameIndex = headers.indexOf('nameStudent');
+    const uidIndex = headers.indexOf('uid');
 
-    const newCare = care !== undefined ? care : oldCare;
-    const newStudyTry = studyTry !== undefined ? studyTry : oldStudyTry;
-    const newStudy = study !== undefined ? study : oldStudy;
-    const newRemove = remove !== undefined ? remove : oldRemove;
+    if (phoneIndex === -1) {
+      return NextResponse.json({ status: false, mes: 'Không tìm thấy cột "phone" trong Google Sheet.', data: [] }, { status: 400 });
+    }
 
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `Data!H${rowNum}:K${rowNum}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: {
-        values: [[newCare, newStudyTry, newStudy, newRemove]]
-      },
-    });
-    return new Response(
-      JSON.stringify({ status: 2, mes: 'Đã cập nhật', data: rowNum }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    );
-  } catch (err) {
-    console.error('Error updating sheet:', err);
-    return new Response(
-      JSON.stringify({ error: 'Failed to update Google Sheet' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    );
+    // ----- BƯỚC 1: LỌC TRÙNG LẶP NGAY TRONG GOOGLE SHEET -----
+    const processedPhonesInSheet = new Set();
+    const validCustomersFromSheet = [];
+
+    for (const row of dataRows) {
+      let phone = row[phoneIndex] || '';
+      if (!phone) continue;
+
+      // Chuẩn hóa SĐT
+      phone = phone.toString().replace(/\s+/g, '');
+      const phoneLength = phone.length;
+      if (phoneLength < 9 || phoneLength > 11) continue;
+      if (phone.length === 9 && phone[0] !== '0') phone = '0' + phone;
+      if (phone.length === 10 && phone[0] !== '0') continue;
+      if (phone.length === 11 && phone.startsWith('84')) phone = '0' + phone.substring(2);
+      else if (phone.length === 11) continue;
+      if (phone.length !== 10) continue;
+
+      // Đảm bảo mỗi SĐT chỉ được xử lý một lần duy nhất từ sheet
+      if (!processedPhonesInSheet.has(phone)) {
+        processedPhonesInSheet.add(phone);
+        validCustomersFromSheet.push({
+          phone: phone,
+          name: row[nameIndex] || '',
+          uid: row[uidIndex] || '',
+        });
+      }
+    }
+
+    if (validCustomersFromSheet.length === 0) {
+      return NextResponse.json({ status: true, mes: 'Không có khách hàng có số điện thoại hợp lệ nào trong Sheet.', data: [] });
+    }
+
+    // ----- BƯỚC 2: KIỂM TRA TRÙNG LẶP VỚI DATABASE -----
+    // Lấy danh sách các SĐT duy nhất từ sheet để kiểm tra
+    const phonesToCheck = Array.from(processedPhonesInSheet);
+
+    // Tìm các khách hàng đã tồn tại trong DB với các SĐT này
+    const existingCustomers = await Customer.find({ phone: { $in: phonesToCheck } }).select('phone').lean();
+    const existingPhonesSet = new Set(existingCustomers.map(c => c.phone));
+
+    // Lọc lần cuối để chỉ giữ lại những khách hàng có phone CHƯA TỒN TẠI trong DB
+    const customersToInsert = validCustomersFromSheet.filter(c => !existingPhonesSet.has(c.phone));
+
+    if (customersToInsert.length === 0) {
+      return NextResponse.json({ status: true, mes: 'Tất cả khách hàng hợp lệ trong Sheet đã tồn tại trong database.', data: [] });
+    }
+
+    const result = await Customer.insertMany(customersToInsert);
+    revalidateTag(tag);
+
+    return NextResponse.json({ status: true, mes: `Đã thêm thành công ${result.length} khách hàng mới.`, data: result }, { status: 201 });
+
+  } catch (error) {
+    if (error.code === 11000) {
+      return NextResponse.json({ status: false, mes: 'Lỗi trùng lặp số điện thoại. Vui lòng kiểm tra lại.', error: error.message }, { status: 409 });
+    }
+    return NextResponse.json({ status: false, mes: 'Đã xảy ra lỗi phía server.', error: error.message }, { status: 500 });
+  }
+}
+
+export async function PUT(request) {
+  await dbConnect();
+  try {
+    const { _id, ...fieldsToUpdate } = await request.json();
+    if (!_id) {
+      return NextResponse.json({ status: false, message: '_id is required for update.' }, { status: 400 });
+    }
+    const updatedCustomer = await Customer.findByIdAndUpdate(_id, fieldsToUpdate, { new: true }).lean();
+    if (!updatedCustomer) {
+      return NextResponse.json({ status: false, message: 'Customer not found.' }, { status: 404 });
+    }
+    revalidateTag(tag);
+    return NextResponse.json({ status: true, data: updatedCustomer });
+  } catch (error) {
+    return NextResponse.json({ status: false, message: 'Server Error', error: error.message }, { status: 500 });
   }
 }

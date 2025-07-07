@@ -32,7 +32,7 @@ export async function POST(request) {
         if (!accountToLock) {
             return NextResponse.json({ status: 1, mes: 'Tài khoản Zalo này đang bận thực hiện một lịch trình khác.' }, { status: 409 });
         }
-        lockedAccountId = accountToLock._id; // Lưu lại ID để có thể mở khóa nếu lỗi
+        lockedAccountId = accountToLock._id;
 
         const totalTasks = tasks.length;
         const actionsPerHour = config.actionsPerHour || accountToLock.rateLimitPerHour;
@@ -41,16 +41,21 @@ export async function POST(request) {
         let currentTime = new Date();
         let actionsInCurrentHour = 0;
 
+        // ----- THAY ĐỔI CHÍNH Ở ĐÂY -----
+        // Vòng lặp map giờ sẽ xử lý mỗi task có dạng { person: { ... } }
         const tasksWithSchedule = tasks.map(task => {
             if (actionsInCurrentHour >= actionsPerHour) {
                 currentTime.setHours(currentTime.getHours() + 1, 0, 0, 0);
                 actionsInCurrentHour = 0;
             }
+
+            // Tạo một task mới, giữ nguyên đối tượng person và thêm các thông tin lịch trình
             const scheduledTask = {
-                ...task,
+                person: task.person, // Lấy đúng đối tượng person từ input
                 status: 'pending',
                 scheduledFor: new Date(currentTime.getTime()),
             };
+
             currentTime.setTime(currentTime.getTime() + delayBetweenTasksInMillis);
             actionsInCurrentHour++;
             return scheduledTask;
@@ -79,7 +84,7 @@ export async function POST(request) {
 
         Re_acc();
         Re_user();
-
+        
         return NextResponse.json({
             status: 2,
             mes: 'Đặt lịch trình thành công!',

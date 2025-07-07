@@ -3,24 +3,19 @@ import fetchApi from '@/utils/fetchApi';
 import { revalidateTag } from 'next/cache';
 
 
-export async function Data_Client() {
+export async function Data_Client(searchParams) {
     try {
-        const res = await fetchApi(`/client`, {
+        const queryString = new URLSearchParams(searchParams).toString();
+        const res = await fetchApi(`/client?${queryString}`, {
             method: 'GET',
-            cache: "force-cache",
-            next: { tags: ['data_client'] }
+            cache: 'no-store', 
+            next: { tags: ['customer_data'] } 
         });
         return res;
     } catch (err) {
-        return { data: [] };
+        return { data: [], pagination: {} };
     }
 }
-
-export async function Re_Client() {
-    revalidateTag('data_client');
-}
-
-
 
 export async function Data_Label() {
     try {

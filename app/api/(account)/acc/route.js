@@ -71,7 +71,8 @@ export async function POST(request) {
         });
 
         const accountData = await scriptResponse.json();
-
+        console.log(accountData, 1);
+        
         if (!scriptResponse.ok || accountData.error) {
             // ERROR: Google Apps Script failed
             return NextResponse.json(

@@ -256,9 +256,7 @@ export default function Setting({ user }) {
 
     const handleCloseNotification = () => {
         setNotification({ ...notification, open: false });
-        setloadfull(true);
         router.refresh();
-        window.location.reload();
     };
 
     const renderConfigList = () => (
