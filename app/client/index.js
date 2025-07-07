@@ -8,6 +8,8 @@ import AddLabelButton from './ui/addlabel';
 import Setting from './ui/setting';
 import Run from './ui/run';
 import Schedule from './ui/schedule';
+import HistoryPopup from './ui/his';
+import SidePanel from './ui/more';
 
 const useSelection = (idKey = '_id') => {
     const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -21,9 +23,9 @@ const useSelection = (idKey = '_id') => {
     return { selectedIds, toggleOne, setSelectedIds, size: selectedIds.size };
 };
 
-const Row = React.memo(function Row({ row, rowIndex, onToggle, checked }) {
+const Row = React.memo(function Row({ row, rowIndex, onToggle, checked, onRowClick }) {
     return (
-        <div className={styles.gridRow} style={{ backgroundColor: row.remove ? '#ffd9dd' : 'white' }}>
+        <div className={styles.gridRow} style={{ backgroundColor: row.remove ? '#ffd9dd' : 'white' }} onClick={() => onRowClick(row)}>
             <div className={`${styles.gridCell} ${styles.colTiny}`} style={{ flex: .5, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                 <input type="checkbox" className={styles.bigCheckbox} checked={checked} onChange={() => onToggle(row)} />
             </div>
@@ -46,6 +48,10 @@ export default function Client({ initialData, initialPagination, initialLabels, 
     const [selectedCustomerMap, setSelectedCustomerMap] = useState(new Map());
     const [viewMode, setViewMode] = useState('all');
     const [query, setQuery] = useState(searchParams.get('query') || '');
+    const [showLabelPopup, setShowLabelPopup] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [panelOpen, setPanelOpen] = useState(false);
+    const [selectedRow, setSelectedRow] = useState(null);
 
     const serverPage = initialPagination?.page || 1;
     const serverTotalPages = initialPagination?.totalPages || 1;
@@ -53,14 +59,9 @@ export default function Client({ initialData, initialPagination, initialLabels, 
 
     const handleNavigation = useCallback((name, value) => {
         const params = new URLSearchParams(searchParams);
-        if (value) {
-            params.set(name, value);
-        } else {
-            params.delete(name);
-        }
-        if (name !== 'page') {
-            params.set('page', '1');
-        }
+        if (value) params.set(name, value);
+        else params.delete(name);
+        if (name !== 'page') params.set('page', '1');
         startTransition(() => {
             setViewMode('all');
             router.push(`${pathname}?${params.toString()}`);
@@ -131,17 +132,36 @@ export default function Client({ initialData, initialPagination, initialLabels, 
     const scheduleData = useMemo(() => Array.from(selectedCustomerMap.values()), [selectedCustomerMap]);
 
     const rowsToDisplay = useMemo(() => viewMode === 'selected' ? scheduleData : initialData, [viewMode, scheduleData, initialData]);
-    const totalDisplayPages = useMemo(() => viewMode === 'selected' ? 1 : serverTotalPages, [viewMode, serverTotalPages]);
+    const totalDisplayPages = useMemo(() => viewMode === 'selected' ? Math.ceil(scheduleData.length / serverLimit) || 1 : serverTotalPages, [viewMode, scheduleData.length, serverLimit, serverTotalPages]);
     const currentDisplayPage = useMemo(() => viewMode === 'selected' ? 1 : serverPage, [viewMode, serverPage]);
+
+    // --- LOGIC CHO SIDEPANEL ---
+    const handleRowClick = useCallback((row) => {
+        setSelectedRow(row);
+        setPanelOpen(true);
+    }, []);
+
+    const closePanel = useCallback(() => {
+        setPanelOpen(false);
+        setTimeout(() => setSelectedRow(null), 300); // Chờ animation kết thúc
+    }, []);
+
+    const handleSaveChanges = useCallback(() => {
+        closePanel();
+        handleRefresh(); // Dùng lại hàm refresh đã có
+    }, [closePanel, handleRefresh]);
 
     return (
         <div className={styles.container}>
             <div className={styles.filterSection}>
                 <div className={styles.filterHeader}>
                     <p className='text_3' style={{ color: 'white' }}>Danh sách khách hàng</p>
-                    <button className={`${styles.btnAction} ${styles.btnReload}`} onClick={handleRefresh} disabled={isPending}>
-                        {isPending ? 'Đang làm mới...' : 'Làm mới dữ liệu'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '16px' }}>
+                        <button className={styles.btnAction} onClick={() => setHistoryOpen(true)}>Xem lịch sử</button>
+                        <button className={`${styles.btnAction} ${styles.btnReload}`} onClick={handleRefresh} disabled={isPending}>
+                            {isPending ? 'Đang làm mới...' : 'Làm mới dữ liệu'}
+                        </button>
+                    </div>
                 </div>
                 <div className={styles.filterChips}>
                     <div style={{ flex: 1, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -176,6 +196,13 @@ export default function Client({ initialData, initialPagination, initialLabels, 
                             <option value="missing">Thiếu UID</option>
                         </select>
                     </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <p className="text_6">Chọn</p>
+                        <div className={styles.viewToggle}>
+                            <button className={`${styles.viewBtn} ${viewMode === 'all' ? styles.active : ''}`} onClick={() => setViewMode('all')}>Tất cả ({initialPagination?.total || 0})</button>
+                            <button className={`${styles.viewBtn} ${viewMode === 'selected' ? styles.active : ''}`} onClick={() => setViewMode('selected')}>Đã chọn ({selectedCount})</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -192,6 +219,8 @@ export default function Client({ initialData, initialPagination, initialLabels, 
                 </div>
                 <Schedule data={scheduleData} user={user} label={initialLabels} />
             </div>
+
+
 
             {isPending && <div className={styles.loading}>Đang tải dữ liệu...</div>}
 
@@ -211,10 +240,11 @@ export default function Client({ initialData, initialPagination, initialLabels, 
                         </div>
                         <div className={styles.gridBody}>
                             {rowsToDisplay.map((r, idx) => (
-                                <Row key={r._id} row={r} rowIndex={(viewMode === 'all' ? ((serverPage - 1) * serverLimit) : 0) + idx} onToggle={toggleRowAndStoreData} checked={selectedIds.has(r._id)} />
+                                <Row key={r._id} row={r} rowIndex={(viewMode === 'all' ? ((serverPage - 1) * serverLimit) : 0) + idx} onToggle={toggleRowAndStoreData} checked={selectedIds.has(r._id)} onRowClick={handleRowClick} />
                             ))}
                         </div>
                     </div>
+
                     {totalDisplayPages > 1 && (
                         <div className={styles.pagination}>
                             {currentDisplayPage > 1 && (<button onClick={() => handleNavigation('page', currentDisplayPage - 1)} className={styles.pageBtn}>&laquo; Trang trước</button>)}
@@ -224,6 +254,25 @@ export default function Client({ initialData, initialPagination, initialLabels, 
                     )}
                 </>
             )}
+
+            {showLabelPopup && (
+                <div className={styles.labelModalBackdrop} onClick={() => setShowLabelPopup(false)}>
+                    <div className={styles.labelModal} onClick={e => e.stopPropagation()}>
+                        <h3 className={styles.labelModalTitle}>Chọn nhãn để lọc</h3>
+                        <div className={styles.labelModalGrid}>
+                            {uniqueLabels.map(lbl => {
+                                const active = currentSelectedLabels.has(lbl);
+                                return (<button key={lbl} className={`${styles.chipLarge}${active ? ` ${styles.chipActive}` : ''}`} onClick={() => handleLabelToggle(lbl)}>{lbl}{active && <span className={styles.chipRemove}>×</span>}</button>);
+                            })}
+                        </div>
+                        <button className={styles.btnCloseModal} onClick={() => setShowLabelPopup(false)}>Đóng</button>
+                    </div>
+                </div>
+            )}
+
+            <HistoryPopup open={historyOpen} onClose={() => setHistoryOpen(false)} datauser={initialData} type="all" />
+
+            <SidePanel open={panelOpen} row={selectedRow} labels={selectedRow?.label || []} onClose={closePanel} onSave={handleSaveChanges} />
         </div>
     );
 }

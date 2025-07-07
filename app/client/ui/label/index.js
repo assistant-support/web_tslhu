@@ -79,7 +79,8 @@ const EditLabelForm = React.memo(({ label, onSubmit, isLoading }) => {
 });
 
 
-export default function Label({ data, onUpdateSuccess, reload }) {
+export default function Label({ data, onUpdateSuccess }) {
+    const router = useRouter();
     const [isListPopupOpen, setListPopupOpen] = useState(false);
     const [editingLabelId, setEditingLabelId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -124,8 +125,7 @@ export default function Label({ data, onUpdateSuccess, reload }) {
             });
 
             if (isSuccess) {
-                reload();
-                window.location.reload(); 
+                router.refresh(); 
                 handleCloseEditPopup();
                 if (onUpdateSuccess) {
                     onUpdateSuccess();

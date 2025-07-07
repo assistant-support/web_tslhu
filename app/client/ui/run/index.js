@@ -114,6 +114,8 @@ const renderDetailPopupContent = ({ job, onEditRecipients, onSave, onStop, isSub
 };
 
 export default function Run({ data }) {
+    console.log(data);
+    
     const router = useRouter();
     const [isSubmitting, startTransition] = useTransition(); 
     const [timeLeft, setTimeLeft] = useState('');

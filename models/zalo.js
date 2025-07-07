@@ -32,9 +32,9 @@ const ZaloAccountSchema = new Schema({
         type: Date,
         default: Date.now,
     },
-    task:{
+    task: {
         type: Schema.Types.ObjectId,
-        ref: 'scheduledjob', 
+        ref: 'scheduledjob',
     },
     isLocked: {
         type: Boolean,
@@ -44,6 +44,9 @@ const ZaloAccountSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'user',
         required: true,
+    },
+    action: {
+        type: String,
     }
 }, {
     timestamps: true,

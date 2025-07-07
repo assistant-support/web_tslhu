@@ -124,8 +124,6 @@ const renderCareHistory = (histories, onHistoryClick, userPhone) => {
     );
 };
 
-// --- COMPONENT CHÍNH ---
-
 export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
     const firstInputRef = useRef(null);
     const [inputs, setInputs] = useState({ care: '', studyTry: '', study: '' });

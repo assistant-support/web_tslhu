@@ -26,22 +26,16 @@ async function executeActionViaAppsScript(actionType, zaloAccount, person, confi
         actionType: actionType,
         message: config.messageTemplate || ''
     };
-    console.log(payload, 0);
-    
-    const response = await fetch('https://script.google.com/macros/s/AKfycbxMQDy5TrIT4KL2BgUCzS4MhV69rg_3Wse2NrePMzvGU63fzcqZHoLko_6C68WWUE8zwg/exec', {
+    const response = await fetch(zaloAccount.action, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload),
         cache: 'no-store'
     });
     const result = await response.json();
-    console.log(result,1);
-    
     if (!response.ok || result.status === 'error') {
         throw new Error(result.message || 'Lỗi không xác định từ Apps Script.');
     }
-
-    // Trả về object data chứa đầy đủ thông tin
     return result.data;
 }
 
@@ -73,8 +67,7 @@ export async function GET(request) {
 
             let result;
             try {
-                // `result` giờ là object { uidStatus, targetUid, actionStatus, actionMessage }
-                result = await executeActionViaAppsScript(actionType, zaloAccount, task.person, config);
+                result = await executeActionViaAppsScript(actionType, currentZaloAccount, task.person, config);
             } catch (apiError) {
                 result = {
                     uidStatus: 'unknown',
@@ -84,7 +77,6 @@ export async function GET(request) {
                 };
             }
 
-            // Mảng chứa tất cả các lệnh cập nhật database
             const promises = [];
 
             // 1. Cập nhật UID của Customer nếu tìm được UID mới
