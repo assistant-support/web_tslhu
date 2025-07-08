@@ -28,7 +28,6 @@ export async function GET(request) {
     const query = searchParams.get('query');
     const status = searchParams.get('status');
     const campaign = searchParams.get('campaign');
-    // Lấy tham số mới để lọc UID
     const uidStatus = searchParams.get('uidStatus');
 
     const skip = (page - 1) * limit;
@@ -37,12 +36,9 @@ export async function GET(request) {
     if (status) filter.status = status;
     if (campaign) filter.campaign = campaign;
 
-    // --- THÊM LOGIC LỌC THEO TRẠNG THÁI UID ---
     if (uidStatus === 'exists') {
-      // Lọc những bản ghi có trường uid tồn tại và không phải là chuỗi rỗng
       filter.uid = { $exists: true, $ne: "" };
     } else if (uidStatus === 'missing') {
-      // Lọc những bản ghi không có trường uid hoặc uid là chuỗi rỗng
       filter.$or = [
         { uid: { $exists: false } },
         { uid: "" }
@@ -51,7 +47,6 @@ export async function GET(request) {
 
     const trimmedQuery = query?.trim();
     if (trimmedQuery) {
-      // Nếu đã có $or từ uidStatus, cần kết hợp điều kiện bằng $and
       if (filter.$or) {
         filter.$and = [
           { $or: filter.$or },
@@ -62,7 +57,7 @@ export async function GET(request) {
             ]
           }
         ];
-        delete filter.$or; // Xóa $or ban đầu để tránh xung đột
+        delete filter.$or; 
       } else {
         filter.$or = [
           { name: { $regex: trimmedQuery, $options: 'i' } },
