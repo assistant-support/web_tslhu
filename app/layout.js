@@ -7,8 +7,8 @@ import '@/styles/all.css'
 import air from './layout.module.css'
 
 export const metadata = {
-  title: "AI Robotic",
-  description: "Khóa học công nghệ cho trẻ"
+  title: "iTrail",
+  description: "Chăm sóc tuyển sinh tự động"
 };
 
 export default async function RootLayout({ children }) {

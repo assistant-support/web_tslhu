@@ -48,7 +48,6 @@ export async function GET(request) {
 
     const trimmedQuery = query?.trim();
     if (trimmedQuery) {
-      // Nếu đã có $or từ uidStatus, cần kết hợp điều kiện bằng $and
       if (filter.$or) {
         filter.$and = [
           { $or: filter.$or },
@@ -59,7 +58,7 @@ export async function GET(request) {
             ],
           },
         ];
-        delete filter.$or; // Xóa $or ban đầu để tránh xung đột
+        delete filter.$or;
       } else {
         filter.$or = [
           { name: { $regex: trimmedQuery, $options: "i" } },

@@ -159,8 +159,8 @@ export default function Nav() {
       <div className='flex_col' style={{ justifyContent: 'space-between', height: '100%', alignItems: 'center' }}>
         <div style={{ height: 100, width: 100 }} className="flex_center">
           <p className="text_1">
-            <span style={{ color: 'var(--main_d)' }}> AI</span>
-            <span>R</span>
+            <span style={{ color: 'var(--main_d)' }}>i</span>
+            <span>Trail</span>
           </p>
         </div>
         <div className={air.container}>
