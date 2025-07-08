@@ -75,7 +75,7 @@ export async function GET(request) {
         .lean(),
       Customer.countDocuments(filter),
     ]);
-
+    
     return NextResponse.json({
       status: true,
       data,
