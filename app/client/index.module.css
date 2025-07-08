@@ -454,6 +454,25 @@
     white-space: nowrap;
 }
 
+.popupTable {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.popupTable th,
+.popupTable td {
+    border: 1px solid #ddd;
+    padding: 6px 8px;
+    font-size: 14px;
+    vertical-align: top;
+}
+
+.popupTable thead {
+    background: #f5f5f5;
+    font-weight: 600;
+}
+
+
 .viewBtn.active {
     background-color: #ffffff;
     color: var(--text-primary);
