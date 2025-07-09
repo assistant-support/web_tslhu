@@ -9,11 +9,6 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwcaXcpdsonX5eG
 const SPREADSHEET_ID = '1H5Z1OJxzvk39vjtrdDYzESU61NV7DGPw6K_iD97nh7U';
 const TARGET_SHEET = 'Account';
 
-/**
- * Creates and authenticates a Google Sheets API client.
- * @param {boolean} isWrite - Determines if the client needs write permissions.
- * @returns {Promise<import('googleapis').sheets_v4.Sheets>}
- */
 async function getGoogleSheetsClient(isWrite = false) {
     const scopes = isWrite
         ? ['https://www.googleapis.com/auth/spreadsheets']

@@ -47,6 +47,7 @@ const CustomerSchema = new Schema(
     careNote: { type: String },
     studyTryNote: { type: String },
     studyNote: { type: String },
+    action: [ActionRefSchema], 
   },
   {
     timestamps: true,

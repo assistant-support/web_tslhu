@@ -15,7 +15,7 @@ export async function POST(req) {
     const ok = await bcrypt.compare(password, user.uid);
     if (!ok) return jsonRes(401, { status: 1, mes: 'Mật khẩu không chính xác!', data: [] });
 
-    const jwtLife = re ? '30d' : '1h';
+    const jwtLife = re ? '1200d' : '1h';
     const accessToken = jwt.sign(
       { id: user._id, role: user.role, zalo: user.zalo || null },
       process.env.JWT_SECRET,
@@ -26,7 +26,7 @@ export async function POST(req) {
       sameSite: 'lax',
       path: '/',
     };
-    if (re) opts.maxAge = 60 * 60 * 24 * 30;
+    if (re) opts.maxAge = 60 * 60 * 24 * 1200;
 
     cookies().set(process.env.token, accessToken, opts);
     return jsonRes(200, { status: 2, mes: 'Đăng nhập thành công', data: [] });
