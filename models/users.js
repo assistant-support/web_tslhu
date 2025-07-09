@@ -8,7 +8,7 @@ const postUser = new Schema({
   phone: { type: String },
   email: { type: String },
   uid: { type: String },
-  zalo: { type: Schema.Types.ObjectId, required: true, ref: 'zaloaccount' }
+  zalo: { type: Schema.Types.ObjectId, ref: 'zaloaccount' }
 })
 
 const users = models.user || model('user', postUser)

@@ -148,7 +148,7 @@ const Row = React.memo(function Row({
             <div style={{ display: "flex", flex: 5 }} onClick={() => onRowClick(row)}>
                 <div
                     className={`${styles.gridCell} ${styles.colTiny}`}
-                    style={{ flex: 0.5, textAlign: "center" }}
+                    style={{ flex: 0.2, textAlign: "center" }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <input
@@ -161,20 +161,25 @@ const Row = React.memo(function Row({
 
                 <div
                     className={`${styles.gridCell} ${styles.colSmall} text_6_400`}
-                    style={{ flex: 0.5, textAlign: "center", fontWeight: 600 }}
+                    style={{ flex: 0.2, textAlign: "center", fontWeight: 600 }}
                 >
                     {rowIndex + 1}
                 </div>
 
                 <div className={`${styles.gridCell} text_6_400`}>{row.phone}</div>
                 <div className={`${styles.gridCell} text_6_400`}>{row.name}</div>
-                <div className={`${styles.gridCell} text_6_400`}>
+                <div className={`${styles.gridCell} text_6_400`} style={{ flex: .5 }}>
                     <StageIndicator level={row.stageLevel} />
                 </div>
                 <div className={`${styles.gridCell} text_6_400`}>
                     {row.status?.name || "-"}
                 </div>
-                <div className={`${styles.gridCell} text_6_400`}>{row.uid}</div>
+                <div className={`${styles.gridCell} text_7_400`} style={{ flex: .5 }}>
+                    <p style={{ padding: '3px 12px', color: 'white', fontSize: 12, borderRadius: 12, background: row.uid == 'Lỗi tìm kiếm' ? 'var(--yellow)' : row.uid ? 'var(--green)' : 'var(--red)' }}>
+                        {row.uid == 'Lỗi tìm kiếm' ? 'Lỗi' : row.uid ? 'Đã có' : 'Chưa tìm'}
+                    </p>
+
+                </div>
             </div>
 
             <div
@@ -599,7 +604,7 @@ export default function Client({
                             <div style={{ display: "flex", flex: 5 }}>
                                 <div
                                     className={`${styles.gridCell} ${styles.colTiny}`}
-                                    style={{ textAlign: "center", flex: 0.5 }}
+                                    style={{ textAlign: "center", flex: 0.2 }}
                                 >
                                     <input
                                         type="checkbox"
@@ -619,7 +624,7 @@ export default function Client({
                                 </div>
                                 <div
                                     className={`${styles.gridCell} ${styles.colSmall} text_6`}
-                                    style={{ flex: 0.5, color: "white" }}
+                                    style={{ flex: 0.2, color: "white" }}
                                 >
                                     STT
                                 </div>
@@ -637,7 +642,7 @@ export default function Client({
                                 </div>
                                 <div
                                     className={`${styles.gridCell} text_6`}
-                                    style={{ color: "white" }}
+                                    style={{ color: "white", flex: .5 }}
                                 >
                                     Giai đoạn
                                 </div>
@@ -649,7 +654,7 @@ export default function Client({
                                 </div>
                                 <div
                                     className={`${styles.gridCell} text_6`}
-                                    style={{ color: "white" }}
+                                    style={{ color: "white", flex: .5 }}
                                 >
                                     UID
                                 </div>

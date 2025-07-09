@@ -185,7 +185,6 @@ const DetailContent = ({
 
 // ---------- main ----------
 export default function Run({ data }) {
-    console.log(data);
     const router = useRouter()
     const [isSubmitting, startTransition] = useTransition()
 
