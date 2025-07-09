@@ -319,28 +319,12 @@ export async function POST(request) {
   }
 }
 
-// export async function PUT(request) {
-//   await dbConnect();
-//   try {
-//     const { _id, ...fieldsToUpdate } = await request.json();
-//     if (!_id) {
-//       return NextResponse.json({ status: false, message: '_id is required for update.' }, { status: 400 });
-//     }
-//     const updatedCustomer = await Customer.findByIdAndUpdate(_id, fieldsToUpdate, { new: true }).lean();
-//     if (!updatedCustomer) {
-//       return NextResponse.json({ status: false, message: 'Customer not found.' }, { status: 404 });
-//     }
-//     revalidateTag(tag);
-//     return NextResponse.json({ status: true, data: updatedCustomer });
-//   } catch (error) {
-//     return NextResponse.json({ status: false, message: 'Server Error', error: error.message }, { status: 500 });
-//   }
-// }
-
 export async function PUT(request) {
   await dbConnect();
   try {
-    const { _id, ...fieldsToUpdate } = await request.json();
+    const body = await request.json();
+    const { _id, status, ...otherFields } = body;
+
     if (!_id) {
       return NextResponse.json(
         { status: false, message: "_id is required for update." },
@@ -348,26 +332,37 @@ export async function PUT(request) {
       );
     }
 
-    // --- LOGIC TÍNH TOÁN STAGE LEVEL ---
+    // --- BƯỚC 1: TÍNH TOÁN STAGE LEVEL (LOGIC CŨ CỦA BẠN) ---
     let stageLevel = 0;
-    if (fieldsToUpdate.study) {
-      // `study` từ checkbox `Nhập học`
+    if (otherFields.study) {
       stageLevel = 3;
-    } else if (fieldsToUpdate.studyTry) {
-      // `studyTry` từ checkbox `OTP`
+    } else if (otherFields.studyTry) {
       stageLevel = 2;
-    } else if (fieldsToUpdate.care) {
-      // `care` từ checkbox `Care`
+    } else if (otherFields.care) {
       stageLevel = 1;
     }
 
-    // Gán giá trị vừa tính được vào object sẽ được lưu
-    fieldsToUpdate.stageLevel = stageLevel;
-    // ------------------------------------
+    // Gán giá trị stageLevel và các trường khác vào lệnh $set
+    const updateOperation = {
+      $set: {
+        ...otherFields,
+        stageLevel: stageLevel,
+      },
+    };
 
+    // --- BƯỚC 2: XỬ LÝ TRẠNG THÁI ĐỘNG (LOGIC MỚI) ---
+    if (status && status.trim() !== "") {
+      // Nếu có status ID hợp lệ, thêm nó vào lệnh $set
+      updateOperation.$set.status = status;
+    } else {
+      // Nếu status là rỗng, thêm lệnh $unset để xóa trường này
+      updateOperation.$unset = { status: 1 };
+    }
+
+    // --- BƯỚC 3: THỰC THI LỆNH CẬP NHẬT ---
     const updatedCustomer = await Customer.findByIdAndUpdate(
       _id,
-      fieldsToUpdate,
+      updateOperation,
       { new: true },
     ).lean();
 
@@ -377,9 +372,21 @@ export async function PUT(request) {
         { status: 404 },
       );
     }
+
     revalidateTag(tag);
     return NextResponse.json({ status: true, data: updatedCustomer });
   } catch (error) {
+    if (error.name === "CastError") {
+      return NextResponse.json(
+        {
+          status: false,
+          message:
+            "Lỗi định dạng dữ liệu, có thể do ID trạng thái không hợp lệ.",
+          error: error.message,
+        },
+        { status: 400 },
+      );
+    }
     return NextResponse.json(
       { status: false, message: "Server Error", error: error.message },
       { status: 500 },

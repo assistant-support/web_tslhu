@@ -273,56 +273,130 @@ const StatusManager = ({ statuses, onUpdate, onClose }) => {
     <>
       <div
         style={{
-          padding: "20px",
-          width: "400px",
+          position: "relative",
+          padding: "16px",
+          // Bỏ width cố định, thêm minWidth và maxWidth
+          minWidth: "320px",
+          maxWidth: "500px",
           maxHeight: "80vh",
-          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        <h3 style={{ marginTop: 0 }}>Quản lý Trạng thái</h3>
-        {/* Phần list và form giữ nguyên như cũ */}
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {statuses.map((s) => (
-            <li
-              key={s._id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                marginBottom: "10px",
-                padding: "8px",
-                background: "#f0f0f0",
-                borderRadius: "4px",
-              }}
-            >
-              <span style={{ flex: 1 }}>{s.name}</span>
-              <button onClick={() => setEditingStatus(s)}>Sửa</button>
-              <button
-                onClick={() => handleDeleteClick(s)}
-                style={{ color: "red" }}
-              >
-                Xóa
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div
+        <button
+          onClick={onClose}
           style={{
-            borderTop: "1px solid #ccc",
-            paddingTop: "20px",
-            marginTop: "20px",
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            background: "none",
+            border: "none",
+            fontSize: "24px",
+            cursor: "pointer",
+            lineHeight: "1",
+            padding: "5px",
           }}
         >
+          &times;
+        </button>
+
+        <h3
+          style={{ marginTop: 0, paddingRight: "25px", marginBottom: "16px" }}
+        >
+          Quản lý Trạng thái
+        </h3>
+
+        {/* Div chứa danh sách trạng thái với thanh cuộn riêng */}
+        <div
+          style={{
+            flexShrink: 1,
+            overflowY: "auto",
+            border: "1px solid #eee",
+            padding: "10px",
+            borderRadius: "5px",
+            marginBottom: "16px",
+          }}
+        >
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {statuses.map((s) => (
+              <li
+                key={s._id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "8px 0",
+                  borderBottom: "1px solid #f0f0f0",
+                }}
+              >
+                {/* Cho phép text tự xuống dòng */}
+                <span
+                  style={{ flex: 1, wordBreak: "break-word" }}
+                  title={s.name}
+                >
+                  {s.name}
+                </span>
+                <button
+                  onClick={() => setEditingStatus(s)}
+                  style={{
+                    fontSize: "12px",
+                    padding: "4px 8px",
+                    flexShrink: 0,
+                  }}
+                >
+                  Sửa
+                </button>
+                <button
+                  onClick={() => handleDeleteClick(s)}
+                  style={{
+                    color: "red",
+                    fontSize: "12px",
+                    padding: "4px 8px",
+                    flexShrink: 0,
+                  }}
+                >
+                  Xóa
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Phần form để thêm/sửa trạng thái */}
+        <div style={{ flexShrink: 0 }}>
           <h4>{editingStatus ? "Sửa trạng thái" : "Thêm trạng thái mới"}</h4>
           <input
             type="text"
             placeholder="Tên trạng thái"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
+            style={{
+              width: "100%",
+              padding: "8px",
+              marginBottom: "10px",
+              boxSizing: "border-box", // Thêm thuộc tính này
+            }}
           />
-          <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-            <button onClick={handleSave} disabled={isLoading}>
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              marginTop: "10px",
+              justifyContent: "center",
+            }}
+          >
+            <button
+              onClick={handleSave}
+              disabled={isLoading}
+              style={{
+                backgroundColor: "var(--green, #28a745)",
+                color: "white",
+                padding: "8px 24px",
+                border: "none",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}
+            >
               {isLoading ? "Đang lưu..." : "Lưu"}
             </button>
             {editingStatus && (
@@ -330,9 +404,6 @@ const StatusManager = ({ statuses, onUpdate, onClose }) => {
             )}
           </div>
         </div>
-        <button onClick={onClose} style={{ marginTop: "20px", width: "100%" }}>
-          Đóng
-        </button>
       </div>
 
       {/* Noti cho thông báo thành công/thất bại */}
@@ -351,7 +422,6 @@ const StatusManager = ({ statuses, onUpdate, onClose }) => {
         }
       />
 
-      {/* ▼▼▼ THÊM LỚP KIỂM TRA Ở ĐÂY ▼▼▼ */}
       {/* Chỉ render Noti xác nhận khi statusToDelete có giá trị */}
       {statusToDelete && (
         <Noti
@@ -374,7 +444,6 @@ const StatusManager = ({ statuses, onUpdate, onClose }) => {
           }
         />
       )}
-      {/* ▲▲▲ KẾT THÚC THAY ĐỔI ▲▲▲ */}
     </>
   );
 };
@@ -575,46 +644,90 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
         </button>
       </section>
 
-      <section className={styles.info}>
-        <p className="text_4" style={{ marginBottom: 8 }}>
-          Cập nhật ghi chú
-        </p>
-        <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-          {/* Dropdown Trạng thái */}
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            <select
-              value={selectedStatusId}
-              onChange={handleStatusChange}
-              style={{
-                padding: "6px 10px",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-              }}
-              disabled={saving}
-              onClick={(e) => e.stopPropagation()} // Ngăn SidePanel đóng khi click
-            >
-              <option value="">-- Chọn trạng thái --</option>
-              {statuses.map((status) => (
-                <option key={status._id} value={status._id}>
-                  {status.name}
-                </option>
-              ))}
-            </select>
+      <section
+        className={"info"}
+        style={{
+          padding: "16px",
+          background: "#f9f9f9",
+          borderRadius: "8px",
+          marginBottom: "16px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          <p className="text_4" style={{ margin: 0, fontWeight: "bold" }}>
+            Cập nhật Ghi chú & Trạng thái
+          </p>
+
+          {/* Container cho các nút điều khiển bên phải */}
+          <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+            {/* Nhóm Dropdown và nút Quản lý */}
+            <div style={{ display: "flex", alignItems: "stretch" }}>
+              <select
+                value={selectedStatusId}
+                onChange={handleStatusChange}
+                style={{
+                  padding: "6px 10px",
+                  border: "1px solid #ccc",
+                  borderRight: "none",
+                  borderRadius: "4px 0 0 4px",
+                  backgroundColor: "white",
+                  // --- BỔ SUNG CSS ĐỂ CẮT CHỮ ---
+                  flex: "1 1 auto",
+                  minWidth: "120px", // Quy định chiều rộng tối thiểu
+                  maxWidth: "300px",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                }}
+                disabled={saving}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <option value="">-- Chọn trạng thái --</option>
+                {statuses.map((status) => (
+                  <option key={status._id} value={status._id}>
+                    {status.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setIsStatusManagerOpen(true)}
+                style={{
+                  fontSize: "12px",
+                  padding: "6px 8px",
+                  border: "1px solid #ccc",
+                  borderRadius: "0 4px 4px 0",
+                  whiteSpace: "nowrap",
+                  backgroundColor: "#f0f0f0",
+                  marginLeft: "-1px",
+                  cursor: "pointer",
+                }}
+              >
+                Quản lý
+              </button>
+            </div>
+
+            {/* Nút Thu gọn/Mở rộng */}
             <button
-              onClick={() => setIsStatusManagerOpen(true)}
-              style={{ fontSize: "12px", padding: "4px 8px" }}
+              onClick={() => setFormOpen((o) => !o)}
+              style={{
+                fontSize: "12px",
+                padding: "6px 12px",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
             >
-              Quản lý trạng thái
+              {formOpen ? "Thu gọn" : "Mở rộng"}
             </button>
           </div>
-
-          {/* Nút Thu gọn/Mở rộng */}
-          <button
-            onClick={() => setFormOpen((o) => !o)}
-            style={{ fontSize: "12px", padding: "4px 8px" }}
-          >
-            {formOpen ? "Thu gọn" : "Mở rộng"}
-          </button>
         </div>
         {formOpen && (
           <form
@@ -752,6 +865,7 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
       <CenterPopup
         open={isStatusManagerOpen}
         onClose={() => setIsStatusManagerOpen(false)}
+        size="auto"
       >
         <StatusManager
           statuses={statuses}

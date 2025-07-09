@@ -4,13 +4,14 @@ import { NextResponse } from "next/server";
 import dbConnect from "@/config/connectDB";
 import Status from "@/models/status"; // Import model Status bạn vừa tạo
 import Customer from "@/models/client"; // Import Customer để kiểm tra trước khi xóa
+import { revalidateTag } from "next/cache";
 
 // --- LẤY TẤT CẢ TRẠNG THÁI ---
 export async function GET() {
   await dbConnect();
   try {
     // Sắp xếp theo tên để danh sách trong dropdown luôn theo thứ tự ABC
-    const statuses = await Status.find({}).sort({ name: 1 }).lean();
+    const statuses = await Status.find({}).sort({ createdAt: -1 }).lean();
     return NextResponse.json({ success: true, data: statuses });
   } catch (error) {
     return NextResponse.json(
@@ -59,10 +60,12 @@ export async function POST(request) {
 }
 
 // --- CẬP NHẬT MỘT TRẠNG THÁI ---
+
 export async function PUT(request) {
   await dbConnect();
   try {
-    const { _id, name, color } = await request.json();
+    // Chỉ nhận _id và name để cập nhật
+    const { _id, name } = await request.json();
 
     if (!_id) {
       return NextResponse.json(
@@ -70,11 +73,17 @@ export async function PUT(request) {
         { status: 400 },
       );
     }
+    if (!name || name.trim() === "") {
+      return NextResponse.json(
+        { success: false, message: "Tên trạng thái không được để trống." },
+        { status: 400 },
+      );
+    }
 
     const updatedStatus = await Status.findByIdAndUpdate(
       _id,
-      { name, color },
-      { new: true, runValidators: true }, // new: true để trả về document đã cập nhật, runValidators để kiểm tra required
+      { name: name.trim() }, // Cập nhật tên mới
+      { new: true, runValidators: true },
     );
 
     if (!updatedStatus) {
@@ -84,12 +93,16 @@ export async function PUT(request) {
       );
     }
 
+    // Thêm revalidateTag để cập nhật danh sách ở client
+    revalidateTag("get_statuses");
+
     return NextResponse.json({
       success: true,
       message: "Cập nhật thành công!",
       data: updatedStatus,
     });
   } catch (error) {
+    // Bắt lỗi nếu tên trạng thái mới bị trùng
     if (error.code === 11000) {
       return NextResponse.json(
         {
@@ -119,19 +132,14 @@ export async function DELETE(request) {
       );
     }
 
-    // KIỂM TRA QUAN TRỌNG: Có khách hàng nào đang dùng trạng thái này không?
-    const customerUsingStatus = await Customer.findOne({ status: _id });
-    if (customerUsingStatus) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Không thể xóa. Vẫn còn khách hàng đang sử dụng trạng thái này.",
-        },
-        { status: 400 },
-      );
-    }
+    // BƯỚC 1: Cập nhật tất cả khách hàng đang dùng trạng thái này
+    // Đặt trường 'status' của họ về rỗng (bằng cách xóa nó đi)
+    await Customer.updateMany(
+      { status: _id }, // Tìm tất cả khách hàng có status này
+      { $unset: { status: "" } }, // Xóa trường status của họ
+    );
 
+    // BƯỚC 2: Sau khi đã cập nhật khách hàng, tiến hành xóa trạng thái
     const deletedStatus = await Status.findByIdAndDelete(_id);
 
     if (!deletedStatus) {
@@ -143,7 +151,7 @@ export async function DELETE(request) {
 
     return NextResponse.json({
       success: true,
-      message: "Xóa trạng thái thành công!",
+      message: "Xóa trạng thái và cập nhật khách hàng thành công!",
     });
   } catch (error) {
     return NextResponse.json(
