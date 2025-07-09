@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectToDatabase from '@/config/connectDB';
 import '@/models/users';
 import ZaloAccount from '@/models/zalo';
+import Customer from '@/models/client';
 import ScheduledJob from '@/models/tasks';
 import authenticate from '@/utils/authenticate';
 import { Re_acc, Re_user } from '@/data/users';
@@ -100,8 +101,7 @@ export async function POST(request) {
             );
 
         const account = await ZaloAccount.findById(zaloAccountId);
-        if (!account)
-            return NextResponse.json({ status: 1, mes: 'Không tìm thấy tài khoản.' }, { status: 404 });
+        if (!account) return NextResponse.json({ status: 1, mes: 'Không tìm thấy tài khoản.' }, { status: 404 });
 
         const persons = tasks.map(t => t.person);
         const tasksWithSchedule = schedulePersons(
