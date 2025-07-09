@@ -39,15 +39,16 @@ const CustomerSchema = new Schema(
     phone: { type: String, required: true },
     uid: { type: String },
     status: {
-      type: Schema.Types.ObjectId, 
-      ref: "status", 
+      type: Schema.Types.ObjectId,
+      ref: "status",
     },
     label: [{ type: Schema.Types.ObjectId, ref: "label" }],
-    stageLevel: { type: Number, default: 0 }, 
+    stageLevel: { type: Number, default: 0 },
     careNote: { type: String },
     studyTryNote: { type: String },
     studyNote: { type: String },
-    action: [ActionRefSchema], 
+    action: [ActionRefSchema],
+    auth: [{ type: Schema.Types.ObjectId, ref: 'user' }]
   },
   {
     timestamps: true,
