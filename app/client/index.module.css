@@ -641,11 +641,9 @@
     /* màu xanh iOS */
 }
 
-/* -------------------------------------------------- */
-/* Chiều rộng cho hai cột đầu                         */
 .colTiny {
-    width: 56px;
-    min-width: 56px;
+    width: 32px;
+    min-width: 32px;
 }
 
 .colSmall {

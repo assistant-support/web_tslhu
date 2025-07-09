@@ -16,7 +16,6 @@ export default async function Page({ searchParams }) {
   const pagination = clientResponse.pagination;
   const initialStatuses = statusResponse.data;
 
-
   return (
     <>
       <Client
