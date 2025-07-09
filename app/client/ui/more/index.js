@@ -606,12 +606,40 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
         <p className="text_4" style={{ marginBottom: 8 }}>
           Thông tin khách hàng
         </p>
-        <InfoRow label="Họ và tên" value={row?.nameParent} />
+        <InfoRow label="Tên học sinh" value={row?.name} />
         <InfoRow label="Số điện thoại" value={row?.phone} />
-        <InfoRow label="Email" value={row?.email} />
-        <InfoRow label="Tên học sinh" value={row?.nameStudent} />
-        <InfoRow label="Khu vực" value={row?.area} />
-        <InfoRow label="Nguồn data" value={row?.source} />
+        <InfoRow label="UID" value={row?.uid} />
+        <div
+          style={{
+            marginTop: "12px",
+            paddingTop: "12px",
+            borderTop: "1px solid #f0f0f0",
+          }}
+        >
+          <p className="text_6" style={{ margin: "4px 0", color: "#666" }}>
+            Nhân viên chăm sóc:
+          </p>
+          {row.auth && row.auth.length > 0 ? (
+            <ul style={{ listStyle: "none", paddingLeft: "10px", margin: 0 }}>
+              {row.auth.map((user) => (
+                <li
+                  key={user._id}
+                  className="text_6_400"
+                  style={{ marginBottom: "4px" }}
+                >
+                  - {user.name || user.email || "Không rõ tên"}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p
+              className="text_6_400"
+              style={{ fontStyle: "italic", paddingLeft: "10px" }}
+            >
+              Chưa có nhân viên phụ trách.
+            </p>
+          )}
+        </div>
       </section>
 
       {labels.length > 0 && (

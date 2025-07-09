@@ -105,6 +105,7 @@ export async function GET(request) {
     const [data, total] = await Promise.all([
       Customer.find(filter)
         .populate("status", "_id name")
+        .populate("auth", "name email")
         .sort({ createdAt: -1, _id: 1 })
         .skip(skip)
         .limit(limit)
@@ -350,14 +351,14 @@ export async function PUT(request) {
       { new: true },
     ).lean();
 
-    if (!updated) {
+    if (!updatedCustomer) {
       return NextResponse.json(
         { status: false, message: "Customer not found." },
         { status: 404 },
       );
     }
 
-    revalidateTag(tag);
+    revalidateTag(TAG);
     return NextResponse.json({ status: true, data: updatedCustomer });
   } catch (error) {
     if (error.name === "CastError") {

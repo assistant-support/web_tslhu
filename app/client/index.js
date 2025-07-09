@@ -36,7 +36,7 @@ const useTraCuuData = (phones) => {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: phone }),
-          }
+          },
         );
         const isOK = res.status === 200;
         let dataObj = { TinhTrang: "Không có thông tin" };
@@ -156,25 +156,16 @@ const Row = React.memo(function Row({
         </div>
         <div className={`${styles.gridCell} text_6_400`}>{row.phone}</div>
         <div className={`${styles.gridCell} text_6_400`}>{row.name}</div>
-        <div
-          className={`${styles.gridCell} text_6_400`}
-          style={{ flex: 0.5 }}
-        >
+        <div className={`${styles.gridCell} text_6_400`} style={{ flex: 0.5 }}>
           <StageIndicator level={row.stageLevel} />
         </div>
         <div className={`${styles.gridCell} text_6_400`}>
           {row.status?.name || "-"}
         </div>
-        <div
-          className={`${styles.gridCell} text_6_400`}
-          style={{ flex: 0.5 }}
-        >
+        <div className={`${styles.gridCell} text_6_400`} style={{ flex: 0.5 }}>
           {row.action.length > 0 ? row.action[0].actionType : "-"}
         </div>
-        <div
-          className={`${styles.gridCell} text_7_400`}
-          style={{ flex: 0.5 }}
-        >
+        <div className={`${styles.gridCell} text_7_400`} style={{ flex: 0.5 }}>
           <p
             style={{
               padding: "3px 12px",
@@ -257,7 +248,7 @@ const Row = React.memo(function Row({
             e.stopPropagation();
             if (hasData && row.MaDangKy) {
               const url = `https://xettuyen.lhu.edu.vn/cap-nhat-thong-tin-xet-tuyen-dai-hoc?id=${encodeURIComponent(
-                row.MaDangKy
+                row.MaDangKy,
               )}&htx=0`;
               window.open(url, "_blank");
             }
@@ -268,6 +259,54 @@ const Row = React.memo(function Row({
   );
 });
 
+// ==================================================================
+// === COMPONENT MỚI: BẢNG ĐIỀU KHIỂN CỦA ADMIN ===
+// ==================================================================
+const AdminDashboard = () => {
+  // State để quản lý popup/giao diện con
+  const [showUserManagement, setShowUserManagement] = useState(false);
+
+  return (
+    <div className={styles.adminDashboard}>
+      {/* Thanh menu chức năng của Admin */}
+      <div className={styles.adminMenu}>
+        <button
+          className={styles.adminMenuItem}
+          onClick={() => setShowUserManagement(true)}
+        >
+          Quản lý Nhân viên
+        </button>
+        <button className={styles.adminMenuItem}>
+          Phân tích & Báo cáo (KPI)
+        </button>
+        <button className={styles.adminMenuItem}>Cài đặt Hệ thống</button>
+      </div>
+
+      {/* Phần nội dung chính của Dashboard */}
+      <div className={styles.adminContent}>
+        <h2>Dashboard Tổng quan</h2>
+        <p>
+          Đây là nơi hiển thị các biểu đồ, thống kê nhanh về hiệu suất làm việc
+          của nhân viên, số lượng khách hàng, v.v...
+        </p>
+        {/* (Placeholder for charts and stats) */}
+      </div>
+
+      {/* Popup quản lý nhân viên (ví dụ) */}
+      <CenterPopup
+        open={showUserManagement}
+        onClose={() => setShowUserManagement(false)}
+        size="lg"
+        title="Quản lý Nhân viên"
+      >
+        <div>
+          <p>Giao diện thêm, sửa, xóa tài khoản nhân viên sẽ nằm ở đây.</p>
+        </div>
+      </CenterPopup>
+    </div>
+  );
+};
+
 export default function Client({
   initialData,
   initialPagination,
@@ -275,8 +314,13 @@ export default function Client({
   initialStatuses,
   user,
 }) {
+  const [activeView, setActiveView] = useState("chamsoc");
   const [traCuuOpen, setTraCuuOpen] = useState(false);
   const [traCuuData, setTraCuuData] = useState(null);
+  const isAdmin = useMemo(
+    () => Array.isArray(user?.role) && user.role.includes("Admin"),
+    [user],
+  );
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -297,19 +341,43 @@ export default function Client({
   const serverPage = initialPagination?.page || 1;
   const serverTotalPages = initialPagination?.totalPages || 1;
   const serverLimit = initialPagination?.limit || 10;
+  const currentLimit = useMemo(
+    () => Number(searchParams.get("limit")) || serverLimit,
+    [searchParams, serverLimit],
+  );
 
   const handleNavigation = useCallback(
     (name, value) => {
       const params = new URLSearchParams(searchParams);
-      value ? params.set(name, value) : params.delete(name);
-      if (name !== "page") params.set("page", "1");
+
+      if (value) {
+        params.set(name, value);
+      } else {
+        params.delete(name);
+      }
+
+      // Khi thay đổi bất kỳ bộ lọc nào (trừ việc chuyển trang), luôn quay về trang 1
+      if (name !== "page") {
+        params.set("page", "1");
+      }
+
       startTransition(() => {
-        setViewMode("all");
         router.push(`${pathname}?${params.toString()}`);
       });
     },
-    [pathname, router, searchParams]
+    [pathname, router, searchParams, startTransition],
   );
+
+  const handleLoadMore = useCallback(() => {
+    // Tăng giới hạn hiện tại lên 10 và điều hướng
+    handleNavigation("limit", (currentLimit + 10).toString());
+  }, [currentLimit, handleNavigation]);
+
+  const handleLoadLess = useCallback(() => {
+    // Đảm bảo giới hạn không bao giờ nhỏ hơn 10
+    const newLimit = Math.max(10, currentLimit - 10);
+    handleNavigation("limit", newLimit.toString());
+  }, [currentLimit, handleNavigation]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -321,22 +389,22 @@ export default function Client({
 
   const handleRefresh = useCallback(
     () => startTransition(() => router.refresh()),
-    [router]
+    [router],
   );
 
   const uniqueLabels = useMemo(
     () =>
       initialLabels
         ? [...new Set(initialLabels.map((l) => l.title))].sort((a, b) =>
-            a.localeCompare(b, "vi")
+            a.localeCompare(b, "vi"),
           )
         : [],
-    [initialLabels]
+    [initialLabels],
   );
   const inlineLabels = useMemo(() => uniqueLabels.slice(0, 6), [uniqueLabels]);
   const currentSelectedLabels = useMemo(
     () => new Set((searchParams.get("label") || "").split(",").filter(Boolean)),
-    [searchParams]
+    [searchParams],
   );
 
   const handleLabelToggle = useCallback(
@@ -345,14 +413,14 @@ export default function Client({
       next.has(labelTitle) ? next.delete(labelTitle) : next.add(labelTitle);
       handleNavigation("label", [...next].join(","));
     },
-    [currentSelectedLabels, handleNavigation]
+    [currentSelectedLabels, handleNavigation],
   );
 
   const allOnPageChecked = useMemo(
     () =>
       initialData.length > 0 &&
       initialData.every((r) => selectedIds.has(r._id)),
-    [initialData, selectedIds]
+    [initialData, selectedIds],
   );
 
   const toggleRowAndStoreData = useCallback(
@@ -364,7 +432,7 @@ export default function Client({
       });
       toggleSelectRow(row._id);
     },
-    [toggleSelectRow]
+    [toggleSelectRow],
   );
 
   const handleTogglePageAndStoreData = useCallback(() => {
@@ -378,7 +446,7 @@ export default function Client({
       const next = new Set(prev);
       const pageIds = initialData.map((r) => r._id);
       pageIds.forEach((id) =>
-        allOnPageChecked ? next.delete(id) : next.add(id)
+        allOnPageChecked ? next.delete(id) : next.add(id),
       );
       return next;
     });
@@ -386,15 +454,15 @@ export default function Client({
 
   const scheduleData = useMemo(
     () => [...selectedCustomerMap.values()],
-    [selectedCustomerMap]
+    [selectedCustomerMap],
   );
   const rowsToDisplay = useMemo(
     () => (viewMode === "selected" ? scheduleData : initialData),
-    [viewMode, scheduleData, initialData]
+    [viewMode, scheduleData, initialData],
   );
   const visiblePhones = useMemo(
     () => rowsToDisplay.slice(0, 10).map((r) => r.phone),
-    [rowsToDisplay]
+    [rowsToDisplay],
   );
   const traCuuMap = useTraCuuData(visiblePhones);
 
@@ -405,11 +473,11 @@ export default function Client({
       viewMode === "selected"
         ? Math.ceil(scheduleData.length / serverLimit) || 1
         : serverTotalPages,
-    [viewMode, scheduleData.length, serverLimit, serverTotalPages]
+    [viewMode, scheduleData.length, serverLimit, serverTotalPages],
   );
   const currentDisplayPage = useMemo(
     () => (viewMode === "selected" ? 1 : serverPage),
-    [viewMode, serverPage]
+    [viewMode, serverPage],
   );
 
   const handleRowClick = useCallback((row) => {
@@ -615,10 +683,16 @@ export default function Client({
                 >
                   STT
                 </div>
-                <div className={`${styles.gridCell} text_6`} style={{ color: "white" }}>
+                <div
+                  className={`${styles.gridCell} text_6`}
+                  style={{ color: "white" }}
+                >
                   SĐT
                 </div>
-                <div className={`${styles.gridCell} text_6`} style={{ color: "white" }}>
+                <div
+                  className={`${styles.gridCell} text_6`}
+                  style={{ color: "white" }}
+                >
                   Tên
                 </div>
                 <div
@@ -627,7 +701,10 @@ export default function Client({
                 >
                   Giai đoạn
                 </div>
-                <div className={`${styles.gridCell} text_6`} style={{ color: "white" }}>
+                <div
+                  className={`${styles.gridCell} text_6`}
+                  style={{ color: "white" }}
+                >
                   Trạng thái
                 </div>
                 <div
@@ -656,7 +733,8 @@ export default function Client({
                   key={r._id}
                   row={{ ...r, ...(traCuuMap.get(r.phone) || {}) }}
                   rowIndex={
-                    (viewMode === "all" ? (serverPage - 1) * serverLimit : 0) + idx
+                    (viewMode === "all" ? (serverPage - 1) * serverLimit : 0) +
+                    idx
                   }
                   onToggle={toggleRowAndStoreData}
                   checked={selectedIds.has(r._id)}
@@ -668,29 +746,46 @@ export default function Client({
           </div>
           {totalDisplayPages > 1 && (
             <div className={styles.pagination}>
-              {currentDisplayPage > 1 && (
-                <button
-                  onClick={() =>
-                    handleNavigation("page", currentDisplayPage - 1)
-                  }
-                  className={styles.pageBtn}
-                >
-                  « Trang trước
+              {/* Nút Bớt đi (Bên trái) */}
+              <div>
+                {currentLimit > 10 && (
+                  <button onClick={handleLoadLess} className={styles.pageBtn}>
+                    Bớt đi -10
+                  </button>
+                )}
+              </div>
+
+              {/* Nhóm điều hướng trang (Ở giữa) */}
+              <div className={styles.pageNavGroup}>
+                {currentDisplayPage > 1 && (
+                  <button
+                    onClick={() =>
+                      handleNavigation("page", currentDisplayPage - 1)
+                    }
+                    className={styles.pageBtn}
+                  >
+                    &laquo; Trang trước
+                  </button>
+                )}
+                <span className={`text_6_400`} style={{ color: "white" }}>
+                  Trang {currentDisplayPage} / {totalDisplayPages}
+                </span>
+                {currentDisplayPage < totalDisplayPages && (
+                  <button
+                    onClick={() =>
+                      handleNavigation("page", currentDisplayPage + 1)
+                    }
+                    className={styles.pageBtn}
+                  >
+                    Trang sau &raquo;
+                  </button>
+                )}
+              </div>
+              <div>
+                <button onClick={handleLoadMore} className={styles.pageBtn}>
+                  Xem thêm +10
                 </button>
-              )}
-              <span className="text_6_400" style={{ color: "white" }}>
-                Trang {currentDisplayPage} / {totalDisplayPages}
-              </span>
-              {currentDisplayPage < totalDisplayPages && (
-                <button
-                  onClick={() =>
-                    handleNavigation("page", currentDisplayPage + 1)
-                  }
-                  className={styles.pageBtn}
-                >
-                  Trang sau »
-                </button>
-              )}
+              </div>
             </div>
           )}
         </>
@@ -700,7 +795,10 @@ export default function Client({
           className={styles.labelModalBackdrop}
           onClick={() => setShowLabelPopup(false)}
         >
-          <div className={styles.labelModal} onClick={(e) => e.stopPropagation()}>
+          <div
+            className={styles.labelModal}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className={styles.labelModalTitle}>Chọn nhãn để lọc</h3>
             <div className={styles.labelModalGrid}>
               {uniqueLabels.map((lbl) => {

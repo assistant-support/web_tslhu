@@ -10,8 +10,7 @@ import { revalidateTag } from "next/cache";
 export async function GET() {
   await dbConnect();
   try {
-    // Sắp xếp theo tên để danh sách trong dropdown luôn theo thứ tự ABC
-    const statuses = await Status.find({}).sort({ createdAt: -1 }).lean();
+    const statuses = await Status.find({}).sort({ createdAt: 1 }).lean();
     return NextResponse.json({ success: true, data: statuses });
   } catch (error) {
     return NextResponse.json(
