@@ -100,7 +100,7 @@ const useSelection = () => {
   }, []);
   return { selectedIds, toggleOne, setSelectedIds, size: selectedIds.size };
 };
-// Dán component này vào ngay trên component Row
+
 const StageIndicator = ({ level = 0 }) => {
   const dotStyle = {
     width: "10px",
@@ -170,6 +170,9 @@ const Row = React.memo(function Row({
         <div className={`${styles.gridCell} text_6_400`}>{row.name}</div>
         <div className={`${styles.gridCell} text_6_400`}>
           <StageIndicator level={row.stageLevel} />
+        </div>
+        <div className={`${styles.gridCell} text_6_400`}>
+          {row.status?.name || "-"}
         </div>
         <div className={`${styles.gridCell} text_6_400`}>{row.uid}</div>
       </div>
@@ -251,6 +254,7 @@ export default function Client({
   initialData,
   initialPagination,
   initialLabels,
+  initialStatuses,
   user,
 }) {
   const [traCuuOpen, setTraCuuOpen] = useState(false);
@@ -511,9 +515,12 @@ export default function Client({
               defaultValue={searchParams.get("status") || ""}
               onChange={(e) => handleNavigation("status", e.target.value)}
             >
-              <option value="">-- Tất cả --</option>
-              <option value="Mới">Mới</option>
-              <option value="Đang chăm sóc">Đang chăm sóc</option>
+              <option value="">-- Tất cả trạng thái --</option>
+              {initialStatuses?.map((status) => (
+                <option key={status._id} value={status.name}>
+                  {status.name}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -630,6 +637,12 @@ export default function Client({
                   style={{ color: "white" }}
                 >
                   Tên
+                </div>
+                <div
+                  className={`${styles.gridCell} text_6`}
+                  style={{ color: "white" }}
+                >
+                  Giai đoạn
                 </div>
                 <div
                   className={`${styles.gridCell} text_6`}

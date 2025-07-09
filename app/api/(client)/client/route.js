@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import { google } from "googleapis";
 import dbConnect from "@/config/connectDB";
 import Customer from "@/models/client";
+import Status from "@/models/status";
 
 const tag = "customer_data";
 
@@ -19,6 +20,77 @@ async function getGoogleSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
+// export async function GET(request) {
+//   await dbConnect();
+//   try {
+//     const { searchParams } = new URL(request.url);
+//     const page = parseInt(searchParams.get("page")) || 1;
+//     const limit = parseInt(searchParams.get("limit")) || 10;
+//     const query = searchParams.get("query");
+//     const status = searchParams.get("status");
+//     const campaign = searchParams.get("campaign");
+//     // Lấy tham số mới để lọc UID
+//     const uidStatus = searchParams.get("uidStatus");
+
+//     const skip = (page - 1) * limit;
+//     const filter = {};
+
+//     if (status) filter.status = status;
+//     if (campaign) filter.campaign = campaign;
+
+//     // --- THÊM LOGIC LỌC THEO TRẠNG THÁI UID ---
+//     if (uidStatus === "exists") {
+//       // Lọc những bản ghi có trường uid tồn tại và không phải là chuỗi rỗng
+//       filter.uid = { $exists: true, $ne: "" };
+//     } else if (uidStatus === "missing") {
+//       // Lọc những bản ghi không có trường uid hoặc uid là chuỗi rỗng
+//       filter.$or = [{ uid: { $exists: false } }, { uid: "" }];
+//     }
+
+//     const trimmedQuery = query?.trim();
+//     if (trimmedQuery) {
+//       if (filter.$or) {
+//         filter.$and = [
+//           { $or: filter.$or },
+//           {
+//             $or: [
+//               { name: { $regex: trimmedQuery, $options: "i" } },
+//               { phone: { $regex: trimmedQuery, $options: "i" } },
+//             ],
+//           },
+//         ];
+//         delete filter.$or;
+//       } else {
+//         filter.$or = [
+//           { name: { $regex: trimmedQuery, $options: "i" } },
+//           { phone: { $regex: trimmedQuery, $options: "i" } },
+//         ];
+//       }
+//     }
+
+//     const [data, total] = await Promise.all([
+//       Customer.find(filter)
+//         .populate("status", "name")
+//         .sort({ createdAt: -1, _id: 1 })
+//         .skip(skip)
+//         .limit(limit)
+//         .lean(),
+//       Customer.countDocuments(filter),
+//     ]);
+
+//     return NextResponse.json({
+//       status: true,
+//       data,
+//       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+//     });
+//   } catch (error) {
+//     return NextResponse.json(
+//       { status: false, message: "Server Error", error: error.message },
+//       { status: 500 },
+//     );
+//   }
+// }
+
 export async function GET(request) {
   await dbConnect();
   try {
@@ -26,62 +98,77 @@ export async function GET(request) {
     const page = parseInt(searchParams.get("page")) || 1;
     const limit = parseInt(searchParams.get("limit")) || 10;
     const query = searchParams.get("query");
-    const status = searchParams.get("status");
-    const campaign = searchParams.get("campaign");
-    // Lấy tham số mới để lọc UID
+    const statusName = searchParams.get("status");
     const uidStatus = searchParams.get("uidStatus");
+    const campaign = searchParams.get("campaign");
 
     const skip = (page - 1) * limit;
-    const filter = {};
+    const filterConditions = [];
 
-    if (status) filter.status = status;
-    if (campaign) filter.campaign = campaign;
+    if (statusName) {
+      const statusDoc = await Status.findOne({ name: statusName })
+        .select("_id")
+        .lean();
+      if (statusDoc) {
+        filterConditions.push({ status: statusDoc._id });
+      } else {
+        return NextResponse.json({
+          status: true,
+          data: [],
+          pagination: { total: 0, page, limit, totalPages: 0 },
+        });
+      }
+    }
 
-    // --- THÊM LOGIC LỌC THEO TRẠNG THÁI UID ---
+    if (campaign) {
+      filterConditions.push({ campaign: campaign });
+    }
+
     if (uidStatus === "exists") {
-      // Lọc những bản ghi có trường uid tồn tại và không phải là chuỗi rỗng
-      filter.uid = { $exists: true, $ne: "" };
+      filterConditions.push({ uid: { $exists: true, $ne: "", $ne: null } });
     } else if (uidStatus === "missing") {
-      // Lọc những bản ghi không có trường uid hoặc uid là chuỗi rỗng
-      filter.$or = [{ uid: { $exists: false } }, { uid: "" }];
+      filterConditions.push({
+        $or: [{ uid: { $exists: false } }, { uid: "" }, { uid: null }],
+      });
     }
 
     const trimmedQuery = query?.trim();
     if (trimmedQuery) {
-      if (filter.$or) {
-        filter.$and = [
-          { $or: filter.$or },
-          {
-            $or: [
-              { name: { $regex: trimmedQuery, $options: "i" } },
-              { phone: { $regex: trimmedQuery, $options: "i" } },
-            ],
-          },
-        ];
-        delete filter.$or;
-      } else {
-        filter.$or = [
+      filterConditions.push({
+        $or: [
           { name: { $regex: trimmedQuery, $options: "i" } },
           { phone: { $regex: trimmedQuery, $options: "i" } },
-        ];
-      }
+        ],
+      });
     }
+
+    const filter =
+      filterConditions.length > 0 ? { $and: filterConditions } : {};
+
+    // ▼▼▼ DÒNG DEBUG QUAN TRỌNG ▼▼▼
+    console.log(
+      "FINAL FILTER SENT TO MONGODB:",
+      JSON.stringify(filter, null, 2),
+    );
+    // ▲▲▲ DÒNG DEBUG QUAN TRỌNG ▲▲▲
 
     const [data, total] = await Promise.all([
       Customer.find(filter)
+        .populate("status", "name")
         .sort({ createdAt: -1, _id: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
       Customer.countDocuments(filter),
     ]);
-    
+
     return NextResponse.json({
       status: true,
       data,
       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
+    console.error("API GET Error:", error);
     return NextResponse.json(
       { status: false, message: "Server Error", error: error.message },
       { status: 500 },
