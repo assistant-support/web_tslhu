@@ -179,24 +179,35 @@ const renderCareHistory = (histories, onHistoryClick, userPhone) => {
 };
 // --- COMPONENT NHỎ ĐỂ QUẢN LÝ TRẠNG THÁI (THÊM/SỬA/XÓA) ---
 const StatusManager = ({ statuses, onUpdate, onClose }) => {
+  // State của component
   const [isLoading, setIsLoading] = useState(false);
   const [editingStatus, setEditingStatus] = useState(null);
   const [newName, setNewName] = useState("");
-  const [newColor, setNewColor] = useState("#808080");
+
+  // State mới để quản lý thông báo
+  const [notiOpen, setNotiOpen] = useState(false);
+  const [notiStatus, setNotiStatus] = useState(false);
+  const [notiMes, setNotiMes] = useState("");
+  const [statusToDelete, setStatusToDelete] = useState(null);
 
   useEffect(() => {
     if (editingStatus) {
       setNewName(editingStatus.name);
-      setNewColor(editingStatus.color || "#808080");
     } else {
       setNewName("");
-      setNewColor("#808080");
     }
   }, [editingStatus]);
 
+  // Hàm tiện ích để hiển thị thông báo
+  const showNotification = (isSuccess, message) => {
+    setNotiStatus(isSuccess);
+    setNotiMes(message);
+    setNotiOpen(true);
+  };
+
   const handleSave = async () => {
     if (!newName.trim()) {
-      alert("Tên trạng thái không được để trống.");
+      showNotification(false, "Tên trạng thái không được để trống.");
       return;
     }
     setIsLoading(true);
@@ -204,8 +215,8 @@ const StatusManager = ({ statuses, onUpdate, onClose }) => {
       const endpoint = "/api/statuses";
       const method = editingStatus ? "PUT" : "POST";
       const payload = editingStatus
-        ? { _id: editingStatus._id, name: newName, color: newColor }
-        : { name: newName, color: newColor };
+        ? { _id: editingStatus._id, name: newName }
+        : { name: newName };
 
       const res = await fetch(endpoint, {
         method,
@@ -215,24 +226,30 @@ const StatusManager = ({ statuses, onUpdate, onClose }) => {
       const result = await res.json();
       if (!result.success) throw new Error(result.message);
 
-      alert(result.message);
+      showNotification(true, result.message);
       setEditingStatus(null);
-      onUpdate(); // Tải lại danh sách trạng thái
+      onUpdate();
     } catch (error) {
-      alert(`Lỗi: ${error.message}`);
+      showNotification(false, `Lỗi: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDelete = async (statusToDelete) => {
-    if (
-      !window.confirm(
-        `Bạn có chắc muốn xóa trạng thái "${statusToDelete.name}" không?`,
-      )
-    )
-      return;
+  // 1. Hàm này giờ chỉ mở hộp thoại xác nhận
+  const handleDeleteClick = (status) => {
+    setStatusToDelete(status); // Lưu lại trạng thái cần xóa và mở Noti xác nhận
+  };
+
+  // 2. Hàm này mới thực sự gọi API để xóa
+  const confirmDelete = async () => {
+    if (!statusToDelete) return;
+
     setIsLoading(true);
+    // Đóng hộp thoại xác nhận trước
+    const statusName = statusToDelete.name;
+    setStatusToDelete(null);
+
     try {
       const res = await fetch("/api/statuses", {
         method: "DELETE",
@@ -242,84 +259,123 @@ const StatusManager = ({ statuses, onUpdate, onClose }) => {
       const result = await res.json();
       if (!result.success) throw new Error(result.message);
 
-      alert(result.message);
+      showNotification(true, result.message);
       onUpdate();
     } catch (error) {
-      alert(`Lỗi: ${error.message}`);
+      showNotification(false, `Lỗi khi xóa "${statusName}": ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div
-      style={{
-        padding: "20px",
-        width: "400px",
-        maxHeight: "80vh",
-        overflowY: "auto",
-      }}
-    >
-      <h3 style={{ marginTop: 0 }}>Quản lý Trạng thái</h3>
-      <ul style={{ listStyle: "none", padding: 0 }}>
-        {statuses.map((s) => (
-          <li
-            key={s._id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              marginBottom: "10px",
-              padding: "8px",
-              background: "#f0f0f0",
-              borderRadius: "4px",
-            }}
-          >
-            <span
-              style={{
-                width: "20px",
-                height: "20px",
-                backgroundColor: s.color,
-                borderRadius: "50%",
-                border: "1px solid #ddd",
-              }}
-            ></span>
-            <span style={{ flex: 1 }}>{s.name}</span>
-            <button onClick={() => setEditingStatus(s)}>Sửa</button>
-            <button onClick={() => handleDelete(s)} style={{ color: "red" }}>
-              Xóa
-            </button>
-          </li>
-        ))}
-      </ul>
+    // Bọc trong React.Fragment để chứa cả Noti
+    <>
       <div
         style={{
-          borderTop: "1px solid #ccc",
-          paddingTop: "20px",
-          marginTop: "20px",
+          padding: "20px",
+          width: "400px",
+          maxHeight: "80vh",
+          overflowY: "auto",
         }}
       >
-        <h4>{editingStatus ? "Sửa trạng thái" : "Thêm trạng thái mới"}</h4>
-        <input
-          type="text"
-          placeholder="Tên trạng thái"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-        />
-        <div style={{ marginTop: "20px", display: "flex", gap: "10px" }}>
-          <button onClick={handleSave} disabled={isLoading}>
-            {isLoading ? "Đang lưu..." : "Lưu"}
-          </button>
-          {editingStatus && (
-            <button onClick={() => setEditingStatus(null)}>Hủy sửa</button>
-          )}
+        <h3 style={{ marginTop: 0 }}>Quản lý Trạng thái</h3>
+        {/* Phần list và form giữ nguyên như cũ */}
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          {statuses.map((s) => (
+            <li
+              key={s._id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                marginBottom: "10px",
+                padding: "8px",
+                background: "#f0f0f0",
+                borderRadius: "4px",
+              }}
+            >
+              <span style={{ flex: 1 }}>{s.name}</span>
+              <button onClick={() => setEditingStatus(s)}>Sửa</button>
+              <button
+                onClick={() => handleDeleteClick(s)}
+                style={{ color: "red" }}
+              >
+                Xóa
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div
+          style={{
+            borderTop: "1px solid #ccc",
+            paddingTop: "20px",
+            marginTop: "20px",
+          }}
+        >
+          <h4>{editingStatus ? "Sửa trạng thái" : "Thêm trạng thái mới"}</h4>
+          <input
+            type="text"
+            placeholder="Tên trạng thái"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
+          />
+          <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+            <button onClick={handleSave} disabled={isLoading}>
+              {isLoading ? "Đang lưu..." : "Lưu"}
+            </button>
+            {editingStatus && (
+              <button onClick={() => setEditingStatus(null)}>Hủy sửa</button>
+            )}
+          </div>
         </div>
+        <button onClick={onClose} style={{ marginTop: "20px", width: "100%" }}>
+          Đóng
+        </button>
       </div>
-      <button onClick={onClose} style={{ marginTop: "20px", width: "100%" }}>
-        Đóng
-      </button>
-    </div>
+
+      {/* Noti cho thông báo thành công/thất bại */}
+      <Noti
+        open={notiOpen}
+        onClose={() => setNotiOpen(false)}
+        status={notiStatus}
+        mes={notiMes}
+        button={
+          <button
+            onClick={() => setNotiOpen(false)}
+            style={{ width: "100%", padding: "10px" }}
+          >
+            Đã hiểu
+          </button>
+        }
+      />
+
+      {/* ▼▼▼ THÊM LỚP KIỂM TRA Ở ĐÂY ▼▼▼ */}
+      {/* Chỉ render Noti xác nhận khi statusToDelete có giá trị */}
+      {statusToDelete && (
+        <Noti
+          open={true} // Luôn mở vì đã được bọc bởi điều kiện bên ngoài
+          onClose={() => setStatusToDelete(null)}
+          status={null}
+          mes={`Bạn có chắc muốn xóa trạng thái "${statusToDelete.name}" không? Hành động này không thể hoàn tác.`}
+          button={
+            <div
+              style={{ display: "flex", gap: "10px", justifyContent: "center" }}
+            >
+              <button
+                onClick={confirmDelete}
+                style={{ background: "var(--red, #dc3545)", color: "white" }}
+              >
+                Có, xóa!
+              </button>
+              <button onClick={() => setStatusToDelete(null)}>Không</button>
+            </div>
+          }
+        />
+      )}
+      {/* ▲▲▲ KẾT THÚC THAY ĐỔI ▲▲▲ */}
+    </>
   );
 };
 
