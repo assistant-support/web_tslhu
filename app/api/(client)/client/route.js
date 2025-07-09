@@ -4,6 +4,7 @@ import { google } from "googleapis";
 import dbConnect from "@/config/connectDB";
 import Customer from "@/models/client";
 import Status from "@/models/status";
+import { Types } from 'mongoose'
 
 const tag = "customer_data";
 
@@ -20,159 +21,73 @@ async function getGoogleSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
-// export async function GET(request) {
-//   await dbConnect();
-//   try {
-//     const { searchParams } = new URL(request.url);
-//     const page = parseInt(searchParams.get("page")) || 1;
-//     const limit = parseInt(searchParams.get("limit")) || 10;
-//     const query = searchParams.get("query");
-//     const status = searchParams.get("status");
-//     const campaign = searchParams.get("campaign");
-//     // Lấy tham số mới để lọc UID
-//     const uidStatus = searchParams.get("uidStatus");
-
-//     const skip = (page - 1) * limit;
-//     const filter = {};
-
-//     if (status) filter.status = status;
-//     if (campaign) filter.campaign = campaign;
-
-//     // --- THÊM LOGIC LỌC THEO TRẠNG THÁI UID ---
-//     if (uidStatus === "exists") {
-//       // Lọc những bản ghi có trường uid tồn tại và không phải là chuỗi rỗng
-//       filter.uid = { $exists: true, $ne: "" };
-//     } else if (uidStatus === "missing") {
-//       // Lọc những bản ghi không có trường uid hoặc uid là chuỗi rỗng
-//       filter.$or = [{ uid: { $exists: false } }, { uid: "" }];
-//     }
-
-//     const trimmedQuery = query?.trim();
-//     if (trimmedQuery) {
-//       if (filter.$or) {
-//         filter.$and = [
-//           { $or: filter.$or },
-//           {
-//             $or: [
-//               { name: { $regex: trimmedQuery, $options: "i" } },
-//               { phone: { $regex: trimmedQuery, $options: "i" } },
-//             ],
-//           },
-//         ];
-//         delete filter.$or;
-//       } else {
-//         filter.$or = [
-//           { name: { $regex: trimmedQuery, $options: "i" } },
-//           { phone: { $regex: trimmedQuery, $options: "i" } },
-//         ];
-//       }
-//     }
-
-//     const [data, total] = await Promise.all([
-//       Customer.find(filter)
-//         .populate("status", "name")
-//         .sort({ createdAt: -1, _id: 1 })
-//         .skip(skip)
-//         .limit(limit)
-//         .lean(),
-//       Customer.countDocuments(filter),
-//     ]);
-
-//     return NextResponse.json({
-//       status: true,
-//       data,
-//       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
-//     });
-//   } catch (error) {
-//     return NextResponse.json(
-//       { status: false, message: "Server Error", error: error.message },
-//       { status: 500 },
-//     );
-//   }
-// }
-
 export async function GET(request) {
-  await dbConnect();
+  await dbConnect()
   try {
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page")) || 1;
-    const limit = parseInt(searchParams.get("limit")) || 10;
-    const query = searchParams.get("query");
-    const statusName = searchParams.get("status");
-    const uidStatus = searchParams.get("uidStatus");
-    const campaign = searchParams.get("campaign");
+    const { searchParams } = new URL(request.url)
 
-    const skip = (page - 1) * limit;
-    const filterConditions = [];
+    const page = Number(searchParams.get('page')) || 1
+    const limit = Number(searchParams.get('limit')) || 10
+    const skip = (page - 1) * limit
 
-    if (statusName) {
-      const statusDoc = await Status.findOne({ name: statusName })
-        .select("_id")
-        .lean();
-      if (statusDoc) {
-        filterConditions.push({ status: statusDoc._id });
-      } else {
-        return NextResponse.json({
-          status: true,
-          data: [],
-          pagination: { total: 0, page, limit, totalPages: 0 },
-        });
-      }
+    const query = (searchParams.get('query') || '').trim()
+    const statusId = searchParams.get('status')?.trim()
+    const uidStatus = searchParams.get('uidStatus')
+
+    const conditions = []
+
+    if (statusId && Types.ObjectId.isValid(statusId)) {
+      conditions.push({ status: statusId })
     }
 
-    if (campaign) {
-      filterConditions.push({ campaign: campaign });
-    }
 
-    if (uidStatus === "exists") {
-      filterConditions.push({ uid: { $exists: true, $ne: "", $ne: null } });
-    } else if (uidStatus === "missing") {
-      filterConditions.push({
-        $or: [{ uid: { $exists: false } }, { uid: "" }, { uid: null }],
-      });
-    }
-
-    const trimmedQuery = query?.trim();
-    if (trimmedQuery) {
-      filterConditions.push({
+    if (uidStatus === 'exists') {
+      conditions.push({ uid: { $exists: true, $nin: ['', null] } })
+    } else if (uidStatus === 'missing') {
+      conditions.push({
         $or: [
-          { name: { $regex: trimmedQuery, $options: "i" } },
-          { phone: { $regex: trimmedQuery, $options: "i" } },
-        ],
-      });
+          { uid: { $exists: false } },
+          { uid: '' },
+          { uid: null }
+        ]
+      })
     }
 
-    const filter =
-      filterConditions.length > 0 ? { $and: filterConditions } : {};
+    if (query) {
+      conditions.push({
+        $or: [
+          { name: { $regex: query, $options: 'i' } },
+          { phone: { $regex: query, $options: 'i' } }
+        ]
+      })
+    }
 
-    // ▼▼▼ DÒNG DEBUG QUAN TRỌNG ▼▼▼
-    console.log(
-      "FINAL FILTER SENT TO MONGODB:",
-      JSON.stringify(filter, null, 2),
-    );
-    // ▲▲▲ DÒNG DEBUG QUAN TRỌNG ▲▲▲
-
+    const filter = conditions.length ? { $and: conditions } : {}
     const [data, total] = await Promise.all([
       Customer.find(filter)
-        .populate("status", "name")
+        .populate('status', '_id name')
         .sort({ createdAt: -1, _id: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      Customer.countDocuments(filter),
-    ]);
-
+      Customer.countDocuments(filter)
+    ])
+    
     return NextResponse.json({
       status: true,
       data,
-      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
-    });
-  } catch (error) {
-    console.error("API GET Error:", error);
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    })
+  } catch (err) {
     return NextResponse.json(
-      { status: false, message: "Server Error", error: error.message },
-      { status: 500 },
-    );
+      { status: false, message: 'Server Error', error: err.message },
+      { status: 500 }
+    )
   }
 }
 
