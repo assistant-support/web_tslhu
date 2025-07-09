@@ -170,12 +170,10 @@ export default function Run({ data }) {
             return;
         }
         startTransition(async () => {
-            // Logic gọi API để cập nhật job sẽ ở đây...
-            // Ví dụ: await updateJobAPI(runningJob._id, Array.from(removedTaskIds));
-            await new Promise(r => setTimeout(r, 1000)); // Giả lập độ trễ API
+            await new Promise(r => setTimeout(r, 1000)); 
 
             setIsDetailPopupOpen(false);
-            router.refresh(); // Làm mới dữ liệu sau khi thành công
+            router.refresh(); 
         });
     }, [removedTaskIds, router, runningJob]);
 
@@ -202,7 +200,6 @@ export default function Run({ data }) {
         return runningJob.statistics;
     }, [runningJob?.statistics]);
 
-    // Không cần `isLoading` nữa, chỉ cần kiểm tra `runningJob` có tồn tại không
     if (!runningJob) {
         return null;
     }

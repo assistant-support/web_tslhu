@@ -7,7 +7,6 @@ export default function Noti({ open, onClose, status, mes, button }) {
 
   return (
     <div
-
       style={{
         position: 'fixed',
         top: 0,

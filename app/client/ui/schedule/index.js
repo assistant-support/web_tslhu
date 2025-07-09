@@ -202,7 +202,7 @@ export default function Schedule({ data, user, label: labelsFromProps }) {
                 actionType,
                 config: { messageTemplate: message, actionsPerHour },
                 zaloAccountId: user.zalo._id,
-                tasks: activeRecipients.map(c => ({ person: { name: c.name, phone: c.phone, uid: c.uid } }))
+                tasks: activeRecipients.map(c => ({ person: { name: c.name, phone: c.phone, uid: c.uid, _id: c._id } }))
             };
             const response = await fetch('/api/runca', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },

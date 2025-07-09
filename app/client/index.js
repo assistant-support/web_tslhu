@@ -22,9 +22,15 @@ import { Svg_Pen } from "@/components/(icon)/svg";
 import CenterPopup from "@/components/(features)/(popup)/popup_center";
 
 const useTraCuuData = (phones) => {
+<<<<<<< Updated upstream
   const CACHE_TIME = 10_000;
   const cacheRef = useRef(new Map());
   const [, forceUpdate] = useState(0);
+=======
+    const CACHE_TIME = 60_000;
+    const cacheRef = useRef(new Map());
+    const [, forceUpdate] = useState(0);
+>>>>>>> Stashed changes
 
   useEffect(() => {
     let cancelled = false;
