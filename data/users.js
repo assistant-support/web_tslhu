@@ -17,7 +17,10 @@ export async function Data_account() {
 
 export async function Get_user() {
     try {
-        const res = await fetchApi(`/user`, { method: 'POST',  body: { source: 1 } });
+        const res = await fetchApi(`/user`, {
+            method: 'POST', cache: "force-cache",
+            next: { tags: [`user`] }, body: { source: 1 }
+        });
         return res.data || [];
     } catch (err) {
         return { data: [] };
