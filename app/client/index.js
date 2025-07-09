@@ -132,6 +132,8 @@ const Row = React.memo(function Row({
     onRowClick,
     onSearch,
 }) {
+    console.log(row);
+
     const hasData = row._apiStatus === "success";
     const canSearch = hasData && row.MaDangKy;
     const disabledStyle = {
@@ -173,6 +175,9 @@ const Row = React.memo(function Row({
                 </div>
                 <div className={`${styles.gridCell} text_6_400`}>
                     {row.status?.name || "-"}
+                </div>
+                <div className={`${styles.gridCell} text_6_400`} style={{ flex: .5 }}>
+                    {row?.action.length > 0 ? row.action[0].actionType : "-"}
                 </div>
                 <div className={`${styles.gridCell} text_7_400`} style={{ flex: .5 }}>
                     <p style={{ padding: '3px 12px', color: 'white', fontSize: 12, borderRadius: 12, background: row.uid == 'Lỗi tìm kiếm' ? 'var(--yellow)' : row.uid ? 'var(--green)' : 'var(--red)' }}>
@@ -651,6 +656,12 @@ export default function Client({
                                     style={{ color: "white" }}
                                 >
                                     Trạng thái
+                                </div>
+                                <div
+                                    className={`${styles.gridCell} text_6`}
+                                    style={{ color: "white", flex: .5 }}
+                                >
+                                    Hành động
                                 </div>
                                 <div
                                     className={`${styles.gridCell} text_6`}
