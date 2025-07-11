@@ -1,8 +1,8 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import { cookies } from 'next/headers';
-import connectDB from '@/config/connectDB';
-import users from '@/models/users';
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
+import connectDB from "@/config/connectDB";
+import users from "@/models/users";
 
 export async function POST(req) {
   try {
@@ -10,32 +10,41 @@ export async function POST(req) {
     const { email, password, re } = await req.json();
 
     const user = await users.findOne({ email }).lean();
-    if (!user) return jsonRes(404, { status: 1, mes: 'Tài khoản không tồn tại!', data: [] });
+    if (!user)
+      return jsonRes(404, {
+        status: 1,
+        mes: "Tài khoản không tồn tại!",
+        data: [],
+      });
 
     const ok = await bcrypt.compare(password, user.uid);
-    if (!ok) return jsonRes(401, { status: 1, mes: 'Mật khẩu không chính xác!', data: [] });
+    if (!ok)
+      return jsonRes(401, {
+        status: 1,
+        mes: "Mật khẩu không chính xác!",
+        data: [],
+      });
 
-    const jwtLife = re ? '1200d' : '1h';
+    const jwtLife = re ? "1200d" : "5h";
     const accessToken = jwt.sign(
       { id: user._id, role: user.role, zalo: user.zalo || null },
       process.env.JWT_SECRET,
-      { expiresIn: jwtLife }
+      { expiresIn: jwtLife },
     );
     const opts = {
       httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
+      sameSite: "lax",
+      path: "/",
     };
     if (re) opts.maxAge = 60 * 60 * 24 * 1200;
 
     cookies().set(process.env.token, accessToken, opts);
-    return jsonRes(200, { status: 2, mes: 'Đăng nhập thành công', data: [] });
+    return jsonRes(200, { status: 2, mes: "Đăng nhập thành công", data: [] });
   } catch (err) {
     console.error(err);
-    return jsonRes(500, { status: 1, mes: 'Lỗi máy chủ', data: [] });
+    return jsonRes(500, { status: 1, mes: "Lỗi máy chủ", data: [] });
   }
 }
-
 
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: corsHeaders() });
@@ -43,14 +52,14 @@ export async function OPTIONS() {
 
 function corsHeaders() {
   return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
   };
 }
 function jsonRes(status, body) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(), "Content-Type": "application/json" },
   });
 }

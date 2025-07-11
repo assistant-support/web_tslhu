@@ -10,9 +10,9 @@ import User from "@/models/users";
 import jwt from "jsonwebtoken";
 /* ─────────────── CONSTANTS ─────────────── */
 const TAG = "customer_data";
-const TARGET_EMAIL = "tn2003bh@gmail.com";
-const COL_F_INDEX = 5; // cột F (0-based: A=0 … F=5)
-const DATA_START_ROW = 23977; // chỉ đọc từ dòng này trở xuống (1-based)
+const TARGET_EMAIL = "phihung.tgdd2003@gmail.com"; // email của nhân viên cần gán quyền
+const COL_F_INDEX = 10; // cột F (0-based: A=0 … F=5)
+const DATA_START_ROW = 385; // chỉ đọc từ dòng này trở xuống (1-based)
 /* ────────────────────────────────────────── */
 
 /* Google Sheets client (readonly) */
@@ -131,24 +131,47 @@ export async function GET(request) {
   }
 }
 
-/*───────────  POST  ───────────*/
+/*───────────  POST (Hardcoded Sheet Info) ───────────*/
 export async function POST(request) {
   await dbConnect();
 
   try {
-    const { spreadsheetId, range } = await request.json();
-    if (!spreadsheetId || !range) {
+    // Chỉ lấy các tham số động từ request body
+    const { targetEmail, startRow } = await request.json();
+
+    // Kiểm tra các tham số bắt buộc
+    if (!targetEmail) {
       return NextResponse.json(
-        {
-          status: false,
-          mes: "Vui lòng cung cấp spreadsheetId và range.",
-          data: [],
-        },
+        { status: false, mes: "Vui lòng cung cấp targetEmail." },
         { status: 400 },
       );
     }
 
-    /* 1. Đọc Google Sheet */
+    // Gán cứng ID và Range của Google Sheet
+    const spreadsheetId = "1atiuB7QC_pZiGzb4fwhrkh2wIgif3z4Hjyp3mWyNUvQ";
+    const range = "Data!A:K";
+
+    // Thiết lập các hằng số động
+    const DATA_START_ROW = Number(startRow) || 1; // Mặc định là 1 nếu không có hoặc không hợp lệ
+    const TARGET_EMAIL = targetEmail.trim().toLowerCase();
+    const COL_F_INDEX = 10; // Cột K (index 10)
+
+    // --- BƯỚC 1: LẤY ID CỦA NHÂN VIÊN CẦN GÁN QUYỀN ---
+    const authUser = await User.findOne({ email: TARGET_EMAIL })
+      .select("_id")
+      .lean();
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          status: false,
+          mes: `Không tìm thấy nhân viên với email: ${TARGET_EMAIL}`,
+        },
+        { status: 404 },
+      );
+    }
+    const authIdToAssign = authUser._id;
+
+    // --- BƯỚC 2: ĐỌC VÀ CHUẨN HÓA DỮ LIỆU TỪ GOOGLE SHEET ---
     const sheets = await getGoogleSheetsClient();
     const { data } = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -156,22 +179,16 @@ export async function POST(request) {
     });
     const rows = data.values ?? [];
 
-    /* Kiểm tra có đủ dòng để lấy dữ liệu */
     if (rows.length < DATA_START_ROW) {
       return NextResponse.json({
         status: true,
         mes: `Sheet chưa có tới dòng ${DATA_START_ROW}.`,
-        data: [],
       });
     }
 
-    /* Header */
     const headers = rows[0].map((h) => h.trim());
-
-    /* Chỉ xử lý từ dòng DATA_START_ROW trở xuống (0-based => -1) */
     const dataRows = rows.slice(DATA_START_ROW - 1);
 
-    /* 2. Xác định cột quan trọng */
     const phoneIdx = headers.indexOf("phone");
     const parentPhoneIdx = headers.indexOf("Parent's Phone Number");
     const nameIdx = headers.indexOf("nameStudent");
@@ -181,15 +198,14 @@ export async function POST(request) {
       return NextResponse.json(
         {
           status: false,
-          mes: "Thiếu cột phone / Parent's Phone Number.",
-          data: [],
+          mes: "Thiếu cột 'phone' hoặc 'Parent's Phone Number'.",
         },
         { status: 400 },
       );
     }
 
-    /* 3. Lọc & gom dữ liệu hợp lệ */
-    const processed = new Set();
+    // --- BƯỚC 3: LỌC & GOM DỮ LIỆU HỢP LỆ ---
+    const processedPhones = new Set();
     const sheetRows = [];
 
     dataRows.forEach((row) => {
@@ -198,7 +214,6 @@ export async function POST(request) {
         .replace(/\s+/g, "");
       if (!phone) return;
 
-      /* Chuẩn hoá SĐT Việt Nam: 10 số, bắt đầu 0 */
       const len = phone.length;
       if (len < 9 || len > 11) return;
       if (len === 9 && phone[0] !== "0") phone = "0" + phone;
@@ -207,98 +222,101 @@ export async function POST(request) {
       else if (len === 11) return;
       if (phone.length !== 10) return;
 
-      if (processed.has(phone)) return;
-      processed.add(phone);
+      if (processedPhones.has(phone)) return;
+      processedPhones.add(phone);
 
-      const colF = (row[COL_F_INDEX] || "").trim().toLowerCase();
+      const assignedEmail = (row[COL_F_INDEX] || "").trim().toLowerCase();
+
       sheetRows.push({
         phone,
         name: nameIdx !== -1 ? row[nameIdx] || "" : "",
         uid: uidIdx !== -1 ? row[uidIdx] || "" : "",
-        needAuth: colF === TARGET_EMAIL.toLowerCase(),
+        needAuth: assignedEmail === TARGET_EMAIL,
       });
     });
 
     if (!sheetRows.length) {
       return NextResponse.json({
         status: true,
-        mes: "Không tìm thấy số điện thoại hợp lệ.",
-        data: [],
+        mes: "Không tìm thấy số điện thoại hợp lệ trong vùng dữ liệu đã chọn.",
       });
     }
 
-    /* 4. Tách dữ liệu mới vs. đã tồn tại */
-    const phoneArr = [...processed];
-    const existingSet = new Set(
-      (
-        await Customer.find({ phone: { $in: phoneArr } })
-          .select("phone")
-          .lean()
-      ).map((d) => d.phone),
+    // --- BƯỚC 4: TÁCH DỮ LIỆU MỚI VS. ĐÃ TỒN TẠI ---
+    const phoneArr = [...processedPhones];
+    const existingCustomers = await Customer.find({ phone: { $in: phoneArr } })
+      .select("phone auth")
+      .lean();
+    const existingCustomerMap = new Map(
+      existingCustomers.map((c) => [c.phone, c]),
     );
 
-    /* 5. Lấy _id user (nếu cần) */
-    let authId = null;
-    if (sheetRows.some((r) => r.needAuth)) {
-      const authUser = await User.findOne({ email: TARGET_EMAIL })
-        .select("_id")
-        .lean();
-      authId = authUser?._id?.toString() ?? null;
-    }
-
-    /* 6. Phân loại insert / update */
+    // --- BƯỚC 5: PHÂN LOẠI INSERT / UPDATE ---
     const docsToInsert = [];
-    const phonesNeedAuth = [];
+    const phonesToUpdateAuth = [];
 
     sheetRows.forEach((r) => {
-      if (existingSet.has(r.phone)) {
-        if (r.needAuth && authId) phonesNeedAuth.push(r.phone);
+      const existingCustomer = existingCustomerMap.get(r.phone);
+
+      if (existingCustomer) {
+        const isAuthAssigned = existingCustomer.auth?.some(
+          (id) => id.toString() === authIdToAssign.toString(),
+        );
+        if (r.needAuth && !isAuthAssigned) {
+          phonesToUpdateAuth.push(r.phone);
+        }
       } else {
         const doc = { phone: r.phone, uid: r.uid, name: r.name };
-        if (r.needAuth && authId) doc.auth = [authId];
+        if (r.needAuth) {
+          doc.auth = [authIdToAssign];
+        }
         docsToInsert.push(doc);
       }
     });
 
-    /* 7a. Thêm mới */
+    // --- BƯỚC 6: THỰC THI LỆNH ---
     let insertedCount = 0;
     if (docsToInsert.length) {
-      const inserted = await Customer.insertMany(docsToInsert);
-      insertedCount = inserted.length;
+      try {
+        const inserted = await Customer.insertMany(docsToInsert, {
+          ordered: false,
+        });
+        insertedCount = inserted.length;
+      } catch (err) {
+        if (err.code === 11000) {
+          insertedCount = err.result.nInserted || 0;
+        } else {
+          throw err;
+        }
+      }
     }
 
-    /* 7b. Update auth các bản ghi cũ */
     let updatedCount = 0;
-    if (phonesNeedAuth.length) {
+    if (phonesToUpdateAuth.length) {
       const res = await Customer.updateMany(
-        { phone: { $in: phonesNeedAuth } },
-        { $addToSet: { auth: authId } },
+        { phone: { $in: phonesToUpdateAuth } },
+        { $addToSet: { auth: authIdToAssign } },
       );
-      updatedCount = res.modifiedCount || res.nModified || 0;
+      updatedCount = res.modifiedCount || 0;
     }
 
-    /* 8. Hoàn tất */
+    // --- BƯỚC 7: HOÀN TẤT ---
     revalidateTag(TAG);
     return NextResponse.json(
       {
         status: true,
-        mes: `Đã thêm ${insertedCount} KH mới và cập nhật ${updatedCount} KH cũ.`,
+        mes: `Đã thêm ${insertedCount} KH mới và cập nhật quyền cho ${updatedCount} KH cũ.`,
       },
       { status: 200 },
     );
   } catch (error) {
-    if (error.code === 11000) {
-      return NextResponse.json(
-        {
-          status: false,
-          mes: "Lỗi trùng lặp số điện thoại.",
-          error: error.message,
-        },
-        { status: 409 },
-      );
-    }
+    console.error("POST Error:", error);
     return NextResponse.json(
-      { status: false, mes: "Server Error", error: error.message },
+      {
+        status: false,
+        mes: "Đã xảy ra lỗi phía server.",
+        error: error.message,
+      },
       { status: 500 },
     );
   }

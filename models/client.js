@@ -1,16 +1,5 @@
 import { Schema, model, models } from "mongoose";
 
-// const CustomerSchema = new Schema(
-//     {
-//         name: { type: String },
-//         phone: { type: String, required: true },
-//         uid: { type: String },
-//         status: { type: String },
-//         label: [{ type: Schema.Types.ObjectId, ref: 'label' }]
-//     },
-//     { timestamps: true }
-// );
-
 const ActionRefSchema = new Schema(
   {
     job: { type: Schema.Types.ObjectId, ref: "scheduledjob", required: true },
@@ -48,7 +37,7 @@ const CustomerSchema = new Schema(
     studyTryNote: { type: String },
     studyNote: { type: String },
     action: [ActionRefSchema],
-    auth: [{ type: Schema.Types.ObjectId, ref: 'user' }]
+    auth: [{ type: Schema.Types.ObjectId, ref: "user" }],
   },
   {
     timestamps: true,

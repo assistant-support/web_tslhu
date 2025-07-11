@@ -6,12 +6,14 @@ import styles from "./admin.module.css";
 // 1. Import các component con mà bạn vừa tạo
 import Dashboard from "./components/Dashboard";
 import UserManagement from "./components/UserManagement";
+import AssignFromSheet from "./components/AssignFromSheet";
+import CenterPopup from "@/components/(features)/(popup)/popup_center";
 
 // Component chính của trang Admin
 export default function AdminPage() {
   // State để quyết định xem nên hiển thị view nào
   const [activeView, setActiveView] = useState("dashboard"); // Mặc định là dashboard
-
+  const [isAssignPopupOpen, setIsAssignPopupOpen] = useState(false);
   // Hàm để render component tương ứng với view đang active
   const renderActiveView = () => {
     switch (activeView) {
@@ -54,6 +56,12 @@ export default function AdminPage() {
           Quản lý Nhân viên
         </button>
         <button
+          className={styles.adminMenuItem}
+          onClick={() => setIsAssignPopupOpen(true)}
+        >
+          Gán quyền từ Sheet
+        </button>
+        <button
           className={`${styles.adminMenuItem} ${
             activeView === "kpi" ? styles.active : ""
           }`}
@@ -65,6 +73,13 @@ export default function AdminPage() {
 
       {/* Phần nội dung chính sẽ render component con tương ứng */}
       <main className={styles.adminContent}>{renderActiveView()}</main>
+      <CenterPopup
+        open={isAssignPopupOpen}
+        onClose={() => setIsAssignPopupOpen(false)}
+        size="md" // hoặc size="auto" nếu bạn đã nâng cấp
+      >
+        <AssignFromSheet />
+      </CenterPopup>
     </div>
   );
 }

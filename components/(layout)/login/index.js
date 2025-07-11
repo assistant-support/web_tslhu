@@ -85,35 +85,160 @@ const InputField = ({ label, type, value, setValue }) => {
   );
 };
 
+// const LoginPage = () => {
+//   const [username, setUsername] = useState("");
+//   const [password, setPassword] = useState("");
+//   const [rememberMe, setRememberMe] = useState(false);
+//   const [loading, setloading] = useState(false);
+//   const emailIsValid = isValidEmail(username);
+//   const passwordIsNotEmpty = password.trim() !== "";
+//   const isFormValid = emailIsValid && passwordIsNotEmpty;
+//   const handleSubmit = async () => {
+//     setloading(true);
+//     try {
+//       const data = { email: username, password, re: rememberMe };
+//       const response = await fetch("/api/login", {
+//         method: "POST",
+//         headers: {
+//           "Content-Type": "application/json",
+//         },
+//         body: JSON.stringify(data),
+//       });
+
+//       if (!response.ok) {
+//         throw new Error("Đăng nhập thất bại");
+//       }
+//       const result = await response.json();
+//       window.location.reload();
+//     } catch (err) {
+//       console.error("Lỗi:", err);
+//     }
+//     setloading(false);
+//   };
+
+//   return (
+//     <>
+//       {loading ? (
+//         <p className="text_2">Đang đăng nhập</p>
+//       ) : (
+//         <p className="text_2">Đăng nhập</p>
+//       )}
+//       <div
+//         style={{
+//           backgroundColor: "white",
+//           padding: "32px 32px 0 32px",
+//           borderRadius: "8px",
+//           width: "calc(100% - 64px)",
+//         }}
+//       >
+//         {loading ? (
+//           <div
+//             style={{ width: "100%", aspectRatio: 1, height: "auto" }}
+//             className="flex_center"
+//           >
+//             {/* <CircularProgress color="inherit" /> */}
+//           </div>
+//         ) : (
+//           <>
+//             <InputField
+//               label="Email"
+//               type="text"
+//               value={username}
+//               setValue={setUsername}
+//             />
+//             <InputField
+//               label="Mật khẩu"
+//               type="password"
+//               value={password}
+//               setValue={setPassword}
+//             />
+
+//             <div
+//               className="flex_center"
+//               style={{ justifyContent: "start", gap: 8 }}
+//             >
+//               <label
+//                 style={{
+//                   display: "flex",
+//                   alignItems: "center",
+//                   gap: 8,
+//                   cursor: "pointer",
+//                 }}
+//               >
+//                 <input
+//                   type="checkbox"
+//                   className={air["custom-checkbox"]}
+//                   checked={rememberMe}
+//                   onChange={(e) => setRememberMe(e.target.checked)}
+//                 />
+//                 <p className="text_5_400">Ghi nhớ tôi</p>
+//               </label>
+//             </div>
+
+//             <div className="flex_center" style={{ margin: "40px 0" }}>
+//               <div
+//                 style={{
+//                   height: 60,
+//                   width: 60,
+//                   borderRadius: 16,
+//                   color: "white",
+//                   display: "flex",
+//                   alignItems: "center",
+//                   justifyContent: "center",
+//                 }}
+//                 onClick={isFormValid ? handleSubmit : undefined}
+//                 className={isFormValid ? air.submit : air.unsubmit}
+//               >
+//                 <Svg_ArowRight w={28} h={28} c={"white"} />
+//               </div>
+//             </div>
+//           </>
+//         )}
+//       </div>
+//     </>
+//   );
+// };
+
 const LoginPage = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setloading] = useState(false);
+
   const emailIsValid = isValidEmail(username);
   const passwordIsNotEmpty = password.trim() !== "";
   const isFormValid = emailIsValid && passwordIsNotEmpty;
+
+  // Hàm logic đăng nhập không đổi
   const handleSubmit = async () => {
     setloading(true);
     try {
       const data = { email: username, password, re: rememberMe };
       const response = await fetch("/api/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
 
       if (!response.ok) {
+        // Bạn nên thêm xử lý hiển thị lỗi cho người dùng ở đây
         throw new Error("Đăng nhập thất bại");
       }
-      const result = await response.json();
+      // Tải lại trang sau khi thành công
       window.location.reload();
     } catch (err) {
       console.error("Lỗi:", err);
+      // Thêm xử lý hiển thị lỗi cho người dùng ở đây
     }
     setloading(false);
+  };
+
+  // --- HÀM MỚI ĐỂ XỬ LÝ SUBMIT FORM ---
+  const handleFormSubmit = (event) => {
+    event.preventDefault(); // Ngăn trình duyệt tải lại trang
+    if (isFormValid) {
+      handleSubmit(); // Gọi hàm logic đăng nhập của bạn
+    }
   };
 
   return (
@@ -139,7 +264,8 @@ const LoginPage = () => {
             {/* <CircularProgress color="inherit" /> */}
           </div>
         ) : (
-          <>
+          // ▼▼▼ BỌC CÁC THÀNH PHẦN BẰNG THẺ <form> ▼▼▼
+          <form onSubmit={handleFormSubmit}>
             <InputField
               label="Email"
               type="text"
@@ -176,7 +302,9 @@ const LoginPage = () => {
             </div>
 
             <div className="flex_center" style={{ margin: "40px 0" }}>
-              <div
+              {/* Thay đổi div thành button type="submit" */}
+              <button
+                type="submit"
                 style={{
                   height: 60,
                   width: 60,
@@ -185,18 +313,19 @@ const LoginPage = () => {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  border: "none", // Xóa viền mặc định của button
                 }}
-                onClick={isFormValid ? handleSubmit : undefined}
+                disabled={!isFormValid} // Vô hiệu hóa nút khi form không hợp lệ
                 className={isFormValid ? air.submit : air.unsubmit}
               >
                 <Svg_ArowRight w={28} h={28} c={"white"} />
-              </div>
+              </button>
             </div>
-          </>
+          </form>
+          // ▲▲▲ KẾT THÚC BỌC FORM ▲▲▲
         )}
       </div>
     </>
   );
 };
-
 export default LoginPage;

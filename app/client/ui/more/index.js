@@ -14,6 +14,8 @@ import { Data_History_User, Re_Client } from "@/data/client";
 import Noti from "@/components/(features)/(noti)/noti";
 import styles from "./index.module.css";
 import Title from "@/components/(features)/(popup)/title";
+import Schedule from "../schedule"; // Import component Schedule
+import CareHistory from "../his"; // Import component CareHistory
 
 // --- CÁC HÀM TIỆN ÍCH ---
 const ClientSideTime = ({ date }) => {
@@ -448,7 +450,15 @@ const StatusManager = ({ statuses, onUpdate, onClose }) => {
   );
 };
 
-export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
+export default function SidePanel({
+  open,
+  row,
+  labels,
+  onClose,
+  onSave,
+  onQuickMessage,
+  onShowHistory,
+}) {
   const firstInputRef = useRef(null);
   const [inputs, setInputs] = useState({
     careNote: "",
@@ -456,7 +466,7 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
     studyNote: "",
   });
   const [saving, setSaving] = useState(false);
-  const [secondaryOpen, setSecondaryOpen] = useState(false);
+  const [secondaryView, setSecondaryView] = useState(null);
   const [formOpen, setFormOpen] = useState(true);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState(null);
@@ -471,6 +481,7 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
   const [statuses, setStatuses] = useState([]); // Lưu danh sách tất cả trạng thái
   const [selectedStatusId, setSelectedStatusId] = useState(""); // Lưu ID của trạng thái được chọn
   const [isStatusManagerOpen, setIsStatusManagerOpen] = useState(false); // Điều khiển popup quản lý
+  const [secondaryContent, setSecondaryContent] = useState(null);
 
   const isCancelled = row?.remove && row.remove.trim() !== "";
   const fetchStatuses = useCallback(async () => {
@@ -484,6 +495,26 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
       console.error("Lỗi khi tải trạng thái:", error);
     }
   }, []); // Mảng phụ thuộc rỗng vì hàm này không cần gì từ bên ngoài
+
+  useEffect(() => {
+    if (open && row) {
+      fetchStatuses();
+      // Logic điền dữ liệu vào form
+      setInputs({
+        careNote: row.careNote ?? "",
+        studyTryNote: row.studyTryNote ?? "",
+        studyNote: row.studyNote ?? "",
+      });
+      setCheckedState({
+        care: !!row.care,
+        studyTry: !!row.studyTry,
+        study: !!row.study,
+      });
+      const currentStatusId =
+        typeof row.status === "object" ? row.status?._id : row.status;
+      setSelectedStatusId(currentStatusId || "");
+    }
+  }, [open, row, fetchStatuses]); // Phụ thuộc vào open, row, và hàm fetch
 
   // 2. useEffect chính để xử lý logic khi mở panel
   useEffect(() => {
@@ -595,11 +626,6 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
     }
   };
 
-  const handleHistoryClick = useCallback((h) => {
-    setSelectedHistory(h);
-    setDetailOpen(true);
-  }, []);
-
   const renderContent = () => (
     <>
       <section className={styles.info}>
@@ -609,6 +635,23 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
         <InfoRow label="Tên học sinh" value={row?.name} />
         <InfoRow label="Số điện thoại" value={row?.phone} />
         <InfoRow label="UID" value={row?.uid} />
+        <button
+          onClick={() => onQuickMessage(row)}
+          style={{
+            width: "100%",
+            marginTop: "12px",
+            padding: "8px",
+            fontSize: "14px",
+            fontWeight: "500",
+            color: "#fff",
+            backgroundColor: "#0d6efd", // Màu xanh dương
+            border: "none",
+            borderRadius: "5px",
+            cursor: "pointer",
+          }}
+        >
+          Lên chiến dịch nhanh
+        </button>
         <div
           style={{
             marginTop: "12px",
@@ -642,15 +685,17 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
         </div>
       </section>
 
-      {labels.length > 0 && (
+      {labels && labels.length > 0 && (
         <section className={styles.labelsBox}>
           <p className="text_4" style={{ marginBottom: 8 }}>
             Nhãn
           </p>
           <div className={styles.labelsWrap}>
-            {labels.map((l) => (
-              <span key={l} className="chip">
-                {l}
+            {labels.map((labelObj) => (
+              // 1. Dùng labelObj._id làm key duy nhất
+              <span key={labelObj._id} className="chip">
+                {/* 2. Hiển thị labelObj.title thay vì cả object */}
+                {labelObj.title}
               </span>
             ))}
           </div>
@@ -666,7 +711,7 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
           type="button"
           className={styles.saveBtn}
           style={{ marginTop: 8 }}
-          onClick={() => setSecondaryOpen(true)}
+          onClick={() => onShowHistory(row)}
         >
           Chi tiết chăm sóc
         </button>
@@ -707,7 +752,6 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
                   borderRight: "none",
                   borderRadius: "4px 0 0 4px",
                   backgroundColor: "white",
-                  // --- BỔ SUNG CSS ĐỂ CẮT CHỮ ---
                   flex: "1 1 auto",
                   minWidth: "120px", // Quy định chiều rộng tối thiểu
                   maxWidth: "300px",
@@ -859,22 +903,9 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
     <>
       <FlexiblePopup
         open={open}
-        key={row?.phone ?? "no-row"}
         onClose={onClose}
         title="Chi tiết khách hàng"
-        size="md"
-        renderItemList={() =>
-          row ? renderContent() : <Loading content="Đang tải chi tiết…" />
-        }
-        secondaryOpen={secondaryOpen}
-        onCloseSecondary={() => setSecondaryOpen(false)}
-        fetchDataSecondary={() =>
-          Data_History_User(row.phone).then((res) => res.data)
-        }
-        renderSecondaryList={(histories) =>
-          renderCareHistory(histories, handleHistoryClick, row.phone)
-        }
-        secondaryTitle="Lịch sử chăm sóc"
+        renderItemList={() => (row ? renderContent() : <Loading />)}
       />
       <CenterPopup
         open={detailOpen}
@@ -907,22 +938,6 @@ export default function SidePanel({ open, row, labels = [], onClose, onSave }) {
         onClose={() => setNotiOpen(false)}
         status={notiStatus}
         mes={notiMes}
-        button={
-          <div
-            onClick={() => {
-              if (notiStatus) onSave();
-              setNotiOpen(false);
-            }}
-            className={styles.saveBtn}
-            style={{
-              width: "calc(100% - 52px)",
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            Tắt thông báo
-          </div>
-        }
       />
     </>
   );

@@ -20,6 +20,7 @@ import SidePanel from "./ui/more";
 import WrapIcon from "@/components/(ui)/(button)/hoveIcon";
 import { Svg_Pen } from "@/components/(icon)/svg";
 import CenterPopup from "@/components/(features)/(popup)/popup_center";
+import Noti from "@/components/(features)/(noti)/noti";
 
 const useTraCuuData = (phones) => {
   const CACHE_TIME = 60_000;
@@ -136,9 +137,10 @@ const Row = React.memo(function Row({
       style={{ backgroundColor: row.remove ? "#ffd9dd" : "white" }}
     >
       <div style={{ display: "flex", flex: 5 }} onClick={() => onRowClick(row)}>
+        {/* Các ô đã được thêm padding: '0 5px' để tạo không gian thở */}
         <div
           className={`${styles.gridCell} ${styles.colTiny}`}
-          style={{ flex: 0.2, textAlign: "center" }}
+          style={{ justifyContent: "center", flex: 0.3, padding: "0 5px" }}
           onClick={(e) => e.stopPropagation()}
         >
           <input
@@ -150,22 +152,64 @@ const Row = React.memo(function Row({
         </div>
         <div
           className={`${styles.gridCell} ${styles.colSmall} text_6_400`}
-          style={{ flex: 0.2, textAlign: "center", fontWeight: 600 }}
+          style={{
+            justifyContent: "center",
+            flex: 0.3,
+            fontWeight: 600,
+            // padding: "3px 3px",
+          }}
         >
           {rowIndex + 1}
         </div>
-        <div className={`${styles.gridCell} text_6_400`}>{row.phone}</div>
-        <div className={`${styles.gridCell} text_6_400`}>{row.name}</div>
-        <div className={`${styles.gridCell} text_6_400`} style={{ flex: 0.5 }}>
+        <div
+          className={`${styles.gridCell} text_6_400`}
+          style={{ justifyContent: "center", flex: 1, padding: "0 5px" }}
+        >
+          {row.phone}
+        </div>
+        <div
+          className={`${styles.gridCell} text_6_400`}
+          style={{ flex: 1.5, padding: "0 5px" }}
+        >
+          {row.name}
+        </div>
+        <div
+          className={`${styles.gridCell} text_6_400`}
+          style={{ justifyContent: "center", flex: 0.5, padding: "0 5px" }}
+        >
           <StageIndicator level={row.stageLevel} />
         </div>
-        <div className={`${styles.gridCell} text_6_400`}>
-          {row.status?.name || "-"}
+        {/* ▼▼▼ Ô TRẠNG THÁI ĐÃ ĐƯỢC SỬA LỖI ▼▼▼ */}
+        <div
+          className={`${styles.gridCell} text_6_400`}
+          style={{
+            justifyContent: "center",
+            flex: 1,
+            padding: "0 5px",
+            overflow: "hidden",
+          }}
+        >
+          <span
+            style={{
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+            title={row.status?.name}
+          >
+            {row.status?.name || "-"}
+          </span>
         </div>
-        <div className={`${styles.gridCell} text_6_400`} style={{ flex: 0.5 }}>
+        <div
+          className={`${styles.gridCell} text_6_400`}
+          style={{ justifyContent: "center", flex: 0.7, padding: "0 5px" }}
+        >
           {row.action.length > 0 ? row.action[0].actionType : "-"}
         </div>
-        <div className={`${styles.gridCell} text_7_400`} style={{ flex: 0.5 }}>
+        <div
+          className={`${styles.gridCell} text_7_400`}
+          style={{ justifyContent: "center", flex: 0.5, padding: "0 5px" }}
+        >
           <p
             style={{
               padding: "3px 12px",
@@ -259,54 +303,6 @@ const Row = React.memo(function Row({
   );
 });
 
-// ==================================================================
-// === COMPONENT MỚI: BẢNG ĐIỀU KHIỂN CỦA ADMIN ===
-// ==================================================================
-const AdminDashboard = () => {
-  // State để quản lý popup/giao diện con
-  const [showUserManagement, setShowUserManagement] = useState(false);
-
-  return (
-    <div className={styles.adminDashboard}>
-      {/* Thanh menu chức năng của Admin */}
-      <div className={styles.adminMenu}>
-        <button
-          className={styles.adminMenuItem}
-          onClick={() => setShowUserManagement(true)}
-        >
-          Quản lý Nhân viên
-        </button>
-        <button className={styles.adminMenuItem}>
-          Phân tích & Báo cáo (KPI)
-        </button>
-        <button className={styles.adminMenuItem}>Cài đặt Hệ thống</button>
-      </div>
-
-      {/* Phần nội dung chính của Dashboard */}
-      <div className={styles.adminContent}>
-        <h2>Dashboard Tổng quan</h2>
-        <p>
-          Đây là nơi hiển thị các biểu đồ, thống kê nhanh về hiệu suất làm việc
-          của nhân viên, số lượng khách hàng, v.v...
-        </p>
-        {/* (Placeholder for charts and stats) */}
-      </div>
-
-      {/* Popup quản lý nhân viên (ví dụ) */}
-      <CenterPopup
-        open={showUserManagement}
-        onClose={() => setShowUserManagement(false)}
-        size="lg"
-        title="Quản lý Nhân viên"
-      >
-        <div>
-          <p>Giao diện thêm, sửa, xóa tài khoản nhân viên sẽ nằm ở đây.</p>
-        </div>
-      </CenterPopup>
-    </div>
-  );
-};
-
 export default function Client({
   initialData,
   initialPagination,
@@ -314,13 +310,8 @@ export default function Client({
   initialStatuses,
   user,
 }) {
-  const [activeView, setActiveView] = useState("chamsoc");
   const [traCuuOpen, setTraCuuOpen] = useState(false);
   const [traCuuData, setTraCuuData] = useState(null);
-  const isAdmin = useMemo(
-    () => Array.isArray(user?.role) && user.role.includes("Admin"),
-    [user],
-  );
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -335,9 +326,11 @@ export default function Client({
   const [viewMode, setViewMode] = useState("all");
   const [query, setQuery] = useState(searchParams.get("query") || "");
   const [showLabelPopup, setShowLabelPopup] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+  const historyRef = useRef(null);
+  const scheduleRef = useRef(null);
+
   const serverPage = initialPagination?.page || 1;
   const serverTotalPages = initialPagination?.totalPages || 1;
   const serverLimit = initialPagination?.limit || 10;
@@ -345,6 +338,36 @@ export default function Client({
     () => Number(searchParams.get("limit")) || serverLimit,
     [searchParams, serverLimit],
   );
+  const scheduleData = useMemo(
+    () => [...selectedCustomerMap.values()],
+    [selectedCustomerMap],
+  );
+
+  const handleOpenBulkSchedule = useCallback(() => {
+    scheduleRef.current?.openForBulk(scheduleData);
+  }, [scheduleData]);
+
+  const handleRowClick = useCallback((row) => {
+    setSelectedRow(row);
+    setPanelOpen(true);
+  }, []);
+
+  const closePanel = useCallback(() => {
+    setPanelOpen(false);
+    setTimeout(() => setSelectedRow(null), 300);
+  }, []);
+  const handleRefresh = useCallback(
+    () => startTransition(() => router.refresh()),
+    [router],
+  );
+
+  const handleSaveChanges = useCallback(() => {
+    closePanel();
+    handleRefresh();
+  }, [closePanel, handleRefresh]);
+  const handleScheduleDone = useCallback(() => {
+    setScheduleTrigger({ active: false, data: [] });
+  }, []);
 
   const handleNavigation = useCallback(
     (name, value) => {
@@ -386,11 +409,6 @@ export default function Client({
     }, 300);
     return () => clearTimeout(t);
   }, [query, searchParams, handleNavigation]);
-
-  const handleRefresh = useCallback(
-    () => startTransition(() => router.refresh()),
-    [router],
-  );
 
   const uniqueLabels = useMemo(
     () =>
@@ -452,10 +470,16 @@ export default function Client({
     });
   }, [initialData, allOnPageChecked, setSelectedIds]);
 
-  const scheduleData = useMemo(
-    () => [...selectedCustomerMap.values()],
-    [selectedCustomerMap],
-  );
+  const handleOpenQuickMessage = useCallback((customer) => {
+    setPanelOpen(false); // Đóng SidePanel
+    scheduleRef.current?.openForQuickMessage(customer);
+  }, []);
+
+  // 3. Hàm mới để gọi HistoryPopup qua "bộ đàm"
+  const handleShowHistory = useCallback((customer) => {
+    historyRef.current?.showFor(customer);
+  }, []);
+
   const rowsToDisplay = useMemo(
     () => (viewMode === "selected" ? scheduleData : initialData),
     [viewMode, scheduleData, initialData],
@@ -479,19 +503,6 @@ export default function Client({
     () => (viewMode === "selected" ? 1 : serverPage),
     [viewMode, serverPage],
   );
-
-  const handleRowClick = useCallback((row) => {
-    setSelectedRow(row);
-    setPanelOpen(true);
-  }, []);
-  const closePanel = useCallback(() => {
-    setPanelOpen(false);
-    setTimeout(() => setSelectedRow(null), 300);
-  }, []);
-  const handleSaveChanges = useCallback(() => {
-    closePanel();
-    handleRefresh();
-  }, [closePanel, handleRefresh]);
   const handleSearchClick = useCallback((row) => {
     setTraCuuData(row);
     setTraCuuOpen(true);
@@ -649,7 +660,15 @@ export default function Client({
           </div>
           <Run data={user} />
         </div>
-        <Schedule data={scheduleData} user={user} label={initialLabels} />
+        <button
+          className="btn"
+          style={{ borderRadius: 5, margin: 0 }}
+          onClick={handleOpenBulkSchedule} // <-- Đảm bảo gọi đúng tên hàm này
+        >
+          <p className="text_6" style={{ color: "white" }}>
+            Lên chiến dịch hàng loạt
+          </p>
+        </button>
       </div>
       {isPending && <div className={styles.loading}>Đang tải dữ liệu...</div>}
       {!isPending && (
@@ -657,9 +676,10 @@ export default function Client({
           <div className={styles.dataGrid}>
             <div className={styles.gridHeader}>
               <div style={{ display: "flex", flex: 5 }}>
+                {/* Các thuộc tính flex đã được điều chỉnh và thêm justifyContent */}
                 <div
                   className={`${styles.gridCell} ${styles.colTiny}`}
-                  style={{ textAlign: "center", flex: 0.2 }}
+                  style={{ justifyContent: "center", flex: 0.3 }}
                 >
                   <input
                     type="checkbox"
@@ -679,52 +699,69 @@ export default function Client({
                 </div>
                 <div
                   className={`${styles.gridCell} ${styles.colSmall} text_6`}
-                  style={{ flex: 0.2, color: "white" }}
+                  style={{
+                    justifyContent: "center",
+                    flex: 0.3,
+                    color: "white",
+                  }}
                 >
                   STT
                 </div>
                 <div
                   className={`${styles.gridCell} text_6`}
-                  style={{ color: "white" }}
+                  style={{ justifyContent: "center", color: "white", flex: 1 }}
                 >
-                  SĐT
+                  Di động
                 </div>
                 <div
                   className={`${styles.gridCell} text_6`}
-                  style={{ color: "white" }}
+                  style={{ color: "white", flex: 1.5 }}
                 >
                   Tên
-                </div>
+                </div>{" "}
+                {/* Để tên căn trái cho dễ đọc */}
                 <div
                   className={`${styles.gridCell} text_6`}
-                  style={{ color: "white", flex: 0.5 }}
+                  style={{
+                    justifyContent: "center",
+                    color: "white",
+                    flex: 0.5,
+                  }}
                 >
                   Giai đoạn
                 </div>
                 <div
                   className={`${styles.gridCell} text_6`}
-                  style={{ color: "white" }}
+                  style={{ justifyContent: "center", color: "white", flex: 1 }}
                 >
                   Trạng thái
                 </div>
                 <div
                   className={`${styles.gridCell} text_6`}
-                  style={{ color: "white", flex: 0.5 }}
+                  style={{
+                    justifyContent: "center",
+                    color: "white",
+                    flex: 0.7,
+                  }}
                 >
                   Hành động
                 </div>
                 <div
                   className={`${styles.gridCell} text_6`}
-                  style={{ color: "white", flex: 0.5 }}
+                  style={{
+                    justifyContent: "center",
+                    color: "white",
+                    flex: 0.5,
+                  }}
                 >
                   UID
                 </div>
               </div>
               <div
                 className={`${styles.gridCell} text_6`}
-                style={{ color: "white", flex: 1 }}
+                style={{ justifyContent: "center", color: "white", flex: 1 }}
               >
-                Cập nhập
+                Cập nhật
               </div>
             </div>
             <div className={styles.gridBody}>
@@ -826,19 +863,26 @@ export default function Client({
           </div>
         </div>
       )}
-      <HistoryPopup
+
+      {/* <HistoryPopup
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         datauser={initialData}
         type="all"
-      />
+      /> */}
       <SidePanel
         open={panelOpen}
         row={selectedRow}
-        labels={selectedRow?.label || []}
+        labels={initialLabels}
         onClose={closePanel}
         onSave={handleSaveChanges}
+        onQuickMessage={handleOpenQuickMessage}
+        onShowHistory={handleShowHistory}
       />
+
+      <Schedule ref={scheduleRef} user={user} label={initialLabels} />
+      <HistoryPopup ref={historyRef} />
+
       <CenterPopup
         open={traCuuOpen}
         onClose={() => setTraCuuOpen(false)}
