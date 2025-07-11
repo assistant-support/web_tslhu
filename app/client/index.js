@@ -16,11 +16,11 @@ import Setting from "./ui/setting";
 import Run from "./ui/run";
 import Schedule from "./ui/schedule";
 import HistoryPopup from "./ui/his";
-import SidePanel from "./ui/more";
 import WrapIcon from "@/components/(ui)/(button)/hoveIcon";
 import { Svg_Pen } from "@/components/(icon)/svg";
 import CenterPopup from "@/components/(features)/(popup)/popup_center";
 import Noti from "@/components/(features)/(noti)/noti";
+import { usePanels } from "../contexts/PanelContext";
 
 const useTraCuuData = (phones) => {
   const CACHE_TIME = 60_000;
@@ -310,6 +310,7 @@ export default function Client({
   initialStatuses,
   user,
 }) {
+  const { openPanel } = usePanels();
   const [traCuuOpen, setTraCuuOpen] = useState(false);
   const [traCuuData, setTraCuuData] = useState(null);
   const router = useRouter();
@@ -326,8 +327,6 @@ export default function Client({
   const [viewMode, setViewMode] = useState("all");
   const [query, setQuery] = useState(searchParams.get("query") || "");
   const [showLabelPopup, setShowLabelPopup] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [selectedRow, setSelectedRow] = useState(null);
   const historyRef = useRef(null);
   const scheduleRef = useRef(null);
 
@@ -343,28 +342,22 @@ export default function Client({
     [selectedCustomerMap],
   );
 
+  const handleRowClick = useCallback(
+    (row) => {
+      openPanel("customerDetail", { customerId: row._id, user: user });
+    },
+    [openPanel, user],
+  );
+
   const handleOpenBulkSchedule = useCallback(() => {
     scheduleRef.current?.openForBulk(scheduleData);
   }, [scheduleData]);
 
-  const handleRowClick = useCallback((row) => {
-    setSelectedRow(row);
-    setPanelOpen(true);
-  }, []);
-
-  const closePanel = useCallback(() => {
-    setPanelOpen(false);
-    setTimeout(() => setSelectedRow(null), 300);
-  }, []);
   const handleRefresh = useCallback(
     () => startTransition(() => router.refresh()),
     [router],
   );
 
-  const handleSaveChanges = useCallback(() => {
-    closePanel();
-    handleRefresh();
-  }, [closePanel, handleRefresh]);
   const handleScheduleDone = useCallback(() => {
     setScheduleTrigger({ active: false, data: [] });
   }, []);
@@ -863,22 +856,6 @@ export default function Client({
           </div>
         </div>
       )}
-
-      {/* <HistoryPopup
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        datauser={initialData}
-        type="all"
-      /> */}
-      <SidePanel
-        open={panelOpen}
-        row={selectedRow}
-        labels={initialLabels}
-        onClose={closePanel}
-        onSave={handleSaveChanges}
-        onQuickMessage={handleOpenQuickMessage}
-        onShowHistory={handleShowHistory}
-      />
 
       <Schedule ref={scheduleRef} user={user} label={initialLabels} />
       <HistoryPopup ref={historyRef} />

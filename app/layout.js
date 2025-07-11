@@ -5,7 +5,9 @@ import Layout_Login from "@/app/(auth)/login";
 import Nav from "@/components/(layout)/nav";
 import "@/styles/all.css";
 import air from "./layout.module.css";
-import { Get_user } from "@/data/users"; // Import hàm lấy dữ liệu người dùng
+import { Get_user } from "@/data/users";
+import { PanelProvider } from "./contexts/PanelContext";
+import PanelContainer from "@/components/panels/PanelContainer";
 
 export const metadata = {
   title: "iTrail",
@@ -44,16 +46,20 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        {userData ? (
-          <div className={air.layout}>
-            <div className={air.nav}>
-              <Nav user={userData} />
+        <PanelProvider>
+          {userData ? (
+            <div className={air.layout}>
+              <div className={air.nav}>
+                <Nav user={userData} />
+              </div>
+              <main className={air.main}>{children}</main>
+              {/* Đặt PanelContainer ở đây để nó hiển thị đè lên trên */}
+              <PanelContainer />
             </div>
-            <div className={air.main}>{children}</div>
-          </div>
-        ) : (
-          <Layout_Login />
-        )}
+          ) : (
+            <Layout_Login />
+          )}
+        </PanelProvider>
       </body>
     </html>
   );
