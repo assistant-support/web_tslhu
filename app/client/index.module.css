@@ -697,3 +697,39 @@
     grid-template-columns: 1fr;
   }
 }
+
+.lookupStatus {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* START: CẬP NHẬT MÀU */
+/* Màu xanh dương khi có thông tin chung */
+.lookupStatus[data-status="found"] {
+  background-color: #3b82f6;
+}
+
+/* Màu xám khi chưa có thông tin */
+.lookupStatus[data-status="not-found"] {
+  background-color: #9ca3af;
+}
+
+/* Màu xanh lá cho trạng thái thành công */
+.lookupStatus[data-status="success"] {
+  background-color: #22c55e;
+}
+
+/* Màu vàng cho trạng thái cảnh báo */
+.lookupStatus[data-status="warning"] {
+  background-color: #f59e0b;
+}
+
+/* Màu đỏ cho trạng thái lỗi */
+.lookupStatus[data-status="error"] {
+  background-color: #ef4444;
+}

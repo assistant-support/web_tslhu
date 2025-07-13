@@ -16,70 +16,77 @@ import Setting from "./ui/setting";
 import Run from "./ui/run";
 import Schedule from "./ui/schedule";
 import HistoryPopup from "./ui/his";
-import SidePanel from "./ui/more";
 import WrapIcon from "@/components/(ui)/(button)/hoveIcon";
 import { Svg_Pen } from "@/components/(icon)/svg";
 import CenterPopup from "@/components/(features)/(popup)/popup_center";
 import Noti from "@/components/(features)/(noti)/noti";
+import { PanelProvider, usePanels } from "@/contexts/PanelContext";
+import StandardSidePanel from "@/components/(features)/panel/SidePanel"; // Import panel quy chuẩn
+import CustomerDetails from "./ui/details/CustomerDetails"; // Import nội dung chi tiết khách hàng
+import StageIndicator from "@/components/(ui)/progress/StageIndicator";
 
-const useTraCuuData = (phones) => {
-  const CACHE_TIME = 60_000;
-  const cacheRef = useRef(new Map());
-  const [, forceUpdate] = useState(0);
+const useTraCuuData = (customers) => {
+  const [lookupMap, setLookupMap] = useState(new Map());
+
+  // Chỉ lấy SĐT của những khách hàng chưa có trong bản đồ tra cứu
+  const phonesToFetch = useMemo(
+    () =>
+      customers
+        .map((c) => c.phone)
+        .filter((phone) => phone && !lookupMap.has(phone)),
+    [customers, lookupMap],
+  );
 
   useEffect(() => {
+    if (phonesToFetch.length === 0) return;
+
     let cancelled = false;
-    const fetchOne = async (phone) => {
-      try {
-        const res = await fetch(
-          "https://tapi.lhu.edu.vn/TS/AUTH/XetTuyen_TraCuu",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: phone }),
-          },
-        );
-        const isOK = res.status === 200;
-        let dataObj = { TinhTrang: "Không có thông tin" };
-        if (isOK) {
+
+    const fetchAll = async () => {
+      console.log(`Đang tra cứu cho ${phonesToFetch.length} SĐT mới...`);
+
+      const fetchPromises = phonesToFetch.map(async (phone) => {
+        try {
+          const res = await fetch(
+            "https://tapi.lhu.edu.vn/TS/AUTH/XetTuyen_TraCuu",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: phone }),
+            },
+          );
+          if (!res.ok) return [phone, { TinhTrang: "Lỗi tra cứu" }];
           const raw = await res.json();
-          dataObj = (Array.isArray(raw) ? raw[0] : raw?.data?.[0]) || dataObj;
-        }
-        if (!cancelled) {
-          cacheRef.current.set(phone, {
-            ts: Date.now(),
-            result: { ...dataObj, _apiStatus: isOK ? "success" : "error" },
-          });
-          forceUpdate((n) => n + 1);
-        }
-      } catch (_) {
-        if (!cancelled) {
-          cacheRef.current.set(phone, {
-            ts: Date.now(),
-            result: { TinhTrang: "Không có thông tin", _apiStatus: "error" },
-          });
-          forceUpdate((n) => n + 1);
-        }
-      }
-    };
-    const fetchStalePhones = () => {
-      phones.forEach((p) => {
-        const cached = cacheRef.current.get(p);
-        if (!cached || Date.now() - cached.ts > CACHE_TIME) {
-          fetchOne(p);
+          const data = (Array.isArray(raw) ? raw[0] : raw?.data?.[0]) || {
+            TinhTrang: "Không có thông tin",
+          };
+          return [phone, data];
+        } catch {
+          return [phone, { TinhTrang: "Lỗi kết nối" }];
         }
       });
+
+      const results = await Promise.all(fetchPromises);
+
+      if (!cancelled) {
+        setLookupMap((prevMap) => {
+          const newMap = new Map(prevMap);
+          results.forEach(([phone, data]) => {
+            newMap.set(phone, data);
+          });
+          return newMap;
+        });
+      }
     };
-    fetchStalePhones();
-    const id = setInterval(fetchStalePhones, CACHE_TIME);
+
+    fetchAll();
+
     return () => {
       cancelled = true;
-      clearInterval(id);
     };
-  }, [phones]);
-  const out = new Map();
-  phones.forEach((p) => out.set(p, cacheRef.current.get(p)?.result));
-  return out;
+  }, [phonesToFetch]); // Chỉ chạy lại khi có SĐT mới cần fetch
+
+  return lookupMap;
 };
 
 const useSelection = () => {
@@ -94,28 +101,6 @@ const useSelection = () => {
   return { selectedIds, toggleOne, setSelectedIds, size: selectedIds.size };
 };
 
-const StageIndicator = ({ level = 0 }) => {
-  const dotStyle = {
-    width: "10px",
-    height: "10px",
-    borderRadius: "50%",
-    transition: "background-color 0.3s ease",
-  };
-  return (
-    <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-      {[1, 2, 3].map((dotLevel) => (
-        <span
-          key={dotLevel}
-          style={{
-            ...dotStyle,
-            backgroundColor: dotLevel <= level ? "#28a745" : "#dc3545",
-          }}
-        ></span>
-      ))}
-    </div>
-  );
-};
-
 const Row = React.memo(function Row({
   row,
   rowIndex,
@@ -126,18 +111,35 @@ const Row = React.memo(function Row({
 }) {
   const hasData = row._apiStatus === "success";
   const canSearch = hasData && row.MaDangKy;
+
   const disabledStyle = {
     backgroundColor: "var(--red)",
     cursor: "default",
     pointerEvents: "none",
   };
+  const getLookupStatusType = (tinhTrang) => {
+    if (tinhTrang === "Không có thông tin") {
+      return "error"; // Màu đỏ
+    }
+    if (tinhTrang === "Thiếu thông tin") {
+      return "warning"; // Màu vàng
+    }
+    if (tinhTrang === "Đủ đúng không xét tuyển") {
+      return "success"; // Màu xanh lá
+    }
+    if (tinhTrang) {
+      return "found"; // Màu xanh dương cho các trường hợp khác
+    }
+    return "not-found"; // Màu xám
+  };
+
   return (
     <div
       className={styles.gridRow}
       style={{ backgroundColor: row.remove ? "#ffd9dd" : "white" }}
+      onClick={() => onRowClick(row)}
     >
-      <div style={{ display: "flex", flex: 5 }} onClick={() => onRowClick(row)}>
-        {/* Các ô đã được thêm padding: '0 5px' để tạo không gian thở */}
+      <div style={{ display: "flex", flex: 5 }}>
         <div
           className={`${styles.gridCell} ${styles.colTiny}`}
           style={{ justifyContent: "center", flex: 0.3, padding: "0 5px" }}
@@ -152,12 +154,7 @@ const Row = React.memo(function Row({
         </div>
         <div
           className={`${styles.gridCell} ${styles.colSmall} text_6_400`}
-          style={{
-            justifyContent: "center",
-            flex: 0.3,
-            fontWeight: 600,
-            // padding: "3px 3px",
-          }}
+          style={{ justifyContent: "center", flex: 0.3, fontWeight: 600 }}
         >
           {rowIndex + 1}
         </div>
@@ -179,7 +176,6 @@ const Row = React.memo(function Row({
         >
           <StageIndicator level={row.stageLevel} />
         </div>
-        {/* ▼▼▼ Ô TRẠNG THÁI ĐÃ ĐƯỢC SỬA LỖI ▼▼▼ */}
         <div
           className={`${styles.gridCell} text_6_400`}
           style={{
@@ -204,7 +200,7 @@ const Row = React.memo(function Row({
           className={`${styles.gridCell} text_6_400`}
           style={{ justifyContent: "center", flex: 0.7, padding: "0 5px" }}
         >
-          {row.action.length > 0 ? row.action[0].actionType : "-"}
+          {row.action && row.action.length > 0 ? row.action[0].actionType : "-"}
         </div>
         <div
           className={`${styles.gridCell} text_7_400`}
@@ -234,82 +230,27 @@ const Row = React.memo(function Row({
       </div>
       <div
         className={`${styles.gridCell} text_6_400`}
-        style={{
-          flex: 1,
-          padding: "0 16px",
-          overflow: "visible",
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-        }}
+        style={{ flex: 1, padding: "0 16px", justifyContent: "center" }}
       >
-        <div
-          style={{
-            flex: 1,
-            background: hasData ? "var(--hover)" : "#d9d9d9",
-            borderRadius: 3,
-            display: "flex",
-          }}
+        <span
+          className={styles.lookupStatus}
+          data-status={getLookupStatusType(row.TinhTrang)}
         >
-          <p className="text_6_400" style={{ flex: 1, padding: 6 }}>
-            {row.TinhTrang}
-          </p>
-          <WrapIcon
-            icon={
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 512 512"
-                width="16"
-                height="16"
-                fill="white"
-              >
-                <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z" />
-              </svg>
-            }
-            content="Tra cứu"
-            placement="left"
-            style={
-              hasData
-                ? { backgroundColor: "var(--main_d)", cursor: "pointer" }
-                : disabledStyle
-            }
-            click={(e) => {
-              e.stopPropagation();
-              if (canSearch) onSearch(row);
-            }}
-          />
-        </div>
-        <WrapIcon
-          icon={<Svg_Pen w={16} h={16} c="white" />}
-          content="Cập nhật"
-          placement="left"
-          style={
-            hasData
-              ? { backgroundColor: "var(--yellow)", cursor: "pointer" }
-              : disabledStyle
-          }
-          click={(e) => {
-            e.stopPropagation();
-            if (hasData && row.MaDangKy) {
-              const url = `https://xettuyen.lhu.edu.vn/cap-nhat-thong-tin-xet-tuyen-dai-hoc?id=${encodeURIComponent(
-                row.MaDangKy,
-              )}&htx=0`;
-              window.open(url, "_blank");
-            }
-          }}
-        />
+          {row.TinhTrang || "Chưa tra cứu"}
+        </span>
       </div>
     </div>
   );
 });
 
-export default function Client({
+function ClientPage({
   initialData,
   initialPagination,
   initialLabels,
   initialStatuses,
   user,
 }) {
+  const { isPanelOpen, panelContent, openPanel, closePanel } = usePanels();
   const [traCuuOpen, setTraCuuOpen] = useState(false);
   const [traCuuData, setTraCuuData] = useState(null);
   const router = useRouter();
@@ -326,10 +267,9 @@ export default function Client({
   const [viewMode, setViewMode] = useState("all");
   const [query, setQuery] = useState(searchParams.get("query") || "");
   const [showLabelPopup, setShowLabelPopup] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [selectedRow, setSelectedRow] = useState(null);
   const historyRef = useRef(null);
   const scheduleRef = useRef(null);
+  const [customers, setCustomers] = useState(initialData);
 
   const serverPage = initialPagination?.page || 1;
   const serverTotalPages = initialPagination?.totalPages || 1;
@@ -347,27 +287,24 @@ export default function Client({
     scheduleRef.current?.openForBulk(scheduleData);
   }, [scheduleData]);
 
-  const handleRowClick = useCallback((row) => {
-    setSelectedRow(row);
-    setPanelOpen(true);
-  }, []);
+  const handleRowClick = useCallback(
+    (row) => {
+      openPanel(row);
+    },
+    [openPanel],
+  );
 
-  const closePanel = useCallback(() => {
-    setPanelOpen(false);
-    setTimeout(() => setSelectedRow(null), 300);
-  }, []);
+  const handleRefreshAndClose = useCallback(() => {
+    startTransition(() => {
+      router.refresh();
+    });
+    closePanel(); // Ra lệnh: "Đóng sân khấu!"
+  }, [router, startTransition, closePanel]);
+
   const handleRefresh = useCallback(
     () => startTransition(() => router.refresh()),
     [router],
   );
-
-  const handleSaveChanges = useCallback(() => {
-    closePanel();
-    handleRefresh();
-  }, [closePanel, handleRefresh]);
-  const handleScheduleDone = useCallback(() => {
-    setScheduleTrigger({ active: false, data: [] });
-  }, []);
 
   const handleNavigation = useCallback(
     (name, value) => {
@@ -388,7 +325,7 @@ export default function Client({
         router.push(`${pathname}?${params.toString()}`);
       });
     },
-    [pathname, router, searchParams, startTransition],
+    [pathname, router, searchParams],
   );
 
   const handleLoadMore = useCallback(() => {
@@ -402,6 +339,11 @@ export default function Client({
     handleNavigation("limit", newLimit.toString());
   }, [currentLimit, handleNavigation]);
 
+  //Cập nhật state này khi dữ liệu từ server thay đổi (ví dụ: chuyển trang, load more)
+  useEffect(() => {
+    setCustomers(initialData);
+  }, [initialData]);
+
   useEffect(() => {
     const t = setTimeout(() => {
       if (query !== (searchParams.get("query") || ""))
@@ -409,6 +351,60 @@ export default function Client({
     }, 300);
     return () => clearTimeout(t);
   }, [query, searchParams, handleNavigation]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // Lấy dữ liệu từ server và làm giàu nó
+    const enrichData = async (dataToEnrich) => {
+      // Tìm những khách hàng chưa có thông tin tra cứu
+      const customersToFetch = dataToEnrich.filter(
+        (c) => c.phone && c.TinhTrang === undefined,
+      );
+
+      if (customersToFetch.length === 0) {
+        // Nếu không có ai cần fetch, chỉ cần cập nhật state
+        setCustomers(dataToEnrich);
+        return;
+      }
+
+      const fetchPromises = customersToFetch.map(async (customer) => {
+        try {
+          const res = await fetch(
+            "https://tapi.lhu.edu.vn/TS/AUTH/XetTuyen_TraCuu",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: customer.phone }),
+            },
+          );
+          if (!res.ok) return { ...customer, TinhTrang: "Lỗi tra cứu" };
+          const raw = await res.json();
+          const data = (Array.isArray(raw) ? raw[0] : raw?.data?.[0]) || {
+            TinhTrang: "Không có thông tin",
+          };
+          return { ...customer, ...data };
+        } catch {
+          return { ...customer, TinhTrang: "Lỗi kết nối" };
+        }
+      });
+
+      const enrichedCustomers = await Promise.all(fetchPromises);
+      const enrichedMap = new Map(enrichedCustomers.map((c) => [c._id, c]));
+
+      if (!cancelled) {
+        // Cập nhật lại state chính bằng cách trộn dữ liệu cũ và mới
+        const finalData = dataToEnrich.map((c) => enrichedMap.get(c._id) || c);
+        setCustomers(finalData);
+      }
+    };
+
+    enrichData(initialData);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialData]);
 
   const uniqueLabels = useMemo(
     () =>
@@ -471,7 +467,6 @@ export default function Client({
   }, [initialData, allOnPageChecked, setSelectedIds]);
 
   const handleOpenQuickMessage = useCallback((customer) => {
-    setPanelOpen(false); // Đóng SidePanel
     scheduleRef.current?.openForQuickMessage(customer);
   }, []);
 
@@ -488,7 +483,6 @@ export default function Client({
     () => rowsToDisplay.slice(0, 10).map((r) => r.phone),
     [rowsToDisplay],
   );
-  const traCuuMap = useTraCuuData(visiblePhones);
 
   const accountDisplayName = user?.zalo?.name || "Chưa chọn tài khoản";
 
@@ -765,18 +759,14 @@ export default function Client({
               </div>
             </div>
             <div className={styles.gridBody}>
-              {rowsToDisplay.map((r, idx) => (
+              {customers.map((r, idx) => (
                 <Row
                   key={r._id}
-                  row={{ ...r, ...(traCuuMap.get(r.phone) || {}) }}
-                  rowIndex={
-                    (viewMode === "all" ? (serverPage - 1) * serverLimit : 0) +
-                    idx
-                  }
+                  row={r}
+                  rowIndex={idx}
                   onToggle={toggleRowAndStoreData}
                   checked={selectedIds.has(r._id)}
                   onRowClick={handleRowClick}
-                  onSearch={handleSearchClick}
                 />
               ))}
             </div>
@@ -864,22 +854,22 @@ export default function Client({
         </div>
       )}
 
-      {/* <HistoryPopup
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        datauser={initialData}
-        type="all"
-      /> */}
-      <SidePanel
-        open={panelOpen}
-        row={selectedRow}
-        labels={initialLabels}
+      <StandardSidePanel
+        isOpen={isPanelOpen}
         onClose={closePanel}
-        onSave={handleSaveChanges}
-        onQuickMessage={handleOpenQuickMessage}
-        onShowHistory={handleShowHistory}
-      />
-
+        title="Thông tin chi tiết"
+      >
+        {panelContent && (
+          <CustomerDetails
+            // Truyền key để component re-mount khi đổi khách hàng
+            key={panelContent._id}
+            customerData={panelContent} // Truyền dữ liệu qua prop
+            onSave={handleRefreshAndClose}
+            onShowHistory={handleShowHistory}
+            onQuickMessage={handleOpenQuickMessage}
+          />
+        )}
+      </StandardSidePanel>
       <Schedule ref={scheduleRef} user={user} label={initialLabels} />
       <HistoryPopup ref={historyRef} />
 
@@ -922,5 +912,13 @@ export default function Client({
         )}
       </CenterPopup>
     </div>
+  );
+}
+
+export default function Client(props) {
+  return (
+    <PanelProvider>
+      <ClientPage {...props} />
+    </PanelProvider>
   );
 }

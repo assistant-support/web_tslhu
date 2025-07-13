@@ -31,7 +31,6 @@ const CustomerSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "status",
     },
-    label: [{ type: Schema.Types.ObjectId, ref: "label" }],
     stageLevel: { type: Number, default: 0 },
     careNote: { type: String },
     studyTryNote: { type: String },
