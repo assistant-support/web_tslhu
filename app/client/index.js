@@ -14,7 +14,6 @@ import Label from "./ui/label";
 import AddLabelButton from "./ui/addlabel";
 import Setting from "./ui/setting";
 import Run from "./ui/run";
-import Schedule from "./ui/schedule";
 import HistoryPopup from "./ui/his";
 import WrapIcon from "@/components/(ui)/(button)/hoveIcon";
 import { Svg_Pen } from "@/components/(icon)/svg";
@@ -24,70 +23,14 @@ import { PanelProvider, usePanels } from "@/contexts/PanelContext";
 import StandardSidePanel from "@/components/(features)/panel/SidePanel"; // Import panel quy chuẩn
 import CustomerDetails from "./ui/details/CustomerDetails"; // Import nội dung chi tiết khách hàng
 import StageIndicator from "@/components/(ui)/progress/StageIndicator";
+import Loading from "@/components/(ui)/(loading)/loading";
+import PanelManager from "@/components/(features)/panel/PanelManager";
+import dynamic from "next/dynamic";
 
-const useTraCuuData = (customers) => {
-  const [lookupMap, setLookupMap] = useState(new Map());
-
-  // Chỉ lấy SĐT của những khách hàng chưa có trong bản đồ tra cứu
-  const phonesToFetch = useMemo(
-    () =>
-      customers
-        .map((c) => c.phone)
-        .filter((phone) => phone && !lookupMap.has(phone)),
-    [customers, lookupMap],
-  );
-
-  useEffect(() => {
-    if (phonesToFetch.length === 0) return;
-
-    let cancelled = false;
-
-    const fetchAll = async () => {
-      console.log(`Đang tra cứu cho ${phonesToFetch.length} SĐT mới...`);
-
-      const fetchPromises = phonesToFetch.map(async (phone) => {
-        try {
-          const res = await fetch(
-            "https://tapi.lhu.edu.vn/TS/AUTH/XetTuyen_TraCuu",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: phone }),
-            },
-          );
-          if (!res.ok) return [phone, { TinhTrang: "Lỗi tra cứu" }];
-          const raw = await res.json();
-          const data = (Array.isArray(raw) ? raw[0] : raw?.data?.[0]) || {
-            TinhTrang: "Không có thông tin",
-          };
-          return [phone, data];
-        } catch {
-          return [phone, { TinhTrang: "Lỗi kết nối" }];
-        }
-      });
-
-      const results = await Promise.all(fetchPromises);
-
-      if (!cancelled) {
-        setLookupMap((prevMap) => {
-          const newMap = new Map(prevMap);
-          results.forEach(([phone, data]) => {
-            newMap.set(phone, data);
-          });
-          return newMap;
-        });
-      }
-    };
-
-    fetchAll();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [phonesToFetch]); // Chỉ chạy lại khi có SĐT mới cần fetch
-
-  return lookupMap;
-};
+const Schedule = dynamic(() => import("./ui/schedule"), {
+  ssr: false, // ssr: false có nghĩa là "Server-Side Rendering: false"
+  loading: () => <p>Đang tải trình lên lịch...</p>, // Hiển thị tạm trong lúc tải
+});
 
 const useSelection = () => {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -108,6 +51,8 @@ const Row = React.memo(function Row({
   checked,
   onRowClick,
   onSearch,
+  isUpdated,
+  isActive,
 }) {
   const hasData = row._apiStatus === "success";
   const canSearch = hasData && row.MaDangKy;
@@ -135,7 +80,9 @@ const Row = React.memo(function Row({
 
   return (
     <div
-      className={styles.gridRow}
+      className={`${styles.gridRow} ${isUpdated ? styles.rowUpdated : ""} ${
+        isActive ? styles.activeRow : ""
+      }`}
       style={{ backgroundColor: row.remove ? "#ffd9dd" : "white" }}
       onClick={() => onRowClick(row)}
     >
@@ -250,25 +197,27 @@ function ClientPage({
   initialStatuses,
   user,
 }) {
-  const { isPanelOpen, panelContent, openPanel, closePanel } = usePanels();
-  const [traCuuOpen, setTraCuuOpen] = useState(false);
-  const [traCuuData, setTraCuuData] = useState(null);
+  const { openPanel, panels } = usePanels();
+  const [updatedIds, setUpdatedIds] = useState(new Set());
+  const [isEnriching, setIsEnriching] = useState(false);
+  const prevCustomersRef = useRef(new Map());
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const [isOverallLoading, setIsOverallLoading] = useState(false);
   const {
     selectedIds,
     toggleOne: toggleSelectRow,
     setSelectedIds,
     size: selectedCount,
   } = useSelection();
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [selectedCustomerMap, setSelectedCustomerMap] = useState(new Map());
   const [viewMode, setViewMode] = useState("all");
   const [query, setQuery] = useState(searchParams.get("query") || "");
   const [showLabelPopup, setShowLabelPopup] = useState(false);
   const historyRef = useRef(null);
-  const scheduleRef = useRef(null);
   const [customers, setCustomers] = useState(initialData);
 
   const serverPage = initialPagination?.page || 1;
@@ -283,23 +232,96 @@ function ClientPage({
     [selectedCustomerMap],
   );
 
-  const handleOpenBulkSchedule = useCallback(() => {
-    scheduleRef.current?.openForBulk(scheduleData);
-  }, [scheduleData]);
+  const activeRowIds = useMemo(() => {
+    const ids = new Set();
+    panels.forEach((panel) => {
+      // Giả định rằng ID của panel chi tiết có dạng 'details-[customerId]'
+      if (panel.id.startsWith("details-")) {
+        ids.add(panel.id.replace("details-", ""));
+      }
+    });
+    return ids;
+  }, [panels]);
 
-  const handleRowClick = useCallback(
+  const handleCustomerUpdate = (updatedCustomerData) => {
+    setCustomers((currentCustomers) => {
+      // Dùng .map() để tạo một mảng mới
+      return currentCustomers.map((customer) => {
+        // Nếu tìm thấy khách hàng có cùng _id
+        if (customer._id === updatedCustomerData._id) {
+          // Trả về dữ liệu mới đã được cập nhật
+          return updatedCustomerData;
+        }
+        // Nếu không thì giữ nguyên khách hàng cũ
+        return customer;
+      });
+    });
+
+    // Cập nhật cả state của panel chi tiết để thông tin đồng bộ ngay lập tức
+    setSelectedCustomer(updatedCustomerData);
+  };
+  const toggleRowAndStoreData = useCallback(
     (row) => {
-      openPanel(row);
+      setSelectedCustomerMap((prev) => {
+        const m = new Map(prev);
+        m.has(row._id) ? m.delete(row._id) : m.set(row._id, row);
+        return m;
+      });
+      toggleSelectRow(row._id);
     },
-    [openPanel],
+    [toggleSelectRow],
   );
 
-  const handleRefreshAndClose = useCallback(() => {
-    startTransition(() => {
-      router.refresh();
+  const handleOpenBulkSchedule = useCallback(() => {
+    if (scheduleData.length === 0) {
+      alert("Vui lòng chọn ít nhất một khách hàng.");
+      return;
+    }
+
+    openPanel({
+      // Tạo một ID động cho panel
+      id: `bulk-action-${Date.now()}`,
+      component: Schedule,
+      title: `Lên lịch cho ${scheduleData.length} người`,
+      props: {
+        // Truyền vào mảng chứa nhiều khách hàng
+        initialData: scheduleData,
+        recipientsMap: selectedCustomerMap, // Dùng Map đã có sẵn
+        onRecipientToggle: toggleRowAndStoreData,
+        user: user,
+        label: initialLabels,
+      },
     });
-    closePanel(); // Ra lệnh: "Đóng sân khấu!"
-  }, [router, startTransition, closePanel]);
+  }, [openPanel, scheduleData, user, initialLabels]);
+
+  const handleRowClick = useCallback(
+    (customer) => {
+      openPanel({
+        id: `details-${customer._id}`, // ID duy nhất cho panel
+        component: CustomerDetails, // Component cần render
+        title: `Chi tiết: ${customer.name}`,
+        props: {
+          // Các props sẽ được truyền vào CustomerDetails
+          recipientsMap: new Map([[customer._id, customer]]), // Tạo Map mới cho 1 người
+          onRecipientToggle: toggleRowAndStoreData, // Hàm để thêm/bớt người nhận
+          customerData: customer,
+          statuses: initialStatuses,
+          onUpdateCustomer: handleCustomerUpdate,
+          user: user,
+          initialLabels: initialLabels,
+          onRecipientToggle: toggleRowAndStoreData,
+        },
+      });
+    },
+    [
+      openPanel,
+      initialStatuses,
+      handleCustomerUpdate,
+      user,
+      initialLabels,
+      toggleRowAndStoreData,
+    ],
+  );
 
   const handleRefresh = useCallback(
     () => startTransition(() => router.refresh()),
@@ -308,6 +330,7 @@ function ClientPage({
 
   const handleNavigation = useCallback(
     (name, value) => {
+      setIsOverallLoading(true);
       const params = new URLSearchParams(searchParams);
 
       if (value) {
@@ -339,11 +362,6 @@ function ClientPage({
     handleNavigation("limit", newLimit.toString());
   }, [currentLimit, handleNavigation]);
 
-  //Cập nhật state này khi dữ liệu từ server thay đổi (ví dụ: chuyển trang, load more)
-  useEffect(() => {
-    setCustomers(initialData);
-  }, [initialData]);
-
   useEffect(() => {
     const t = setTimeout(() => {
       if (query !== (searchParams.get("query") || ""))
@@ -352,54 +370,115 @@ function ClientPage({
     return () => clearTimeout(t);
   }, [query, searchParams, handleNavigation]);
 
+  const areObjectsDifferent = (objA, objB) => {
+    // Chuyển cả hai đối tượng thành chuỗi JSON để so sánh
+    // Đây là cách đơn giản và đáng tin cậy nhất cho cấu trúc dữ liệu của bạn
+    const stringA = JSON.stringify(objA);
+    const stringB = JSON.stringify(objB);
+
+    if (stringA !== stringB) {
+      // Log ra để kiểm tra nếu chúng khác nhau
+      console.log(`DETECTED CHANGE FOR ID: ${objA._id}`);
+      console.log("DATA BEFORE:", stringA);
+      console.log("DATA AFTER: ", stringB);
+      return true;
+    }
+
+    return false;
+  };
+
   useEffect(() => {
     let cancelled = false;
 
-    // Lấy dữ liệu từ server và làm giàu nó
-    const enrichData = async (dataToEnrich) => {
-      // Tìm những khách hàng chưa có thông tin tra cứu
-      const customersToFetch = dataToEnrich.filter(
+    const processData = async (dataToProcess) => {
+      // ---- GIAI ĐOẠN 1: LÀM GIÀU DỮ LIỆU (Giữ nguyên) ----
+      let finalEnrichedData = [...dataToProcess];
+      const customersToFetch = dataToProcess.filter(
         (c) => c.phone && c.TinhTrang === undefined,
       );
 
-      if (customersToFetch.length === 0) {
-        // Nếu không có ai cần fetch, chỉ cần cập nhật state
-        setCustomers(dataToEnrich);
-        return;
+      if (customersToFetch.length > 0) {
+        const fetchPromises = customersToFetch.map(async (customer) => {
+          try {
+            // ... (Logic fetch API của bạn giữ nguyên) ...
+            const res = await fetch(
+              "https://tapi.lhu.edu.vn/TS/AUTH/XetTuyen_TraCuu",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: customer.phone }),
+              },
+            );
+            if (!res.ok) return { ...customer, TinhTrang: "Lỗi tra cứu" };
+            const raw = await res.json();
+            const data = (Array.isArray(raw) ? raw[0] : raw?.data?.[0]) || {
+              TinhTrang: "Không có thông tin",
+            };
+            const {
+              HoTen: admissionName,
+              DienThoai: admissionPhone,
+              ...admissionOtherData
+            } = data;
+            return {
+              ...customer,
+              admissionName,
+              admissionPhone,
+              ...admissionOtherData,
+            };
+          } catch {
+            return { ...customer, TinhTrang: "Lỗi kết nối" };
+          }
+        });
+        const newlyEnrichedCustomers = await Promise.all(fetchPromises);
+        const enrichedMap = new Map(
+          newlyEnrichedCustomers.map((c) => [c._id, c]),
+        );
+        finalEnrichedData = dataToProcess.map(
+          (c) => enrichedMap.get(c._id) || c,
+        );
       }
 
-      const fetchPromises = customersToFetch.map(async (customer) => {
-        try {
-          const res = await fetch(
-            "https://tapi.lhu.edu.vn/TS/AUTH/XetTuyen_TraCuu",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: customer.phone }),
-            },
-          );
-          if (!res.ok) return { ...customer, TinhTrang: "Lỗi tra cứu" };
-          const raw = await res.json();
-          const data = (Array.isArray(raw) ? raw[0] : raw?.data?.[0]) || {
-            TinhTrang: "Không có thông tin",
-          };
-          return { ...customer, ...data };
-        } catch {
-          return { ...customer, TinhTrang: "Lỗi kết nối" };
+      if (cancelled) return;
+
+      // ---- GIAI ĐOẠN 2: SO SÁNH ĐÁNG TIN CẬY HƠN ----
+      const newUpdatedIds = new Set();
+      const prevDataMap = prevCustomersRef.current;
+
+      finalEnrichedData.forEach((currentCustomer) => {
+        const prevCustomer = prevDataMap.get(currentCustomer._id);
+
+        // CHỈ highlight nếu dữ liệu cũ đã tồn tại và dữ liệu mới THỰC SỰ khác
+        if (
+          prevCustomer &&
+          areObjectsDifferent(prevCustomer, currentCustomer)
+        ) {
+          newUpdatedIds.add(currentCustomer._id);
         }
       });
 
-      const enrichedCustomers = await Promise.all(fetchPromises);
-      const enrichedMap = new Map(enrichedCustomers.map((c) => [c._id, c]));
+      // ---- GIAI ĐOẠN 3: CẬP NHẬT STATE VÀ "BỘ NHỚ" (Giữ nguyên) ----
+      setCustomers(finalEnrichedData);
+      setIsOverallLoading(false);
+      prevCustomersRef.current = new Map(
+        finalEnrichedData.map((c) => [c._id, c]),
+      );
 
-      if (!cancelled) {
-        // Cập nhật lại state chính bằng cách trộn dữ liệu cũ và mới
-        const finalData = dataToEnrich.map((c) => enrichedMap.get(c._id) || c);
-        setCustomers(finalData);
+      if (newUpdatedIds.size > 0) {
+        setUpdatedIds(newUpdatedIds);
+        const timer = setTimeout(() => {
+          setUpdatedIds(new Set());
+        }, 2000);
+        return () => clearTimeout(timer); // Dọn dẹp timer
       }
     };
 
-    enrichData(initialData);
+    if (initialData && initialData.length > 0) {
+      processData(initialData);
+    } else {
+      setCustomers([]);
+      prevCustomersRef.current = new Map();
+      setIsOverallLoading(false);
+    }
 
     return () => {
       cancelled = true;
@@ -437,18 +516,6 @@ function ClientPage({
     [initialData, selectedIds],
   );
 
-  const toggleRowAndStoreData = useCallback(
-    (row) => {
-      setSelectedCustomerMap((prev) => {
-        const m = new Map(prev);
-        m.has(row._id) ? m.delete(row._id) : m.set(row._id, row);
-        return m;
-      });
-      toggleSelectRow(row._id);
-    },
-    [toggleSelectRow],
-  );
-
   const handleTogglePageAndStoreData = useCallback(() => {
     setSelectedCustomerMap((prev) => {
       const m = new Map(prev);
@@ -465,10 +532,6 @@ function ClientPage({
       return next;
     });
   }, [initialData, allOnPageChecked, setSelectedIds]);
-
-  const handleOpenQuickMessage = useCallback((customer) => {
-    scheduleRef.current?.openForQuickMessage(customer);
-  }, []);
 
   // 3. Hàm mới để gọi HistoryPopup qua "bộ đàm"
   const handleShowHistory = useCallback((customer) => {
@@ -665,157 +728,155 @@ function ClientPage({
         </button>
       </div>
       {isPending && <div className={styles.loading}>Đang tải dữ liệu...</div>}
-      {!isPending && (
-        <>
-          <div className={styles.dataGrid}>
-            <div className={styles.gridHeader}>
-              <div style={{ display: "flex", flex: 5 }}>
-                {/* Các thuộc tính flex đã được điều chỉnh và thêm justifyContent */}
-                <div
-                  className={`${styles.gridCell} ${styles.colTiny}`}
-                  style={{ justifyContent: "center", flex: 0.3 }}
-                >
-                  <input
-                    type="checkbox"
-                    className={styles.bigCheckbox}
-                    checked={allOnPageChecked}
-                    onChange={handleTogglePageAndStoreData}
-                    disabled={viewMode === "selected"}
-                  />
-                  {selectedCount > 0 && (
-                    <span
-                      className={styles.selectedCount}
-                      style={{ color: "white" }}
-                    >
-                      {selectedCount}
-                    </span>
-                  )}
-                </div>
-                <div
-                  className={`${styles.gridCell} ${styles.colSmall} text_6`}
-                  style={{
-                    justifyContent: "center",
-                    flex: 0.3,
-                    color: "white",
-                  }}
-                >
-                  STT
-                </div>
-                <div
-                  className={`${styles.gridCell} text_6`}
-                  style={{ justifyContent: "center", color: "white", flex: 1 }}
-                >
-                  Di động
-                </div>
-                <div
-                  className={`${styles.gridCell} text_6`}
-                  style={{ color: "white", flex: 1.5 }}
-                >
-                  Tên
-                </div>{" "}
-                {/* Để tên căn trái cho dễ đọc */}
-                <div
-                  className={`${styles.gridCell} text_6`}
-                  style={{
-                    justifyContent: "center",
-                    color: "white",
-                    flex: 0.5,
-                  }}
-                >
-                  Giai đoạn
-                </div>
-                <div
-                  className={`${styles.gridCell} text_6`}
-                  style={{ justifyContent: "center", color: "white", flex: 1 }}
-                >
-                  Trạng thái
-                </div>
-                <div
-                  className={`${styles.gridCell} text_6`}
-                  style={{
-                    justifyContent: "center",
-                    color: "white",
-                    flex: 0.7,
-                  }}
-                >
-                  Hành động
-                </div>
-                <div
-                  className={`${styles.gridCell} text_6`}
-                  style={{
-                    justifyContent: "center",
-                    color: "white",
-                    flex: 0.5,
-                  }}
-                >
-                  UID
-                </div>
+      {isOverallLoading ? (
+        <Loading content={"Đang tải thêm khách hàng"} />
+      ) : (
+        <div className={styles.dataGrid}>
+          <div className={styles.gridHeader}>
+            <div style={{ display: "flex", flex: 5 }}>
+              {/* Các thuộc tính flex đã được điều chỉnh và thêm justifyContent */}
+              <div
+                className={`${styles.gridCell} ${styles.colTiny}`}
+                style={{ justifyContent: "center", flex: 0.3 }}
+              >
+                <input
+                  type="checkbox"
+                  className={styles.bigCheckbox}
+                  checked={allOnPageChecked}
+                  onChange={handleTogglePageAndStoreData}
+                  disabled={viewMode === "selected"}
+                />
+                {selectedCount > 0 && (
+                  <span
+                    className={styles.selectedCount}
+                    style={{ color: "white" }}
+                  >
+                    {selectedCount}
+                  </span>
+                )}
+              </div>
+              <div
+                className={`${styles.gridCell} ${styles.colSmall} text_6`}
+                style={{
+                  justifyContent: "center",
+                  flex: 0.3,
+                  color: "white",
+                }}
+              >
+                STT
               </div>
               <div
                 className={`${styles.gridCell} text_6`}
                 style={{ justifyContent: "center", color: "white", flex: 1 }}
               >
-                Cập nhật
+                Di động
+              </div>
+              <div
+                className={`${styles.gridCell} text_6`}
+                style={{ color: "white", flex: 1.5 }}
+              >
+                Tên
+              </div>{" "}
+              {/* Để tên căn trái cho dễ đọc */}
+              <div
+                className={`${styles.gridCell} text_6`}
+                style={{
+                  justifyContent: "center",
+                  color: "white",
+                  flex: 0.5,
+                }}
+              >
+                Giai đoạn
+              </div>
+              <div
+                className={`${styles.gridCell} text_6`}
+                style={{ justifyContent: "center", color: "white", flex: 1 }}
+              >
+                Trạng thái
+              </div>
+              <div
+                className={`${styles.gridCell} text_6`}
+                style={{
+                  justifyContent: "center",
+                  color: "white",
+                  flex: 0.7,
+                }}
+              >
+                Hành động
+              </div>
+              <div
+                className={`${styles.gridCell} text_6`}
+                style={{
+                  justifyContent: "center",
+                  color: "white",
+                  flex: 0.5,
+                }}
+              >
+                UID
               </div>
             </div>
-            <div className={styles.gridBody}>
-              {customers.map((r, idx) => (
-                <Row
-                  key={r._id}
-                  row={r}
-                  rowIndex={idx}
-                  onToggle={toggleRowAndStoreData}
-                  checked={selectedIds.has(r._id)}
-                  onRowClick={handleRowClick}
-                />
-              ))}
+            <div
+              className={`${styles.gridCell} text_6`}
+              style={{ justifyContent: "center", color: "white", flex: 1 }}
+            >
+              Cập nhật
             </div>
           </div>
-          {totalDisplayPages > 1 && (
-            <div className={styles.pagination}>
-              {/* Nút Bớt đi (Bên trái) */}
-              <div>
-                {currentLimit > 10 && (
-                  <button onClick={handleLoadLess} className={styles.pageBtn}>
-                    Bớt đi -10
-                  </button>
-                )}
-              </div>
+          <div className={styles.gridBody}>
+            {customers.map((r, idx) => (
+              <Row
+                key={r._id}
+                row={r}
+                rowIndex={idx}
+                onToggle={toggleRowAndStoreData}
+                checked={selectedIds.has(r._id)}
+                onRowClick={handleRowClick}
+                isUpdated={updatedIds.has(r._id)}
+                isActive={activeRowIds.has(r._id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {totalDisplayPages > 1 && (
+        <div className={styles.pagination}>
+          {/* Nút Bớt đi (Bên trái) */}
+          <div>
+            {currentLimit > 10 && (
+              <button onClick={handleLoadLess} className={styles.pageBtn}>
+                Bớt đi -10
+              </button>
+            )}
+          </div>
 
-              {/* Nhóm điều hướng trang (Ở giữa) */}
-              <div className={styles.pageNavGroup}>
-                {currentDisplayPage > 1 && (
-                  <button
-                    onClick={() =>
-                      handleNavigation("page", currentDisplayPage - 1)
-                    }
-                    className={styles.pageBtn}
-                  >
-                    &laquo; Trang trước
-                  </button>
-                )}
-                <span className={`text_6_400`} style={{ color: "white" }}>
-                  Trang {currentDisplayPage} / {totalDisplayPages}
-                </span>
-                {currentDisplayPage < totalDisplayPages && (
-                  <button
-                    onClick={() =>
-                      handleNavigation("page", currentDisplayPage + 1)
-                    }
-                    className={styles.pageBtn}
-                  >
-                    Trang sau &raquo;
-                  </button>
-                )}
-              </div>
-              <div>
-                <button onClick={handleLoadMore} className={styles.pageBtn}>
-                  Xem thêm +10
-                </button>
-              </div>
-            </div>
-          )}
-        </>
+          {/* Nhóm điều hướng trang (Ở giữa) */}
+          <div className={styles.pageNavGroup}>
+            {currentDisplayPage > 1 && (
+              <button
+                onClick={() => handleNavigation("page", currentDisplayPage - 1)}
+                className={styles.pageBtn}
+              >
+                &laquo; Trang trước
+              </button>
+            )}
+            <span className={`text_6_400`} style={{ color: "white" }}>
+              Trang {currentDisplayPage} / {totalDisplayPages}
+            </span>
+            {currentDisplayPage < totalDisplayPages && (
+              <button
+                onClick={() => handleNavigation("page", currentDisplayPage + 1)}
+                className={styles.pageBtn}
+              >
+                Trang sau &raquo;
+              </button>
+            )}
+          </div>
+          <div>
+            <button onClick={handleLoadMore} className={styles.pageBtn}>
+              Xem thêm +10
+            </button>
+          </div>
+        </div>
       )}
       {showLabelPopup && (
         <div
@@ -853,64 +914,7 @@ function ClientPage({
           </div>
         </div>
       )}
-
-      <StandardSidePanel
-        isOpen={isPanelOpen}
-        onClose={closePanel}
-        title="Thông tin chi tiết"
-      >
-        {panelContent && (
-          <CustomerDetails
-            // Truyền key để component re-mount khi đổi khách hàng
-            key={panelContent._id}
-            customerData={panelContent} // Truyền dữ liệu qua prop
-            onSave={handleRefreshAndClose}
-            onShowHistory={handleShowHistory}
-            onQuickMessage={handleOpenQuickMessage}
-          />
-        )}
-      </StandardSidePanel>
-      <Schedule ref={scheduleRef} user={user} label={initialLabels} />
       <HistoryPopup ref={historyRef} />
-
-      <CenterPopup
-        open={traCuuOpen}
-        onClose={() => setTraCuuOpen(false)}
-        title="DANH SÁCH NGUYỆN VỌNG"
-        size="lg"
-        globalZIndex={1200}
-      >
-        {traCuuData && (
-          <table className={styles.popupTable}>
-            <thead>
-              <tr>
-                <th>Mã HS</th>
-                <th>Họ tên</th>
-                <th>Điện thoại</th>
-                <th>Trường THPT</th>
-                <th>Ngành xét tuyển</th>
-                <th>Tổng điểm</th>
-                <th>Phương thức xét tuyển</th>
-                <th>Tình trạng</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>{traCuuData.MaDangKy}</td>
-                <td>{traCuuData.HoTen}</td>
-                <td>{traCuuData.DienThoai}</td>
-                <td>{traCuuData.TruongTHPT}</td>
-                <td>{traCuuData.TenNganh}</td>
-                <td style={{ textAlign: "right" }}>
-                  {traCuuData.TongDiem?.toFixed?.(2) ?? traCuuData.TongDiem}
-                </td>
-                <td>{traCuuData.TenPhuongThuc}</td>
-                <td>{traCuuData.TinhTrang}</td>
-              </tr>
-            </tbody>
-          </table>
-        )}
-      </CenterPopup>
     </div>
   );
 }
@@ -919,6 +923,7 @@ export default function Client(props) {
   return (
     <PanelProvider>
       <ClientPage {...props} />
+      <PanelManager />
     </PanelProvider>
   );
 }

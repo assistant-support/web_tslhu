@@ -1,17 +1,13 @@
+// app/client/ui/schedule/index.js
 "use client";
 
-import React, {
-  useState,
-  useMemo,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  forwardRef,
-} from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import FlexiblePopup from "@/components/(features)/(popup)/popup_right";
 import Noti from "@/components/(features)/(noti)/noti";
 import styles from "./index.module.css";
+// Import các component con trực tiếp
+import CenterPopup from "@/components/(features)/(popup)/popup_center";
+import RecipientList from "./RecipientList";
 
 const LimitInputRow = ({ label, value, onChange, min, max, disabled }) => {
   const handleInputChange = (e) => {
@@ -130,7 +126,7 @@ const ScheduleForm = ({
             disabled={isSubmitting}
           >
             <option value="">-- Chọn nhãn có sẵn --</option>
-            {labels.map((label) => (
+            {(labels || []).map((label) => (
               <option key={label._id} value={label._id}>
                 {label.title}
               </option>
@@ -199,42 +195,15 @@ const ScheduleForm = ({
   </div>
 );
 
-const RecipientList = ({ recipients, removedIds, onToggle }) => (
-  <div className={styles.recipientListPopup}>
-    {recipients.map((customer, index) => {
-      const isRemoved = removedIds.has(customer.phone);
-      return (
-        <div
-          key={index}
-          className={`${styles.recipientItem} ${
-            isRemoved ? styles.removed : ""
-          }`}
-        >
-          <div className={styles.recipientInfo}>
-            <div className={styles.recipientName}>{customer.name}</div>
-            <div className={styles.recipientPhone}>{customer.phone}</div>
-          </div>
-          <button
-            onClick={() => onToggle(customer.phone)}
-            className={`${styles.toggleRecipientBtn} ${
-              isRemoved ? styles.reAdd : styles.remove
-            }`}
-          >
-            {isRemoved ? "Thêm lại" : "Bỏ"}
-          </button>
-        </div>
-      );
-    })}
-  </div>
-);
-
-const Schedule = forwardRef(function Schedule(
-  { user, label: labelsFromProps, isInsidePanel, onCloseRequest, initialData },
-  ref,
-) {
+// --- Component Schedule Chính ---
+export default function Schedule({
+  user,
+  label: labelsFromProps,
+  recipientsMap = new Map(),
+  initialData,
+}) {
   const router = useRouter();
 
-  const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [isRecipientPopupOpen, setIsRecipientPopupOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jobName, setJobName] = useState("");
@@ -250,45 +219,56 @@ const Schedule = forwardRef(function Schedule(
     mes: "",
   });
 
-  const availableLabels = useMemo(
-    () => labelsFromProps || [],
-    [labelsFromProps],
+  // Logic để xác định chế độ hoạt động (nhanh hay hàng loạt)
+  const isQuickAction = useMemo(
+    () => currentRecipients.length === 1,
+    [currentRecipients],
   );
+
+  // useEffect để thiết lập state ban đầu khi nhận được `initialData`
+  useEffect(() => {
+    if (initialData && initialData.length > 0) {
+      setCurrentRecipients(initialData);
+      setRemovedIds(new Set()); // Reset danh sách xóa
+
+      // Tự động điền tên job dựa trên chế độ
+      const newJobName =
+        initialData.length > 1
+          ? `Lịch trình ngày ${new Date().toLocaleDateString("vi-VN")}`
+          : `Hành động nhanh cho ${initialData[0].name}`;
+      setJobName(newJobName);
+
+      // Reset các trường khác
+      setMessage("");
+      setActionType("sendMessage");
+      setSelectedLabelId("");
+      setActionsPerHour(user?.zalo?.rateLimitPerHour || 50);
+    }
+  }, [initialData, user]);
+
   const activeRecipients = useMemo(
-    () => currentRecipients.filter((c) => !removedIds.has(c.phone)),
-    [currentRecipients, removedIds],
+    () => Array.from(recipientsMap.values()),
+    [recipientsMap],
   );
+  useEffect(() => {
+    if (activeRecipients.length > 0) {
+      const newJobName =
+        activeRecipients.length > 1
+          ? `Lịch trình ngày ${new Date().toLocaleDateString("vi-VN")}`
+          : `Hành động nhanh cho ${activeRecipients[0].name}`;
+      setJobName(newJobName);
+    }
+  }, [activeRecipients]);
 
   const estimatedTime = useMemo(() => {
     if (activeRecipients.length === 0 || !actionsPerHour || actionsPerHour <= 0)
       return "0 phút";
-    const totalTasks = activeRecipients.length;
-    const hoursNeeded = totalTasks / actionsPerHour;
-    if (hoursNeeded < 1) {
-      const minutesNeeded = Math.ceil(hoursNeeded * 60);
-      return `${minutesNeeded} phút`;
-    }
-    return `${Math.ceil(hoursNeeded)} giờ`;
+    const hoursNeeded = activeRecipients.length / actionsPerHour;
+    return hoursNeeded < 1
+      ? `${Math.ceil(hoursNeeded * 60)} phút`
+      : `${Math.ceil(hoursNeeded)} giờ`;
   }, [activeRecipients.length, actionsPerHour]);
 
-  useEffect(() => {
-    // Nếu được truyền dữ liệu ban đầu (từ SidePanel), hãy sử dụng nó
-    if (initialData && initialData.length > 0) {
-      // Logic này sẽ được kích hoạt khi bấm "Lên chiến dịch nhanh"
-      setCurrentRecipients(initialData);
-      setJobName(`Tin nhắn nhanh cho ${initialData[0].name}`);
-      // Reset các state khác nếu cần
-      setMessage("");
-      setActionType("sendMessage");
-      // ...
-    }
-  }, [initialData]); // Chạy lại khi initialData thay đổi
-
-  const handleClosePopup = useCallback(() => setIsPopupOpen(false), []);
-  const handleCloseNotification = useCallback(
-    () => setNotification((prev) => ({ ...prev, open: false })),
-    [],
-  );
   const handleToggleRecipient = useCallback((phone) => {
     setRemovedIds((prev) => {
       const next = new Set(prev);
@@ -301,13 +281,15 @@ const Schedule = forwardRef(function Schedule(
     (e) => {
       const labelId = e.target.value;
       setSelectedLabelId(labelId);
-      const selectedLabel = availableLabels.find((l) => l._id === labelId);
+      const selectedLabel = (labelsFromProps || []).find(
+        (l) => l._id === labelId,
+      );
       setMessage(selectedLabel ? selectedLabel.content || "" : "");
     },
-    [availableLabels],
+    [labelsFromProps],
   );
 
-  const handleSubmitSchedule = useCallback(async () => {
+  const handleSubmit = useCallback(async () => {
     if (activeRecipients.length === 0)
       return alert("Không có người nhận nào được chọn.");
     setIsSubmitting(true);
@@ -336,7 +318,6 @@ const Schedule = forwardRef(function Schedule(
         status: true,
         mes: result.mes || "Tạo lịch trình thành công!",
       });
-      handleClosePopup();
       router.refresh();
     } catch (error) {
       setNotification({ open: true, status: false, mes: error.message });
@@ -350,93 +331,54 @@ const Schedule = forwardRef(function Schedule(
     actionsPerHour,
     activeRecipients,
     user,
-    handleClosePopup,
     router,
   ]);
 
-  useImperativeHandle(ref, () => ({
-    openForBulk: (recipients) => {
-      if (!user?.zalo)
-        return alert("Lỗi: Bạn phải chọn một tài khoản Zalo trước.");
-      if (!recipients || recipients.length === 0)
-        return alert("Vui lòng chọn ít nhất một khách hàng.");
-
-      setCurrentRecipients(recipients);
-      setRemovedIds(new Set());
-      setJobName(`Lịch trình ngày ${new Date().toLocaleDateString("vi-VN")}`);
-      setMessage("");
-      setActionType("sendMessage");
-      setSelectedLabelId("");
-      setActionsPerHour(user?.zalo?.rateLimitPerHour || 50);
-      setIsPopupOpen(true);
-    },
-    openForQuickMessage: (customer) => {
-      if (!user?.zalo)
-        return alert("Lỗi: Bạn phải chọn một tài khoản Zalo trước.");
-      if (!customer) return;
-
-      setCurrentRecipients([customer]);
-      setRemovedIds(new Set());
-      setJobName(`Tin nhắn nhanh cho ${customer.name}`);
-      setMessage("");
-      setActionType("sendMessage");
-      setSelectedLabelId("");
-      setActionsPerHour(user?.zalo?.rateLimitPerHour || 50);
-      setIsPopupOpen(true);
-    },
-  }));
-
   return (
     <>
-      <FlexiblePopup
-        open={isPopupOpen}
-        onClose={handleClosePopup}
-        title={
-          currentRecipients.length > 1
-            ? `Đặt lịch trình cho ${activeRecipients.length} người`
-            : `Nhắn nhanh cho ${activeRecipients[0]?.name}`
-        }
-        renderItemList={() => (
-          <ScheduleForm
-            jobName={jobName}
-            setJobName={setJobName}
-            actionType={actionType}
-            setActionType={setActionType}
-            message={message}
-            setMessage={setMessage}
-            actionsPerHour={actionsPerHour}
-            setActionsPerHour={setActionsPerHour}
-            activeRecipientCount={activeRecipients.length}
-            labels={availableLabels}
-            selectedLabelId={selectedLabelId}
-            onLabelChange={handleLabelChange}
-            onSubmit={handleSubmitSchedule}
-            isSubmitting={isSubmitting}
-            onEditRecipients={() => setIsRecipientPopupOpen(true)}
-            estimatedTime={estimatedTime}
-            maxLimit={user?.zalo?.rateLimitPerHour || 50}
-          />
-        )}
-        secondaryOpen={isRecipientPopupOpen}
-        onCloseSecondary={() => setIsRecipientPopupOpen(false)}
-        secondaryTitle={`Chỉnh sửa danh sách (${activeRecipients.length}/${currentRecipients.length})`}
-        renderSecondaryList={() => (
-          <RecipientList
-            recipients={currentRecipients}
-            removedIds={removedIds}
-            onToggle={handleToggleRecipient}
-          />
-        )}
+      <ScheduleForm
+        jobName={jobName}
+        setJobName={setJobName}
+        actionType={actionType}
+        setActionType={setActionType}
+        message={message}
+        setMessage={setMessage}
+        actionsPerHour={actionsPerHour}
+        setActionsPerHour={setActionsPerHour}
+        activeRecipientCount={activeRecipients.length}
+        labels={labelsFromProps || []}
+        selectedLabelId={selectedLabelId}
+        onLabelChange={handleLabelChange}
+        onSubmit={handleSubmit}
+        isSubmitting={isSubmitting}
+        onEditRecipients={() => setIsRecipientPopupOpen(true)}
+        estimatedTime={estimatedTime}
+        maxLimit={user?.zalo?.rateLimitPerHour || 50}
       />
+
+      <CenterPopup
+        open={isRecipientPopupOpen}
+        onClose={() => setIsRecipientPopupOpen(false)}
+      >
+        <div className={styles.recipientPopupContainer}>
+          <h3 className={styles.recipientPopupTitle}>
+            Chỉnh sửa danh sách ({activeRecipients.length} người)
+          </h3>
+          <RecipientList
+            recipients={activeRecipients}
+            onToggle={(customer) => onRecipientToggle(customer)}
+          />
+        </div>
+      </CenterPopup>
 
       <Noti
         open={notification.open}
-        onClose={handleCloseNotification}
+        onClose={() => setNotification((prev) => ({ ...prev, open: false }))}
         status={notification.status}
         mes={notification.mes}
       />
     </>
   );
-});
+}
 
-export default Schedule;
+// BỎ `forwardRef` đi, không cần nữa.

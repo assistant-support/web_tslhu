@@ -1,44 +1,19 @@
-/* Container chính, bao bọc cả lớp phủ và panel */
-.container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1000; /* Luôn nằm trên cùng */
-  display: flex;
-  justify-content: flex-end; /* Đẩy panel về bên phải */
-}
-
-/* Lớp phủ mờ phía sau */
-.backdrop {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  animation: fadeIn 0.3s ease-in-out;
-}
-
 /* Khung panel chính */
 .panel {
   width: 100%;
-  max-width: 500px; /* Chiều rộng tối đa của panel */
+  max-width: 500px;
   height: 100%;
   background-color: #ffffff;
   box-shadow: -5px 0px 15px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
 
-  /* Trạng thái ẩn ban đầu (dịch 100% ra khỏi màn hình) */
-  transform: translateX(100%);
-  transition: transform 0.3s ease-in-out;
-}
+  /* Thêm các thuộc tính này để định vị panel */
+  position: fixed;
+  top: 0;
 
-/* Trạng thái mở (dịch về vị trí 0) */
-.panelOpen {
-  transform: translateX(0);
+  /* Hiệu ứng chuyển động */
+  transition: transform 0.3s ease-in-out;
 }
 
 /* Header của panel */

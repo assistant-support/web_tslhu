@@ -17,27 +17,32 @@ export const usePanels = () => {
 };
 
 export const PanelProvider = ({ children }) => {
-  const [isPanelOpen, setPanelOpen] = useState(false);
-  const [panelContent, setPanelContent] = useState(null);
+  // State chính: một mảng chứa thông tin các panel đang mở
+  const [panels, setPanels] = useState([]);
 
-  const openPanel = useCallback((content) => {
-    console.log("Opening panel with content:", content); // Thêm log để kiểm tra
-    setPanelContent(content);
-    setPanelOpen(true);
+  // Hàm để MỞ một panel mới
+  const openPanel = useCallback((panelConfig) => {
+    // panelConfig là một object, vd: { id: 'details-123', component: CustomerDetails, props: {...} }
+    setPanels((prev) => {
+      // Tránh mở trùng panel có cùng ID
+      if (prev.some((p) => p.id === panelConfig.id)) {
+        return prev;
+      }
+      return [...prev, panelConfig];
+    });
   }, []);
 
-  const closePanel = useCallback(() => {
-    setPanelOpen(false);
-    // Đợi animation chạy xong mới xóa content
-    setTimeout(() => setPanelContent(null), 300);
+  // Hàm để ĐÓNG một panel cụ thể
+  const closePanel = useCallback((panelId) => {
+    setPanels((prev) => prev.filter((p) => p.id !== panelId));
   }, []);
 
-  const value = {
-    isPanelOpen,
-    panelContent,
-    openPanel,
-    closePanel,
-  };
+  // Hàm để ĐÓNG TẤT CẢ panel
+  const closeAllPanels = useCallback(() => {
+    setPanels([]);
+  }, []);
+
+  const value = { panels, openPanel, closePanel, closeAllPanels };
 
   return (
     <PanelContext.Provider value={value}>{children}</PanelContext.Provider>

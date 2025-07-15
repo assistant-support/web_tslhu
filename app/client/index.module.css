@@ -733,3 +733,48 @@
 .lookupStatus[data-status="error"] {
   background-color: #ef4444;
 }
+
+.rowUpdated {
+  position: relative; /* Bắt buộc phải có để định vị vệt sáng */
+  background-color: rgb(114, 255, 123);
+  overflow: hidden; /* Ẩn vệt sáng khi nó ở ngoài hàng */
+}
+
+.rowUpdated::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+
+  /* Đây là vệt sáng của chúng ta */
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.8) 50%,
+    transparent 100%
+  );
+
+  /* Di chuyển vệt sáng ra khỏi màn hình ban đầu */
+  transform: translateX(-100%);
+
+  /* Gọi animation */
+  animation: shimmer-effect 1.5s forwards;
+}
+
+@keyframes shimmer-effect {
+  100% {
+    /* Di chuyển vệt sáng qua hết bên phải */
+    transform: translateX(100%);
+  }
+}
+
+/* app/client/index.module.css */
+
+.activeRow {
+  /* Dùng !important để đảm bảo ghi đè lên các style khác nếu cần */
+  background-color: #eef2ff !important; /* Màu xanh lavender rất nhạt */
+  /* Thêm một đường viền trái để nhấn mạnh */
+  box-shadow: inset 4px 0 0 0 #4f46e5;
+}

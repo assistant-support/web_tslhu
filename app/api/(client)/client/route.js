@@ -396,3 +396,96 @@ export async function PUT(request) {
     );
   }
 }
+
+export async function PATCH(request) {
+  await dbConnect();
+
+  try {
+    const body = await request.json();
+    const { customerId, updateData } = body;
+
+    // --- Kiểm tra đầu vào ---
+    if (!customerId || !Types.ObjectId.isValid(customerId)) {
+      return NextResponse.json(
+        { status: false, message: "ID khách hàng không hợp lệ." },
+        { status: 400 },
+      );
+    }
+
+    if (
+      !updateData ||
+      typeof updateData !== "object" ||
+      Object.keys(updateData).length === 0
+    ) {
+      return NextResponse.json(
+        { status: false, message: "Vui lòng cung cấp dữ liệu cần cập nhật." },
+        { status: 400 },
+      );
+    }
+
+    // --- Cập nhật linh hoạt ---
+    const updatedCustomer = await Customer.findByIdAndUpdate(
+      customerId,
+      { $set: updateData }, // Dùng $set để cập nhật các trường trong updateData
+      { new: true }, // Trả về document đã được cập nhật
+    )
+      .populate("status", "_id name")
+      .lean();
+
+    if (!updatedCustomer) {
+      return NextResponse.json(
+        { status: false, message: "Không tìm thấy khách hàng." },
+        { status: 404 },
+      );
+    }
+
+    // --- Revalidate và trả về kết quả ---
+    revalidateTag(TAG);
+    return NextResponse.json({ status: true, data: updatedCustomer });
+  } catch (error) {
+    console.error("PATCH Error:", error);
+    return NextResponse.json(
+      { status: false, message: "Lỗi phía máy chủ.", error: error.message },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(request) {
+  await dbConnect();
+
+  try {
+    const body = await request.json();
+    const { customerId } = body;
+
+    if (!customerId || !Types.ObjectId.isValid(customerId)) {
+      return NextResponse.json(
+        { status: false, message: "ID khách hàng không hợp lệ." },
+        { status: 400 },
+      );
+    }
+
+    // Dùng $unset để xóa hoàn toàn trường 'status' khỏi document
+    const updatedCustomer = await Customer.findByIdAndUpdate(
+      customerId,
+      { $unset: { status: "" } }, // Giá trị của status không quan trọng, chỉ cần key
+      { new: true },
+    ).lean();
+
+    if (!updatedCustomer) {
+      return NextResponse.json(
+        { status: false, message: "Không tìm thấy khách hàng." },
+        { status: 404 },
+      );
+    }
+
+    revalidateTag(TAG);
+    return NextResponse.json({ status: true, data: updatedCustomer });
+  } catch (error) {
+    console.error("DELETE Error:", error);
+    return NextResponse.json(
+      { status: false, message: "Lỗi phía máy chủ.", error: error.message },
+      { status: 500 },
+    );
+  }
+}
