@@ -26,6 +26,7 @@ import StageIndicator from "@/components/(ui)/progress/StageIndicator";
 import Loading from "@/components/(ui)/(loading)/loading";
 import PanelManager from "@/components/(features)/panel/PanelManager";
 import dynamic from "next/dynamic";
+import { CampaignProvider } from "@/contexts/CampaignContext";
 
 const Schedule = dynamic(() => import("./ui/schedule"), {
   ssr: false, // ssr: false có nghĩa là "Server-Side Rendering: false"
@@ -126,7 +127,7 @@ const Row = React.memo(function Row({
         <div
           className={`${styles.gridCell} text_6_400`}
           style={{
-            justifyContent: "center",
+            justifyContent: "left",
             flex: 1,
             padding: "0 5px",
             overflow: "hidden",
@@ -219,6 +220,7 @@ function ClientPage({
   const [showLabelPopup, setShowLabelPopup] = useState(false);
   const historyRef = useRef(null);
   const [customers, setCustomers] = useState(initialData);
+  const { updatePanelProps } = usePanels();
 
   const serverPage = initialPagination?.page || 1;
   const serverTotalPages = initialPagination?.totalPages || 1;
@@ -259,6 +261,9 @@ function ClientPage({
 
     // Cập nhật cả state của panel chi tiết để thông tin đồng bộ ngay lập tức
     setSelectedCustomer(updatedCustomerData);
+    updatePanelProps(`details-${updatedCustomerData._id}`, {
+      customerData: updatedCustomerData,
+    });
   };
   const toggleRowAndStoreData = useCallback(
     (row) => {
@@ -284,10 +289,7 @@ function ClientPage({
       component: Schedule,
       title: `Lên lịch cho ${scheduleData.length} người`,
       props: {
-        // Truyền vào mảng chứa nhiều khách hàng
         initialData: scheduleData,
-        recipientsMap: selectedCustomerMap, // Dùng Map đã có sẵn
-        onRecipientToggle: toggleRowAndStoreData,
         user: user,
         label: initialLabels,
       },
@@ -301,15 +303,11 @@ function ClientPage({
         component: CustomerDetails, // Component cần render
         title: `Chi tiết: ${customer.name}`,
         props: {
-          // Các props sẽ được truyền vào CustomerDetails
-          recipientsMap: new Map([[customer._id, customer]]), // Tạo Map mới cho 1 người
-          onRecipientToggle: toggleRowAndStoreData, // Hàm để thêm/bớt người nhận
           customerData: customer,
           statuses: initialStatuses,
           onUpdateCustomer: handleCustomerUpdate,
           user: user,
           initialLabels: initialLabels,
-          onRecipientToggle: toggleRowAndStoreData,
         },
       });
     },
@@ -921,9 +919,11 @@ function ClientPage({
 
 export default function Client(props) {
   return (
-    <PanelProvider>
-      <ClientPage {...props} />
-      <PanelManager />
-    </PanelProvider>
+    <CampaignProvider>
+      <PanelProvider>
+        <ClientPage {...props} />
+        <PanelManager />
+      </PanelProvider>
+    </CampaignProvider>
   );
 }

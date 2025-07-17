@@ -6,7 +6,13 @@ import { createPortal } from "react-dom";
 import styles from "./SidePanel.module.css";
 import { Svg_Close } from "@/components/(icon)/svg";
 
-const SidePanel = ({ onClose, title, children, rightOffset = 0 }) => {
+const SidePanel = ({
+  onClose,
+  title,
+  children,
+  onCollapse,
+  rightOffset = 0,
+}) => {
   const [isVisible, setIsVisible] = useState(false);
 
   // Kích hoạt animation khi component mount
@@ -26,7 +32,14 @@ const SidePanel = ({ onClose, title, children, rightOffset = 0 }) => {
     // Component này giờ chỉ render duy nhất khung panel
     <div className={styles.panel} style={panelStyle}>
       <div className={styles.panelHeader}>
-        <h3 className={styles.panelTitle}>{title || "Bảng điều khiển"}</h3>
+        <button
+          onClick={onCollapse}
+          className={styles.headerButton}
+          title="Thu gọn"
+        >
+          —
+        </button>
+        <h3 className={styles.panelTitle}>{title}</h3>
         <button onClick={onClose} className={styles.closeButton}>
           <Svg_Close w={24} h={24} />
         </button>

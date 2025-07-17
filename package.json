@@ -19,6 +19,7 @@
     "dayjs": "^1.11.13",
     "exceljs": "^4.4.0",
     "googleapis": "^149.0.0",
+    "jose": "^6.0.12",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.6.1",
     "next": "^15.3.2",

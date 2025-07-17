@@ -8,6 +8,14 @@ import styles from "./index.module.css";
 // Import các component con trực tiếp
 import CenterPopup from "@/components/(features)/(popup)/popup_center";
 import RecipientList from "./RecipientList";
+import { useCampaigns } from "@/contexts/CampaignContext";
+
+const AVAILABLE_ACTIONS = [
+  { key: "sendMessage", name: "Gửi tin" },
+  { key: "addFriend", name: "Kết bạn" },
+  { key: "findUid", name: "Tìm UID" },
+  // Thêm các hành động khác ở đây
+];
 
 const LimitInputRow = ({ label, value, onChange, min, max, disabled }) => {
   const handleInputChange = (e) => {
@@ -199,11 +207,11 @@ const ScheduleForm = ({
 export default function Schedule({
   user,
   label: labelsFromProps,
-  recipientsMap = new Map(),
   initialData,
 }) {
   const router = useRouter();
-
+  const [currentRecipients, setCurrentRecipients] = useState([]);
+  const [removedIds, setRemovedIds] = useState(() => new Set());
   const [isRecipientPopupOpen, setIsRecipientPopupOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jobName, setJobName] = useState("");
@@ -211,54 +219,40 @@ export default function Schedule({
   const [message, setMessage] = useState("");
   const [actionsPerHour, setActionsPerHour] = useState(50);
   const [selectedLabelId, setSelectedLabelId] = useState("");
-  const [currentRecipients, setCurrentRecipients] = useState([]);
-  const [removedIds, setRemovedIds] = useState(() => new Set());
   const [notification, setNotification] = useState({
     open: false,
     status: true,
     mes: "",
   });
+  const { createDraft, removeDraft } = useCampaigns();
+  const [draftId, setDraftId] = useState(null);
 
-  // Logic để xác định chế độ hoạt động (nhanh hay hàng loạt)
-  const isQuickAction = useMemo(
-    () => currentRecipients.length === 1,
-    [currentRecipients],
-  );
+  useEffect(() => {
+    // Đăng ký một chiến dịch nháp khi component mount
+    const newDraftId = createDraft({
+      title: `Lịch trình cho ${initialData.length} người`,
+      recipients: initialData,
+    });
+    setDraftId(newDraftId);
+
+    // Hàm dọn dẹp: tự hủy đăng ký khi component unmount
+    return () => {
+      removeDraft(newDraftId);
+    };
+  }, [initialData, createDraft, removeDraft]);
 
   // useEffect để thiết lập state ban đầu khi nhận được `initialData`
   useEffect(() => {
-    if (initialData && initialData.length > 0) {
+    if (initialData) {
       setCurrentRecipients(initialData);
-      setRemovedIds(new Set()); // Reset danh sách xóa
-
-      // Tự động điền tên job dựa trên chế độ
-      const newJobName =
-        initialData.length > 1
-          ? `Lịch trình ngày ${new Date().toLocaleDateString("vi-VN")}`
-          : `Hành động nhanh cho ${initialData[0].name}`;
-      setJobName(newJobName);
-
-      // Reset các trường khác
-      setMessage("");
-      setActionType("sendMessage");
-      setSelectedLabelId("");
-      setActionsPerHour(user?.zalo?.rateLimitPerHour || 50);
+      setRemovedIds(new Set());
     }
-  }, [initialData, user]);
+  }, [initialData]);
 
   const activeRecipients = useMemo(
-    () => Array.from(recipientsMap.values()),
-    [recipientsMap],
+    () => currentRecipients.filter((c) => !removedIds.has(c._id)),
+    [currentRecipients, removedIds],
   );
-  useEffect(() => {
-    if (activeRecipients.length > 0) {
-      const newJobName =
-        activeRecipients.length > 1
-          ? `Lịch trình ngày ${new Date().toLocaleDateString("vi-VN")}`
-          : `Hành động nhanh cho ${activeRecipients[0].name}`;
-      setJobName(newJobName);
-    }
-  }, [activeRecipients]);
 
   const estimatedTime = useMemo(() => {
     if (activeRecipients.length === 0 || !actionsPerHour || actionsPerHour <= 0)
@@ -269,10 +263,12 @@ export default function Schedule({
       : `${Math.ceil(hoursNeeded)} giờ`;
   }, [activeRecipients.length, actionsPerHour]);
 
-  const handleToggleRecipient = useCallback((phone) => {
+  const handleToggleRecipient = useCallback((customer) => {
     setRemovedIds((prev) => {
       const next = new Set(prev);
-      next.has(phone) ? next.delete(phone) : next.add(phone);
+      next.has(customer._id)
+        ? next.delete(customer._id)
+        : next.add(customer._id);
       return next;
     });
   }, []);
@@ -365,8 +361,9 @@ export default function Schedule({
             Chỉnh sửa danh sách ({activeRecipients.length} người)
           </h3>
           <RecipientList
-            recipients={activeRecipients}
-            onToggle={(customer) => onRecipientToggle(customer)}
+            recipients={currentRecipients} // Dùng state nội bộ
+            removedIds={removedIds} // Dùng state nội bộ
+            onToggle={handleToggleRecipient} // Dùng hàm nội bộ
           />
         </div>
       </CenterPopup>

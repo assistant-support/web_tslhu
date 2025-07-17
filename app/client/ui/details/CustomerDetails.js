@@ -15,6 +15,7 @@ import Loading from "@/components/(ui)/(loading)/loading";
 import StageIndicator from "@/components/(ui)/progress/StageIndicator";
 import TextNoti from "@/components/(features)/(noti)/textnoti";
 import Schedule from "../schedule";
+import { useCampaigns } from "@/contexts/CampaignContext";
 
 // --- Component hiển thị một dòng thông tin ---
 const InfoRow = ({ label, value, children, statusColor }) => (
@@ -65,6 +66,8 @@ export default function CustomerDetails({
   onUpdateCustomer,
 }) {
   const [customer, setCustomer] = useState(customerData);
+  const { drafts, addRecipientToDraft } = useCampaigns();
+  const [showCampaignList, setShowCampaignList] = useState(false);
   const { openPanel } = usePanels();
   const [isEditingName, setIsEditingName] = useState(false);
   const [editableName, setEditableName] = useState(customer.name || "");
@@ -344,6 +347,25 @@ export default function CustomerDetails({
           />
           <div className={styles.mainActionContainer}>
             <button onClick={handleOpenActionPanel}>Lên Lịch Nhanh</button>
+            <button onClick={() => setShowCampaignList(!showCampaignList)}>
+              Thêm vào chiến dịch
+            </button>
+            {/* Hiển thị danh sách các chiến dịch đang mở */}
+            {showCampaignList && drafts.length > 0 && (
+              <div className={styles.campaignDropdown}>
+                {drafts.map((draft) => (
+                  <div
+                    key={draft.id}
+                    onClick={() => {
+                      addRecipientToDraft(draft.id, customerData);
+                      setShowCampaignList(false);
+                    }}
+                  >
+                    {draft.title}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

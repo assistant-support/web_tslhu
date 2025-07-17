@@ -1,84 +1,108 @@
 .container {
-    margin: 8px auto;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: center;
-    width: 100px;
-    position: relative;
+  /* Cho phép khối này giãn ra để chiếm hết không gian trống ở giữa */
+  flex-grow: 1;
+
+  /* Biến nó thành một flex container để căn giữa các con của nó */
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Căn giữa các icon theo chiều dọc */
+
+  /* Các thuộc tính khác giữ nguyên */
+  gap: 8px;
+  align-items: center;
+  width: 100px;
+  position: relative;
 }
 
 .loading {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.9);
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
 }
 
 .highlight {
-    position: absolute;
-    top: 0;
-    left: 12px;
-    width: 74px;
-    height: 74px;
-    background: var(--border-color);
-    border-radius: 12px;
-    transform: var(--highlight-transform);
-    transition: transform 0.3s ease;
-    z-index: 0;
+  position: absolute;
+  top: 0;
+  left: 12px;
+  width: 74px;
+  height: 74px;
+  background: var(--border-color);
+  border-radius: 12px;
+  transform: var(--highlight-transform);
+  transition: transform 0.3s ease;
+  z-index: 0;
 }
 
 .navItem {
-    width: 74px;
-    height: 74px;
-    border-radius: 12px;
-    cursor: pointer;
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    align-items: center;
-    justify-content: center;
-    transition: all .2s linear;
+  width: 74px;
+  height: 74px;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s linear;
 }
 
 .navItem:hover {
-    background: var(--hover);
+  background: var(--hover);
 }
 
 .navText {
-    color: var(--text-primary);
-    font-size: 12px;
-    font-weight: 500;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .menu_li {
-    border-radius: 8px;
-    transition: all .3s linear;
-    cursor: pointer;
-    padding: 12px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
+  border-radius: 8px;
+  transition: all 0.3s linear;
+  cursor: pointer;
+  padding: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
-
 .menu_li:hover {
-    background: var(--hover);
+  background: var(--hover);
 }
 
 .menu_li.logout {
-    background-color: rgb(230, 130, 130);
-    color: white;
+  background-color: rgb(230, 130, 130);
+  color: white;
 }
 
 .menu_li.logout:hover {
-    background-color: rgb(233, 146, 146);
+  background-color: rgb(233, 146, 146);
+}
+
+.mainNavContainer {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* Đẩy logo lên trên, menu "Thêm" xuống dưới */
+  height: 100%;
+  align-items: center;
+}
+
+/* Container cho riêng các link điều hướng ở giữa */
+.navLinksContainer {
+  /* Quan trọng: Cho phép khối này tự căn giữa */
+  /* Nó sẽ chiếm không gian còn lại và đẩy các con vào giữa */
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Căn giữa các icon theo chiều dọc */
+  gap: 8px;
+  position: relative;
 }

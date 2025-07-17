@@ -3,13 +3,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all .2s linear;
+  transition: all 0.2s linear;
   cursor: pointer;
 }
 
 .unsubmit {
   cursor: not-allowed;
-  background: gray
+  background: gray;
 }
 
 .submit:hover {
@@ -49,4 +49,25 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+}
+/* Thêm vào file login/index.module.css */
+.errorMessage {
+  color: var(--red, #ef4444);
+  font-size: 14px;
+  text-align: center;
+  margin-top: -8px;
+  margin-bottom: 16px;
+}
+.spinner {
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s ease-in-out infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

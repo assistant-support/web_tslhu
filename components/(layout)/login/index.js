@@ -1,78 +1,55 @@
+// components/(layout)/login/index.js
 "use client";
+
+import { useFormState, useFormStatus } from "react-dom";
 import { useState } from "react";
-import air from "./index.module.css";
+import styles from "./index.module.css";
 import { Svg_ArowRight, Svg_Eye, Svg_unEye } from "@/components/(icon)/svg";
+import { loginUser } from "@/app/actions/authActions"; // Import Server Action của bạn
 
-const isValidEmail = (email) => {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-};
-
-const InputField = ({ label, type, value, setValue }) => {
+// --- Component InputField (Đã được sửa lại) ---
+// Giờ đây nó không cần quản lý state `value` nữa, chỉ cần nhận `name`.
+const InputField = ({ label, name, type }) => {
   const [focused, setFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [hasValue, setHasValue] = useState(false);
+
   const handleFocus = () => setFocused(true);
   const handleBlur = (e) => {
-    if (e.target.value === "") setFocused(false);
+    if (e.target.value === "") {
+      setFocused(false);
+    }
   };
+  const handleChange = (e) => {
+    setHasValue(e.target.value !== "");
+  };
+
   const inputType =
     type === "password" ? (showPassword ? "text" : "password") : type;
+  const isLabelUp = focused || hasValue;
+
   return (
-    <div
-      style={{
-        position: "relative",
-        border: focused ? "2px solid #626262" : "2px solid var(--background)",
-        backgroundColor: focused ? "white" : "#f5f5f5",
-        borderRadius: "3px",
-        marginBottom: "16px",
-      }}
-    >
+    <div className={styles.inputContainer} data-focused={focused}>
       <input
+        id={name} // Thêm id để label có thể liên kết
+        name={name} // QUAN TRỌNG: Thuộc tính `name` để Server Action đọc dữ liệu
         type={inputType}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        style={{
-          width: "calc(100% - 32px)",
-          padding: "16px",
-          paddingTop: focused || value !== "" ? 22 : 16,
-          paddingBottom: focused || value !== "" ? 10 : 16,
-          border: "none",
-          outline: "none",
-          fontSize: "16px",
-          color: "#333",
-          borderRadius: 5,
-          background: "var(--background)",
-        }}
+        onChange={handleChange}
+        className={styles.inputField}
+        required // Thêm yêu cầu bắt buộc của trình duyệt
       />
       <label
-        htmlFor={label}
-        style={{
-          position: "absolute",
-          top: "16px",
-          left: "12px",
-          transform: `translateY(${
-            focused || value !== "" ? "-14px" : "0"
-          }) scale(${focused || value !== "" ? "0.75" : "1"})`,
-          transition: "all 0.3s ease",
-          color: focused || value !== "" ? "#626262" : "#999",
-          pointerEvents: "none",
-        }}
+        htmlFor={name}
+        className={`${styles.inputLabel} ${isLabelUp ? styles.up : ""}`}
       >
         {label}
       </label>
       {type === "password" && (
         <div
           onClick={() => setShowPassword(!showPassword)}
-          style={{
-            position: "absolute",
-            top: "50%",
-            right: "12px",
-            transform: "translateY(-50%)",
-            cursor: "pointer",
-            color: "#626262",
-          }}
-          className="flex_center"
+          className={styles.eyeIcon}
         >
           {showPassword ? (
             <Svg_Eye w={18} h={18} c={"gray"} />
@@ -85,247 +62,62 @@ const InputField = ({ label, type, value, setValue }) => {
   );
 };
 
-// const LoginPage = () => {
-//   const [username, setUsername] = useState("");
-//   const [password, setPassword] = useState("");
-//   const [rememberMe, setRememberMe] = useState(false);
-//   const [loading, setloading] = useState(false);
-//   const emailIsValid = isValidEmail(username);
-//   const passwordIsNotEmpty = password.trim() !== "";
-//   const isFormValid = emailIsValid && passwordIsNotEmpty;
-//   const handleSubmit = async () => {
-//     setloading(true);
-//     try {
-//       const data = { email: username, password, re: rememberMe };
-//       const response = await fetch("/api/login", {
-//         method: "POST",
-//         headers: {
-//           "Content-Type": "application/json",
-//         },
-//         body: JSON.stringify(data),
-//       });
+// --- Component Nút Submit Mới ---
+// Phải là component con của form để dùng được useFormStatus
+function SubmitButton() {
+  const { pending } = useFormStatus();
 
-//       if (!response.ok) {
-//         throw new Error("Đăng nhập thất bại");
-//       }
-//       const result = await response.json();
-//       window.location.reload();
-//     } catch (err) {
-//       console.error("Lỗi:", err);
-//     }
-//     setloading(false);
-//   };
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className={`${styles.submitButton} ${
+        pending ? styles.unsubmit : styles.submit
+      }`}
+    >
+      {pending ? (
+        <div className={styles.spinner}></div>
+      ) : (
+        <Svg_ArowRight w={28} h={28} c={"white"} />
+      )}
+    </button>
+  );
+}
 
-//   return (
-//     <>
-//       {loading ? (
-//         <p className="text_2">Đang đăng nhập</p>
-//       ) : (
-//         <p className="text_2">Đăng nhập</p>
-//       )}
-//       <div
-//         style={{
-//           backgroundColor: "white",
-//           padding: "32px 32px 0 32px",
-//           borderRadius: "8px",
-//           width: "calc(100% - 64px)",
-//         }}
-//       >
-//         {loading ? (
-//           <div
-//             style={{ width: "100%", aspectRatio: 1, height: "auto" }}
-//             className="flex_center"
-//           >
-//             {/* <CircularProgress color="inherit" /> */}
-//           </div>
-//         ) : (
-//           <>
-//             <InputField
-//               label="Email"
-//               type="text"
-//               value={username}
-//               setValue={setUsername}
-//             />
-//             <InputField
-//               label="Mật khẩu"
-//               type="password"
-//               value={password}
-//               setValue={setPassword}
-//             />
-
-//             <div
-//               className="flex_center"
-//               style={{ justifyContent: "start", gap: 8 }}
-//             >
-//               <label
-//                 style={{
-//                   display: "flex",
-//                   alignItems: "center",
-//                   gap: 8,
-//                   cursor: "pointer",
-//                 }}
-//               >
-//                 <input
-//                   type="checkbox"
-//                   className={air["custom-checkbox"]}
-//                   checked={rememberMe}
-//                   onChange={(e) => setRememberMe(e.target.checked)}
-//                 />
-//                 <p className="text_5_400">Ghi nhớ tôi</p>
-//               </label>
-//             </div>
-
-//             <div className="flex_center" style={{ margin: "40px 0" }}>
-//               <div
-//                 style={{
-//                   height: 60,
-//                   width: 60,
-//                   borderRadius: 16,
-//                   color: "white",
-//                   display: "flex",
-//                   alignItems: "center",
-//                   justifyContent: "center",
-//                 }}
-//                 onClick={isFormValid ? handleSubmit : undefined}
-//                 className={isFormValid ? air.submit : air.unsubmit}
-//               >
-//                 <Svg_ArowRight w={28} h={28} c={"white"} />
-//               </div>
-//             </div>
-//           </>
-//         )}
-//       </div>
-//     </>
-//   );
-// };
-
+// --- Component Login Chính (Đã tái cấu trúc) ---
 const LoginPage = () => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
-  const [loading, setloading] = useState(false);
-
-  const emailIsValid = isValidEmail(username);
-  const passwordIsNotEmpty = password.trim() !== "";
-  const isFormValid = emailIsValid && passwordIsNotEmpty;
-
-  // Hàm logic đăng nhập không đổi
-  const handleSubmit = async () => {
-    setloading(true);
-    try {
-      const data = { email: username, password, re: rememberMe };
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        // Bạn nên thêm xử lý hiển thị lỗi cho người dùng ở đây
-        throw new Error("Đăng nhập thất bại");
-      }
-      // Tải lại trang sau khi thành công
-      window.location.reload();
-    } catch (err) {
-      console.error("Lỗi:", err);
-      // Thêm xử lý hiển thị lỗi cho người dùng ở đây
-    }
-    setloading(false);
-  };
-
-  // --- HÀM MỚI ĐỂ XỬ LÝ SUBMIT FORM ---
-  const handleFormSubmit = (event) => {
-    event.preventDefault(); // Ngăn trình duyệt tải lại trang
-    if (isFormValid) {
-      handleSubmit(); // Gọi hàm logic đăng nhập của bạn
-    }
-  };
+  // Dùng useFormState để gọi Server Action và nhận kết quả
+  // `initialState` là undefined, `loginUser` là action sẽ được gọi
+  const [state, formAction] = useFormState(loginUser, undefined);
 
   return (
     <>
-      {loading ? (
-        <p className="text_2">Đang đăng nhập</p>
-      ) : (
-        <p className="text_2">Đăng nhập</p>
-      )}
-      <div
-        style={{
-          backgroundColor: "white",
-          padding: "32px 32px 0 32px",
-          borderRadius: "8px",
-          width: "calc(100% - 64px)",
-        }}
-      >
-        {loading ? (
-          <div
-            style={{ width: "100%", aspectRatio: 1, height: "auto" }}
-            className="flex_center"
-          >
-            {/* <CircularProgress color="inherit" /> */}
+      <p className="text_2">Đăng nhập</p>
+      <div className={styles.formWrapper}>
+        {/* Thẻ form giờ sẽ gọi Server Action */}
+        <form action={formAction}>
+          <InputField label="Email" name="email" type="email" />
+          <InputField label="Mật khẩu" name="password" type="password" />
+
+          <label className={styles.checkboxContainer}>
+            <input
+              type="checkbox"
+              name="rememberMe" // Thuộc tính name cho checkbox
+              className={styles["custom-checkbox"]}
+            />
+            <p className="text_5_400">Ghi nhớ tôi</p>
+          </label>
+
+          {/* Hiển thị lỗi trả về từ Server Action (nếu có) */}
+          {state?.error && <p className={styles.errorMessage}>{state.error}</p>}
+
+          <div className={styles.submitContainer}>
+            <SubmitButton />
           </div>
-        ) : (
-          // ▼▼▼ BỌC CÁC THÀNH PHẦN BẰNG THẺ <form> ▼▼▼
-          <form onSubmit={handleFormSubmit}>
-            <InputField
-              label="Email"
-              type="text"
-              value={username}
-              setValue={setUsername}
-            />
-            <InputField
-              label="Mật khẩu"
-              type="password"
-              value={password}
-              setValue={setPassword}
-            />
-
-            <div
-              className="flex_center"
-              style={{ justifyContent: "start", gap: 8 }}
-            >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  className={air["custom-checkbox"]}
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                />
-                <p className="text_5_400">Ghi nhớ tôi</p>
-              </label>
-            </div>
-
-            <div className="flex_center" style={{ margin: "40px 0" }}>
-              {/* Thay đổi div thành button type="submit" */}
-              <button
-                type="submit"
-                style={{
-                  height: 60,
-                  width: 60,
-                  borderRadius: 16,
-                  color: "white",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "none", // Xóa viền mặc định của button
-                }}
-                disabled={!isFormValid} // Vô hiệu hóa nút khi form không hợp lệ
-                className={isFormValid ? air.submit : air.unsubmit}
-              >
-                <Svg_ArowRight w={28} h={28} c={"white"} />
-              </button>
-            </div>
-          </form>
-          // ▲▲▲ KẾT THÚC BỌC FORM ▲▲▲
-        )}
+        </form>
       </div>
     </>
   );
 };
+
 export default LoginPage;

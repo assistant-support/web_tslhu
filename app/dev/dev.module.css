@@ -1,0 +1,13 @@
+/* app/dev/dev.module.css */
+.container {
+  width: 100%;
+  /* Chiều cao bằng 100% chiều cao màn hình trừ đi chiều cao của thanh menu (giả sử là 60px) */
+  height: calc(100vh - 60px);
+  overflow: hidden;
+}
+
+.iframe {
+  width: 100%;
+  height: 100%;
+  border: none; /* Bỏ đường viền của iframe */
+}
