@@ -17,6 +17,8 @@ const cors = {
 export const OPTIONS = () => new NextResponse(null, { headers: cors })
 
 const exec = async (type, acc, person, cfg) => {
+    console.log(acc);
+
     const r = await fetch(acc.action, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -29,6 +31,8 @@ const exec = async (type, acc, person, cfg) => {
         }),
         cache: 'no-store'
     })
+    console.log(acc.uid, person.phone, person.uid, type, cfg.messageTemplate);
+
     const j = await r.json()
     if (!r.ok || j.status === 'error') throw new Error(j.message || 'script error')
     return j.data
@@ -159,6 +163,8 @@ export const GET = async () => {
             { headers: cors }
         )
     } catch (err) {
+        console.log('Cron job error:', err);
+        
         return NextResponse.json(
             { message: 'Lỗi xử lý cron job.', error: err.message },
             { status: 500, headers: cors }
