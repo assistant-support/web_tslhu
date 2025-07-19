@@ -26,6 +26,7 @@ import StageIndicator from "@/components/(ui)/progress/StageIndicator";
 import Loading from "@/components/(ui)/(loading)/loading";
 import PanelManager from "@/components/(features)/panel/PanelManager";
 import dynamic from "next/dynamic";
+import { Re_user } from "@/data/users";
 
 const Schedule = dynamic(() => import("./ui/schedule"), {
   ssr: false, // ssr: false có nghĩa là "Server-Side Rendering: false"
@@ -920,6 +921,7 @@ function ClientPage({
 }
 
 export default function Client(props) {
+
   return (
     <PanelProvider>
       <ClientPage {...props} />

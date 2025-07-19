@@ -10,6 +10,7 @@ import React, {
 import styles from './index.module.css'
 import FlexiblePopup from '@/components/(features)/(popup)/popup_right'
 import { useRouter } from 'next/navigation'
+import { Re_user } from '@/data/users'
 
 // ---------- helper ----------
 const calcTimeLeft = (until) => {

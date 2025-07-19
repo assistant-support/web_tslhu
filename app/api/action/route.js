@@ -17,8 +17,6 @@ const cors = {
 export const OPTIONS = () => new NextResponse(null, { headers: cors })
 
 const exec = async (type, acc, person, cfg) => {
-    console.log(acc);
-
     const r = await fetch(acc.action, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
