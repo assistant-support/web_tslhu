@@ -4,7 +4,10 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerDetails.module.css";
+
+// --- IMPORT THÀNH PHẦN & CONTEXT ---
 import { usePanels } from "@/contexts/PanelContext";
+import { useCampaigns } from "@/contexts/CampaignContext";
 import {
   Svg_History,
   Svg_Notes,
@@ -15,9 +18,18 @@ import Loading from "@/components/(ui)/(loading)/loading";
 import StageIndicator from "@/components/(ui)/progress/StageIndicator";
 import TextNoti from "@/components/(features)/(noti)/textnoti";
 import Schedule from "../schedule";
-import { useCampaigns } from "@/contexts/CampaignContext";
 
-// --- Component hiển thị một dòng thông tin ---
+//================================================================================
+// --- HELPER COMPONENTS (Thành phần phụ trợ) ---
+//================================================================================
+
+/**
+ * Component InfoRow: Hiển thị một dòng thông tin theo cặp "Nhãn" và "Giá trị".
+ * @param {string} label - Nhãn hiển thị bên trái.
+ * @param {string|React.ReactNode} value - Giá trị hiển thị bên phải.
+ * @param {React.ReactNode} children - Các nút hoặc component con đi kèm.
+ * @param {string} statusColor - Màu trạng thái (nếu có) để styling.
+ */
 const InfoRow = ({ label, value, children, statusColor }) => (
   <div className={styles.infoRow}>
     <span className={styles.infoLabel}>{label}</span>
@@ -34,6 +46,11 @@ const InfoRow = ({ label, value, children, statusColor }) => (
   </div>
 );
 
+/**
+ * Component StageSelector: Hiển thị các bước của giai đoạn chăm sóc và cho phép lựa chọn.
+ * @param {number} currentLevel - Mức giai đoạn hiện tại.
+ * @param {function} onSelect - Hàm callback được gọi khi một giai đoạn được chọn.
+ */
 const StageSelector = ({ currentLevel, onSelect }) => {
   const stages = ["Chưa có", "Chăm sóc", "Học thử", "Vào học"];
   return (
@@ -54,61 +71,101 @@ const StageSelector = ({ currentLevel, onSelect }) => {
   );
 };
 
-// --- Component chính ---
+//================================================================================
+// --- MAIN COMPONENT (Thành phần chính) ---
+//================================================================================
+
 export default function CustomerDetails({
-  customerData,
+  customerData, // Dữ liệu khách hàng được truyền từ props, sẽ thay đổi
+  onUpdateCustomer, // Hàm callback để cập nhật dữ liệu ở component cha
   onShowHistory,
   user,
   initialLabels,
-  onShowActionPanel,
   statuses,
   onRecipientToggle,
-  onUpdateCustomer,
 }) {
+  //----------------------------------------------------------------
+  // --- STATE MANAGEMENT (Quản lý State) ---
+  //----------------------------------------------------------------
+
+  // State chính: lưu trữ bản sao của dữ liệu khách hàng để component tự quản lý.
   const [customer, setCustomer] = useState(customerData);
-  const { drafts, addRecipientToDraft } = useCampaigns();
-  const [showCampaignList, setShowCampaignList] = useState(false);
-  const { openPanel } = usePanels();
+
+  // State cho các giá trị có thể chỉnh sửa trên form.
+  const [editableName, setEditableName] = useState(customerData.name || "");
+  const [editableStatus, setEditableStatus] = useState(
+    customerData.status?._id || "",
+  );
+  const [editableStageLevel, setEditableStageLevel] = useState(
+    customerData.stageLevel || 0,
+  );
+  const [editableNotes, setEditableNotes] = useState({
+    careNote: customerData.careNote || "",
+    studyTryNote: customerData.studyTryNote || "",
+    studyNote: customerData.studyNote || "",
+  });
+
+  // State quản lý trạng thái UI (hiển thị/ẩn các thành phần).
   const [isEditingName, setIsEditingName] = useState(false);
-  const [editableName, setEditableName] = useState(customer.name || "");
+  const [isNoteVisible, setNoteVisible] = useState(false);
+  const [isStatusSelectorVisible, setStatusSelectorVisible] = useState(false);
+  const [showCampaignList, setShowCampaignList] = useState(false);
+
+  // State cho hệ thống thông báo.
   const [notification, setNotification] = useState({
     show: false,
     title: "",
     mes: "",
     color: "default",
   });
-  const [isNoteVisible, setNoteVisible] = useState(false);
-  const [isStatusSelectorVisible, setStatusSelectorVisible] = useState(false);
 
-  const [editableStatus, setEditableStatus] = useState(
-    customer.status?._id || "",
-  );
-  const [editableStageLevel, setEditableStageLevel] = useState(
-    customer.stageLevel || 0,
-  );
-  const [editableNotes, setEditableNotes] = useState({
-    careNote: customer.careNote || "",
-    studyTryNote: customer.studyTryNote || "",
-    studyNote: customer.studyNote || "",
-  });
+  //----------------------------------------------------------------
+  // --- HOOKS ---
+  //----------------------------------------------------------------
 
-  const handleOpenActionPanel = () => {
-    const singleRecipientMap = new Map([[customerData._id, customerData]]);
-    openPanel({
-      id: `action-${customerData._id}`,
-      component: Schedule,
-      title: `Hành động cho: ${customerData.name}`,
-      props: {
-        // Truyền vào một mảng chỉ có 1 phần tử
-        initialData: [customerData],
-        recipientsMap: singleRecipientMap, // <-- Truyền Map mới tạo
-        onRecipientToggle: onRecipientToggle,
-        user: user, // Truyền user data vào
-        label: initialLabels, // Truyền label data vào
-      },
+  const { openPanel } = usePanels();
+  const { drafts, addRecipientToDraft } = useCampaigns();
+
+  /**
+   * 🧠 **LOGIC CỐT LÕI**: Đồng bộ hóa state nội bộ với props từ bên ngoài.
+   * Hook này sẽ chạy lại MỖI KHI prop `customerData` thay đổi.
+   * Đây là giải pháp cho vấn đề "panel không render lại" khi dữ liệu được cập nhật từ nơi khác.
+   */
+  useEffect(() => {
+    // 1. Cập nhật state chính của component.
+    setCustomer(customerData);
+
+    // 2. Đồng bộ hóa tất cả các state dùng cho việc chỉnh sửa trên form.
+    setEditableName(customerData.name || "");
+    setEditableStatus(customerData.status?._id || "");
+    setEditableStageLevel(customerData.stageLevel || 0);
+    setEditableNotes({
+      careNote: customerData.careNote || "",
+      studyTryNote: customerData.studyTryNote || "",
+      studyNote: customerData.studyNote || "",
     });
-  };
+  }, [customerData]);
 
+  // Hook để tự động ẩn thông báo sau 3 giây.
+  useEffect(() => {
+    if (!notification.show) return;
+    const timerId = setTimeout(
+      () => setNotification((prev) => ({ ...prev, show: false })),
+      3000,
+    );
+    // Hàm dọn dẹp: hủy bộ đếm giờ nếu component bị unmount.
+    return () => clearTimeout(timerId);
+  }, [notification.show]);
+
+  //----------------------------------------------------------------
+  // --- HANDLERS (Hàm xử lý sự kiện) ---
+  //----------------------------------------------------------------
+
+  /**
+   * Lưu một trường dữ liệu cụ thể về server.
+   * @param {string} fieldName - Tên của trường cần cập nhật (ví dụ: 'name', 'stageLevel').
+   * @param {*} value - Giá trị mới của trường đó.
+   */
   const handleSaveField = async (fieldName, value) => {
     try {
       const res = await fetch(`/api/client`, {
@@ -116,19 +173,17 @@ export default function CustomerDetails({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerId: customer._id,
-          updateData: { [fieldName]: value }, // Tạo đối tượng động: { name: 'giá trị mới' }
+          updateData: { [fieldName]: value }, // Cập nhật động
         }),
       });
 
       if (!res.ok) throw new Error("Cập nhật thất bại");
-
       const responseJson = await res.json();
-      onUpdateCustomer(responseJson.data); // Cập nhật UI
 
-      // Xử lý riêng cho việc sửa tên
-      if (fieldName === "name") {
-        setIsEditingName(false); // Ẩn ô nhập liệu sau khi lưu
-      }
+      // Gọi callback để cập nhật dữ liệu ở component cha, kích hoạt re-render toàn cục.
+      onUpdateCustomer(responseJson.data);
+
+      if (fieldName === "name") setIsEditingName(false);
 
       setNotification({
         show: true,
@@ -146,63 +201,9 @@ export default function CustomerDetails({
     }
   };
 
-  // useEffect(() => {
-  //   if (customer) {
-  //     setEditableStatus(customer.status?._id || "");
-  //     setNotes({
-  //       careNote: customer.careNote || "",
-  //       studyTryNote: customer.studyTryNote || "",
-  //       studyNote: customer.studyNote || "",
-  //     });
-  //   }
-  // }, [customer]);
-
-  useEffect(() => {
-    // Nếu thông báo đang không hiển thị, không làm gì cả
-    if (!notification.show) {
-      return;
-    }
-
-    // Nếu thông báo được bật, đặt một bộ đếm giờ để tự động tắt nó
-    const timerId = setTimeout(() => {
-      setNotification((prev) => ({ ...prev, show: false }));
-    }, 3000); // Ẩn sau 3 giây
-
-    // QUAN TRỌNG: Đây là hàm "dọn dẹp"
-    // Nó sẽ tự động chạy khi component bị xóa khỏi giao diện,
-    // đảm bảo bộ đếm giờ luôn bị hủy, tránh gây lỗi.
-    return () => {
-      clearTimeout(timerId);
-    };
-  }, [notification.show]);
-
-  const handleUpdateLookup = () => {
-    if (customer?.MaDangKy) {
-      const url = `https://xettuyen.lhu.edu.vn/cap-nhat-thong-tin-xet-tuyen-dai-hoc?id=${encodeURIComponent(
-        customer.MaDangKy,
-      )}&htx=0`;
-      window.open(url, "_blank");
-    }
-  };
-
-  const getStatusColor = (tinhTrang) => {
-    if (tinhTrang === "Không có thông tin" || tinhTrang === "Lỗi tra cứu")
-      return "error";
-    if (tinhTrang === "Thiếu thông tin") return "warning";
-    if (tinhTrang === "Đủ đúng không xét tuyển") return "success";
-    if (tinhTrang) return "found";
-    return "not-found";
-  };
-
-  if (!customer) {
-    // Hiển thị loading hoặc thông báo trống trong khi chờ dữ liệu được truyền vào
-    return (
-      <div className={styles.loadingContainer}>
-        <Loading />
-      </div>
-    );
-  }
-
+  /**
+   * Cập nhật trạng thái chăm sóc của khách hàng.
+   */
   const handleUpdateStatus = async () => {
     if (!editableStatus) {
       setNotification({
@@ -213,39 +214,13 @@ export default function CustomerDetails({
       });
       return;
     }
-
-    try {
-      const res = await fetch(`/api/client`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId: customer._id,
-          updateData: { status: editableStatus }, // Gửi đúng định dạng cho API mới
-        }),
-      });
-
-      if (!res.ok) throw new Error("Cập nhật trạng thái thất bại");
-
-      const responseJson = await res.json();
-      onUpdateCustomer(responseJson.data); // Cập nhật UI
-
-      setStatusSelectorVisible(false); // Ẩn dropdown
-      setNotification({
-        show: true,
-        title: "Thành công",
-        mes: "Đã cập nhật trạng thái.",
-        color: "green",
-      });
-    } catch (error) {
-      setNotification({
-        show: true,
-        title: "Lỗi",
-        mes: error.message,
-        color: "red",
-      });
-    }
+    await handleSaveField("status", editableStatus);
+    setStatusSelectorVisible(false); // Ẩn dropdown sau khi lưu
   };
 
+  /**
+   * Xóa trạng thái chăm sóc của khách hàng.
+   */
   const handleDeleteStatus = async () => {
     if (
       !window.confirm(
@@ -254,41 +229,82 @@ export default function CustomerDetails({
     ) {
       return;
     }
+    await handleSaveField("status", null); // Gửi null để API hiểu là unset
+    setStatusSelectorVisible(false); // Ẩn dropdown
+  };
 
-    try {
-      const res = await fetch(`/api/client`, {
-        method: "PATCH", // Dùng PATCH một cách thống nhất
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId: customer._id,
-          updateData: { status: null }, // Gửi null để xóa (unset) trạng thái
-        }),
-      });
-
-      if (!res.ok) throw new Error("Xóa trạng thái thất bại");
-
-      const responseJson = await res.json();
-      onUpdateCustomer(responseJson.data);
-
-      setStatusSelectorVisible(false);
-      setNotification({
-        show: true,
-        title: "Thành Công",
-        mes: "Đã xóa trạng thái của khách hàng.",
-        color: "green",
-      });
-    } catch (error) {
+  /**
+   * Mở panel "Lên lịch nhanh" cho khách hàng hiện tại.
+   */
+  const handleOpenActionPanel = () => {
+    // BƯỚC KIỂM TRA AN TOÀN: Đảm bảo user và user.zalo tồn tại
+    if (!user || !user.zalo) {
       setNotification({
         show: true,
         title: "Lỗi",
-        mes: error.message,
+        mes: "Không tìm thấy thông tin tài khoản Zalo. Vui lòng kiểm tra lại.",
         color: "red",
       });
+      return; // Dừng hàm tại đây nếu không có user
+    }
+
+    // Nếu user hợp lệ, tiếp tục mở panel như bình thường
+    const singleRecipientMap = new Map([[customerData._id, customerData]]);
+    openPanel({
+      id: `action-${customerData._id}`,
+      component: Schedule,
+      title: `Hành động cho: ${customerData.name}`,
+      props: {
+        initialData: [customerData],
+        // recipientsMap và onRecipientToggle có thể không cần thiết nếu Schedule không dùng,
+        // nhưng giữ lại cũng không sao
+        onRecipientToggle: onRecipientToggle,
+        user: user, // Bây giờ `user` chắc chắn hợp lệ
+        label: initialLabels,
+      },
+    });
+  };
+
+  /**
+   * Mở tab mới để đến trang cập nhật thông tin tuyển sinh.
+   */
+  const handleUpdateLookup = () => {
+    if (customer?.MaDangKy) {
+      const url = `https://xettuyen.lhu.edu.vn/cap-nhat-thong-tin-xet-tuyen-dai-hoc?id=${encodeURIComponent(
+        customer.MaDangKy,
+      )}&htx=0`;
+      window.open(url, "_blank");
     }
   };
 
+  //----------------------------------------------------------------
+  // --- UTILITY FUNCTIONS (Hàm tiện ích) ---
+  //----------------------------------------------------------------
+
+  const getStatusColor = (tinhTrang) => {
+    if (tinhTrang === "Không có thông tin" || tinhTrang === "Lỗi tra cứu")
+      return "error";
+    if (tinhTrang === "Thiếu thông tin") return "warning";
+    if (tinhTrang === "Đủ đúng không xét tuyển") return "success";
+    if (tinhTrang) return "found";
+    return "not-found";
+  };
+
+  //----------------------------------------------------------------
+  // --- RENDER ---
+  //----------------------------------------------------------------
+
+  if (!customer) {
+    return (
+      <div className={styles.loadingContainer}>
+        <Loading />
+      </div>
+    );
+  }
+
   return (
     <div className={styles.container}>
+      {/* Vùng hiển thị thông báo */}
       {notification.show && (
         <div className={styles.notificationContainer}>
           <TextNoti
@@ -298,14 +314,15 @@ export default function CustomerDetails({
           />
         </div>
       )}
+
       <div className={styles.content}>
+        {/* === SECTION: THÔNG TIN CƠ BẢN === */}
         <div className={styles.section}>
           <h3 className={styles.sectionTitle}>Thông tin cơ bản</h3>
           <div className={styles.infoRow}>
             <span className={styles.infoLabel}>Tên khách hàng</span>
             <div className={styles.infoValue}>
               {isEditingName ? (
-                // Chế độ SỬA
                 <div className={styles.editInputContainer}>
                   <input
                     type="text"
@@ -328,7 +345,6 @@ export default function CustomerDetails({
                   </button>
                 </div>
               ) : (
-                // Chế độ XEM
                 <>
                   <span>{customer.name || "(chưa có tên)"}</span>
                   <button
@@ -345,30 +361,25 @@ export default function CustomerDetails({
             label="Di động"
             value={customer.DienThoai || customer.phone}
           />
-          <div className={styles.mainActionContainer}>
-            <button onClick={handleOpenActionPanel}>Lên Lịch Nhanh</button>
-            <button onClick={() => setShowCampaignList(!showCampaignList)}>
+          <div
+            className={`${styles.buttonContainer} ${styles.multiButtonContainer}`}
+          >
+            <button
+              onClick={handleOpenActionPanel}
+              className={`${styles.buttonBase} ${styles.greenButton}`}
+            >
+              Hành động nhanh
+            </button>
+            <button
+              onClick={() => setShowCampaignList(!showCampaignList)}
+              className={`${styles.buttonBase} ${styles.greenButton}`}
+            >
               Thêm vào chiến dịch
             </button>
-            {/* Hiển thị danh sách các chiến dịch đang mở */}
-            {showCampaignList && drafts.length > 0 && (
-              <div className={styles.campaignDropdown}>
-                {drafts.map((draft) => (
-                  <div
-                    key={draft.id}
-                    onClick={() => {
-                      addRecipientToDraft(draft.id, customerData);
-                      setShowCampaignList(false);
-                    }}
-                  >
-                    {draft.title}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
+        {/* === SECTION: THÔNG TIN XÉT TUYỂN === */}
         <div className={styles.section}>
           <h3 className={styles.sectionTitle}>Thông tin xét tuyển</h3>
           <InfoRow label="Tên" value={customer.admissionName} />
@@ -385,9 +396,9 @@ export default function CustomerDetails({
             value={customer.TinhTrang}
             statusColor={getStatusColor(customer.TinhTrang)}
           />
-          <div className={styles.updateLookupContainer}>
+          <div className={styles.buttonContainer}>
             <button
-              className={styles.secondaryButton}
+              className={`${styles.buttonBase} ${styles.ghostButton} ${styles.fullWidthButton}`}
               onClick={handleUpdateLookup}
               disabled={!customer?.MaDangKy}
             >
@@ -396,6 +407,7 @@ export default function CustomerDetails({
           </div>
         </div>
 
+        {/* === SECTION: THÔNG TIN CHĂM SÓC === */}
         <div className={styles.section}>
           <h3 className={styles.sectionTitle}>Thông tin chăm sóc</h3>
           <InfoRow label="Trạng thái">
@@ -421,22 +433,20 @@ export default function CustomerDetails({
                   </option>
                 ))}
               </select>
-
               <div className={styles.actionButtons}>
-                {/* Chỉ hiển thị nút xóa khi customer có status */}
                 {customer?.status && (
                   <button
                     onClick={handleDeleteStatus}
-                    // Đổi tên class để rõ ràng hơn
-                    className={`${styles.buttonBase} ${styles.statusDeleteButton}`}
+                    // Áp dụng style nút cơ bản và màu đỏ nguy hiểm
+                    className={`${styles.buttonBase} ${styles.dangerButton}`}
                   >
                     Xóa trạng thái
                   </button>
                 )}
                 <button
                   onClick={handleUpdateStatus}
-                  // Đổi tên class để rõ ràng hơn
-                  className={`${styles.buttonBase} ${styles.statusSaveButton}`}
+                  // Áp dụng style nút cơ bản và màu xanh lưu
+                  className={`${styles.buttonBase} ${styles.blueButton}`}
                 >
                   Lưu
                 </button>
@@ -457,19 +467,12 @@ export default function CustomerDetails({
           {isNoteVisible && (
             <div className={styles.section}>
               <div className={styles.sectionTitle}>Giai đoạn & Ghi chú</div>
-
-              {/* Thanh cập nhật Stage Level */}
               <div className={styles.infoRow}>
                 <StageSelector
                   currentLevel={editableStageLevel}
-                  onSelect={(level) => {
-                    setEditableStageLevel(level);
-                    handleSaveField("stageLevel", level); // Tự động lưu khi click
-                  }}
+                  onSelect={(level) => handleSaveField("stageLevel", level)}
                 />
               </div>
-
-              {/* Ghi chú Chăm sóc */}
               <div className={styles.noteSection}>
                 <label className={styles.noteLabel}>Ghi chú Chăm sóc:</label>
                 <textarea
@@ -484,11 +487,9 @@ export default function CustomerDetails({
                   }
                   onBlur={() =>
                     handleSaveField("careNote", editableNotes.careNote)
-                  } // Tự động lưu khi người dùng click ra ngoài
+                  }
                 />
               </div>
-
-              {/* Ghi chú Học thử */}
               <div className={styles.noteSection}>
                 <label className={styles.noteLabel}>Ghi chú Học thử:</label>
                 <textarea
@@ -506,8 +507,6 @@ export default function CustomerDetails({
                   }
                 />
               </div>
-
-              {/* Ghi chú Vào học */}
               <div className={styles.noteSection}>
                 <label className={styles.noteLabel}>Ghi chú Vào học:</label>
                 <textarea
@@ -527,7 +526,6 @@ export default function CustomerDetails({
               </div>
             </div>
           )}
-
           <InfoRow label="NV Chăm sóc">
             {customer.auth && customer.auth.length > 0
               ? customer.auth.map((user) => user.name || user.email).join(", ")
@@ -535,9 +533,10 @@ export default function CustomerDetails({
           </InfoRow>
         </div>
 
-        <div className={styles.historyButtonContainer}>
+        {/* === SECTION: LỊCH SỬ TƯƠNG TÁC === */}
+        <div className={styles.buttonContainer}>
           <button
-            className={styles.fullWidthButton}
+            className={`${styles.buttonBase} ${styles.ghostButton} ${styles.fullWidthButton}`}
             onClick={() => onShowHistory(customer)}
           >
             <Svg_History w={16} h={16} /> Hiển thị lịch sử tương tác

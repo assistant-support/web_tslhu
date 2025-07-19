@@ -1,4 +1,3 @@
-// app/api/schedule/route.js
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 
@@ -139,13 +138,32 @@ export async function POST(request) {
     }
 
     // Tính lịch
+    let scheduledTasks;
     const personIds = tasks.map((t) => t.person);
-    const scheduledTasks = schedulePersons(
-      personIds,
-      new Date(),
-      config.actionsPerHour || account.rateLimitPerHour,
-      MIN_GAP_MS,
-    );
+
+    // Nếu chỉ có 1 người, xếp lịch chạy ngay lập tức
+    if (personIds.length === 1) {
+      console.log("LOGIC: Tối ưu cho 1 người, xếp lịch ngay lập tức.");
+      scheduledTasks = [
+        {
+          person: personIds[0],
+          scheduledFor: new Date(), // Thời gian là NGAY BÂY GIỜ
+          status: "pending",
+        },
+      ];
+    }
+    // Nếu có nhiều người, mới dùng thuật toán dàn trải
+    else {
+      console.log(
+        `LOGIC: Dùng thuật toán dàn trải cho ${personIds.length} người.`,
+      );
+      scheduledTasks = schedulePersons(
+        personIds,
+        new Date(),
+        config.actionsPerHour || account.rateLimitPerHour,
+        MIN_GAP_MS,
+      );
+    }
 
     // Tạo ScheduledJob
     const [newJob] = await ScheduledJob.create(

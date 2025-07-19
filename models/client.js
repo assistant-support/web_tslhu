@@ -22,6 +22,39 @@ const ActionRefSchema = new Schema(
   { _id: false },
 );
 
+/**
+ * Schema con cho mỗi bình luận trong hồ sơ khách hàng.
+ */
+const CommentSchema = new Schema(
+  {
+    // Người dùng (nhân viên) đã tạo bình luận.
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: "user",
+      required: true,
+    },
+    // Giai đoạn của khách hàng tại thời điểm bình luận.
+    stage: {
+      type: Number,
+      required: true,
+    },
+    // Nội dung chi tiết của bình luận.
+    detail: {
+      type: String,
+      required: true,
+    },
+    // Thời điểm tạo bình luận, mặc định là bây giờ.
+    time: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false },
+);
+
+/**
+ * Schema chính cho Khách hàng (Customer).
+ */
 const CustomerSchema = new Schema(
   {
     name: { type: String },
@@ -32,15 +65,16 @@ const CustomerSchema = new Schema(
       ref: "status",
     },
     stageLevel: { type: Number, default: 0 },
-    careNote: { type: String },
-    studyTryNote: { type: String },
-    studyNote: { type: String },
-    action: [ActionRefSchema],
-    auth: [{ type: Schema.Types.ObjectId, ref: "user" }],
+
+    // Mảng lưu trữ các bình luận/ghi chú về quá trình chăm sóc.
+    comments: [CommentSchema],
+
+    // Mảng chứa các nhân viên được gán để chăm sóc khách hàng này.
+    users: [{ type: Schema.Types.ObjectId, ref: "user" }],
   },
   {
     timestamps: true,
-    strict: false,
+    strict: false, // Vẫn giữ strict: false để lưu dữ liệu xét tuyển
   },
 );
 

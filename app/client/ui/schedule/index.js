@@ -305,6 +305,7 @@ export default function Schedule({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(scheduleData),
+        credentials: "include",
       });
       const result = await response.json();
       if (!response.ok)
@@ -377,5 +378,3 @@ export default function Schedule({
     </>
   );
 }
-
-// BỎ `forwardRef` đi, không cần nữa.

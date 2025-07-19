@@ -6,6 +6,8 @@ import { useState } from "react";
 import styles from "./index.module.css";
 import { Svg_ArowRight, Svg_Eye, Svg_unEye } from "@/components/(icon)/svg";
 import { loginUser } from "@/app/actions/authActions"; // Import Server Action của bạn
+import { useActionState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 // --- Component InputField (Đã được sửa lại) ---
 // Giờ đây nó không cần quản lý state `value` nữa, chỉ cần nhận `name`.
@@ -88,8 +90,22 @@ function SubmitButton() {
 const LoginPage = () => {
   // Dùng useFormState để gọi Server Action và nhận kết quả
   // `initialState` là undefined, `loginUser` là action sẽ được gọi
-  const [state, formAction] = useFormState(loginUser, undefined);
+  const router = useRouter(); // Khởi tạo router
+  const [state, formAction] = useActionState(loginUser, undefined);
 
+  useEffect(() => {
+    // Nếu action trả về trạng thái success
+    if (state?.success) {
+      // BƯỚC 1: Làm mới dữ liệu từ server để nhận cookie mới
+      router.refresh();
+
+      if (state.role === "Admin") {
+        router.push("/admin"); // Điều hướng Admin đến trang quản lý
+      } else {
+        router.push("/"); // Điều hướng Employee và các vai trò khác về trang chủ
+      }
+    }
+  }, [state, router]);
   return (
     <>
       <p className="text_2">Đăng nhập</p>

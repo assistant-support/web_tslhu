@@ -1,16 +1,12 @@
 // utils/fetchApi.js
-import { cookies } from "next/headers";
-
+"use server";
 // Lấy URL gốc của API từ biến môi trường để dễ dàng thay đổi
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
 
-async function fetchApi(endpoint, options = {}) {
+async function fetchApi(endpoint, options = {}, token = null) {
   // Xây dựng URL đầy đủ
   const url = `${API_BASE_URL}${endpoint}`;
-
-  // Lấy token từ cookie ở phía server
-  const token = cookies().get("token")?.value;
 
   // Chuẩn bị các header
   const headers = {

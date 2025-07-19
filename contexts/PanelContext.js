@@ -66,6 +66,20 @@ export const PanelProvider = ({ children }) => {
       return [...otherPanels, panelToMove];
     });
   }, []);
+  const updatePanelProps = useCallback((panelId, newProps) => {
+    setPanels((prevPanels) =>
+      prevPanels.map((panel) => {
+        if (panel.id === panelId) {
+          return {
+            ...panel,
+            // Gộp props cũ với props mới, props mới sẽ ghi đè lên props cũ nếu có trùng lặp
+            props: { ...panel.props, ...newProps },
+          };
+        }
+        return panel;
+      }),
+    );
+  }, []);
 
   // HÀM QUAN TRỌNG ĐỂ ĐÓNG TẤT CẢ
   const closeAllPanels = useCallback(() => {
@@ -81,6 +95,7 @@ export const PanelProvider = ({ children }) => {
     collapsePanel,
     restorePanel,
     bringToFront,
+    updatePanelProps,
     closeAllPanels,
   };
 

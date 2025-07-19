@@ -6,7 +6,7 @@ import { usePanels } from "@/contexts/PanelContext";
 import SidePanel from "./SidePanel";
 import styles from "./PanelManager.module.css";
 
-const PANEL_WIDTH = 500;
+const PANEL_WIDTH = 450;
 const MAX_VISIBLE_PANELS = 3;
 
 // --- Component Nút Điều Khiển ---

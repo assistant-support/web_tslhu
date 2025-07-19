@@ -1,7 +1,7 @@
 // app/actions/authActions.js
 "use server";
 
-import jwt from "jsonwebtoken";
+import { SignJWT } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import connectDB from "@/config/connectDB";
@@ -9,51 +9,62 @@ import users from "@/models/users";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 const COOKIE_NAME = "token";
 
-// --- ACTION 1: ĐĂNG NHẬP ---
+/**
+ * Xử lý logic đăng nhập cho người dùng.
+ * Chỉ xác thực tài khoản web và tạo token cơ bản.
+ * @param {object} prevState - Trạng thái trước đó (không dùng).
+ * @param {FormData} formData - Dữ liệu từ form.
+ * @returns {Promise<object>} - Trả về { success: true } hoặc { error: '...' }.
+ */
 export async function loginUser(prevState, formData) {
   try {
     await connectDB();
     const email = formData.get("email");
     const password = formData.get("password");
-    const rememberMe = formData.get("rememberMe") === "on";
 
-    const user = await users.findOne({ email }).lean();
+    const user = await User.findOne({ email }).lean();
     if (!user) {
       return { error: "Tài khoản không tồn tại!" };
     }
 
-    const isPasswordCorrect = await bcrypt.compare(password, user.uid);
+    // So sánh mật khẩu với trường `password` đã hash
+    const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       return { error: "Mật khẩu không chính xác!" };
     }
 
+    // Token giờ chỉ chứa thông tin xác thực cốt lõi
     const tokenData = {
-      id: user._id,
+      id: user._id.toString(), // Đảm bảo ID là string
       role: user.role,
-      zalo: user.zalo || null,
     };
-    const accessToken = jwt.sign(tokenData, process.env.JWT_SECRET, {
-      expiresIn: rememberMe ? "120d" : "5h",
-    });
+
+    const expirationTime = "5h";
+    const accessToken = await new SignJWT(tokenData)
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime(expirationTime)
+      .sign(JWT_SECRET);
 
     cookies().set(COOKIE_NAME, accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: rememberMe ? 60 * 60 * 24 * 120 : undefined,
+      // Đặt maxAge tương ứng với 5 giờ (tính bằng giây)
+      maxAge: 5 * 60 * 60,
     });
+
+    return { success: true, role: user.role };
   } catch (err) {
-    console.error(err);
+    console.error("Lỗi đăng nhập:", err);
     return { error: "Lỗi phía máy chủ, vui lòng thử lại." };
   }
-  // Chuyển hướng về trang chủ sau khi thành công
-  redirect("/");
 }
 
-// --- ACTION 2: ĐĂNG XUẤT ---
 export async function logoutUser() {
   // Xóa cookie
   cookies().set(COOKIE_NAME, "", { maxAge: 0, path: "/" });

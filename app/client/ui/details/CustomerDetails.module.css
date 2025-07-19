@@ -1,5 +1,9 @@
 /* File: app/client/ui/details/CustomerDetails.module.css */
 
+/* ================================================================ */
+/* === CẤU TRÚC LAYOUT CHÍNH (Main Layout & Structure) === */
+/* ================================================================ */
+
 .container {
   display: flex;
   flex-direction: column;
@@ -13,8 +17,7 @@
   padding: 12px;
 }
 
-.loadingContainer,
-.emptyState {
+.loadingContainer {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -22,12 +25,12 @@
   color: #6b7280;
 }
 
-/* --- Section Styling --- */
 .section {
   background-color: #ffffff;
   border-radius: 8px;
   margin-bottom: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  /* Quan trọng: Loại bỏ padding-bottom ở đây để container con quyết định khoảng cách */
 }
 
 .sectionTitle {
@@ -38,7 +41,6 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
-/* --- Info Row Styling --- */
 .infoRow {
   display: flex;
   justify-content: space-between;
@@ -47,7 +49,7 @@
   border-bottom: 1px solid #f3f4f6;
   font-size: 14px;
 }
-.section .infoRow:last-child {
+.section .infoRow:last-of-type {
   border-bottom: none;
 }
 
@@ -64,26 +66,105 @@
   text-align: right;
 }
 
-/* --- Main Action Button --- */
-.mainActionContainer {
-  padding: 16px;
+/* ================================================================ */
+/* === CONTAINER CHO CÁC NÚT (Button Containers) === */
+/* ================================================================ */
+
+/* Lớp cơ sở cho mọi khu vực chứa nút để đảm bảo khoảng cách đồng nhất */
+.buttonContainer {
+  padding: 12px; /* Khoảng đệm bên trong container */
+  /* Thêm đường viền phía trên để tách biệt rõ ràng với nội dung */
   border-top: 1px solid #f3f4f6;
+  margin-top: 8px; /* Luôn có một khoảng margin nhỏ với infoRow cuối cùng */
 }
-.mainActionButton {
-  width: 100%;
-  padding: 10px;
+
+.multiButtonContainer {
+  display: flex;
+  gap: 12px; /* Khoảng cách nhất quán giữa các nút */
+  justify-content: space-between;
+}
+
+.actionButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* ================================================================ */
+/* === STYLES CHO NÚT (Buttons) === */
+/* ================================================================ */
+
+/* Lớp cơ sở cho TẤT CẢ các nút để đảm bảo style đồng nhất */
+.buttonBase {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
   font-size: 14px;
-  font-weight: 600;
-  background-color: #3b82f6;
-  color: white;
-  border: none;
+  font-weight: 500;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease-in-out;
+  border: 1px solid transparent;
 }
-.mainActionButton:hover {
-  background-color: #2563eb;
+
+/* Kiểu nút chính (nền màu) */
+.greenButton {
+  background-color: #e7f5ef;
+  color: #1e8449;
+  border-color: #a9dfbf;
 }
+.greenButton:hover {
+  background-color: #d4ece1;
+  border-color: #1e8449;
+  box-shadow: 0 2px 8px rgba(30, 132, 73, 0.2);
+}
+
+/* Kiểu nút phụ (viền, nền trong suốt) */
+.ghostButton {
+  background-color: #fff;
+  color: #374151;
+  border-color: #d1d5db;
+}
+.ghostButton:hover {
+  background-color: #f9fafb;
+}
+
+/* Nút rộng 100% */
+.fullWidthButton {
+  width: 100%;
+}
+
+/* Nút inline nhỏ (dùng cho Sửa, Thay đổi...) */
+.inlineButton {
+  background: none;
+  color: #3b82f6;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+.inlineButton:hover {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+/* Nút lưu/hủy inline */
+.inlineSaveButton,
+.inlineCancelButton {
+  padding: 6px 12px;
+  color: white;
+}
+.inlineSaveButton {
+  background-color: #3b82f6;
+}
+.inlineCancelButton {
+  background-color: #9ca3af;
+}
+
+/* ================================================================ */
+/* === CÁC THÀNH PHẦN GIAO DIỆN KHÁC (Other UI Components) === */
+/* ================================================================ */
 
 /* --- Status Tag (Tình trạng TT) --- */
 .statusTag {
@@ -95,104 +176,124 @@
 }
 .statusTag[data-status="found"] {
   background-color: #3b82f6;
-} /* Xanh dương */
+}
 .statusTag[data-status="not-found"] {
   background-color: #9ca3af;
-} /* Xám */
+}
 .statusTag[data-status="success"] {
   background-color: #22c55e;
-} /* Xanh lá */
+}
 .statusTag[data-status="warning"] {
   background-color: #f59e0b;
-} /* Vàng */
+}
 .statusTag[data-status="error"] {
   background-color: #ef4444;
-} /* Đỏ */
+}
 
-/* --- Các style khác giữ nguyên --- */
-.updateLookupContainer,
-.historyButtonContainer {
-  padding: 16px;
-}
-.secondaryButton,
-.fullWidthButton {
-  width: 100%;
-  padding: 10px;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  background-color: #fff;
-  cursor: pointer;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: #374151;
-}
-.secondaryButton:hover,
-.fullWidthButton:hover {
-  background-color: #f9fafb;
-}
-.secondaryButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.footer {
-  padding: 12px;
-  background-color: #ffffff;
-  border-top: 1px solid #e5e7eb;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
-  margin-top: auto;
-}
-.saveButton {
-  width: 100%;
-  padding: 12px;
-  background-color: #2563eb;
-  color: white;
-  font-weight: 600;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.saveButton:hover {
-  background-color: #1d4ed8;
-}
-.inlineButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: 1px solid transparent;
-  color: #3b82f6;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 4px 6px;
-  border-radius: 6px;
-}
-.inlineButton:hover {
-  background-color: #eff6ff;
-  border-color: #bfdbfe;
-}
+/* --- Input, Select, Textarea --- */
 .statusSelector,
-.notesSection {
+.noteSection {
   padding: 10px 16px;
   animation: slideDown 0.3s ease-out;
 }
+
 .statusSelector select,
-.notesSection textarea {
+.noteTextArea {
   width: 100%;
   padding: 10px;
   border-radius: 6px;
   border: 1px solid #d1d5db;
   font-size: 14px;
+  box-sizing: border-box;
 }
-.notesSection {
-  background-color: transparent;
-  border: none;
+
+.noteTextArea {
+  min-height: 80px;
+  resize: vertical;
+}
+.noteTextArea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.inlineInput {
+  flex-grow: 1;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* --- Stage Selector --- */
+.stageSelector {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  position: relative;
+  padding: 10px 0;
+}
+.stageSelector::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  left: 15%;
+  right: 15%;
+  height: 2px;
+  background-color: #e5e7eb;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+.stageStep {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  cursor: pointer;
+  z-index: 2;
+  background-color: #ffffff;
+  padding: 0 4px;
+}
+.stageDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  background-color: #ffffff;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+.stageLabel {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 5px;
+  text-align: center;
+}
+.stageStep.active .stageDot {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+}
+.stageStep.active .stageLabel {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+/* --- Notification & Animations --- */
+.notificationContainer {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes slideDown {
   from {
@@ -204,183 +305,27 @@
     transform: translateY(0);
   }
 }
-/* app/client/ui/details/CustomerDetails.module.css */
 
-.notificationContainer {
-  position: fixed; /* Hoặc absolute tùy vào layout cha */
-  top: 80px;
-  right: 20px;
-  z-index: 1000; /* Đảm bảo hiển thị trên các thành phần khác */
-  animation: fadeIn 0.3s ease-out;
-}
+/* ================================================================ */
+/* === MÀU SẮC CHO NÚT LƯU & XÓA (Save & Danger Buttons) === */
+/* ================================================================ */
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0px);
-  }
-}
-
-.actionButtons {
-  display: flex;
-  justify-content: flex-end; /* Đẩy các nút về bên phải */
-  gap: 10px; /* Khoảng cách giữa các nút */
-  margin-top: 10px;
-}
-
-.buttonBase {
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  color: rgb(255, 255, 255);
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.buttonBase:hover {
-  opacity: 0.85;
-}
-
-.statusSaveButton {
-  background-color: #3b82f6; /* Màu xanh */
-}
-
-/* Class mới cho nút Xóa Trạng Thái */
-.statusDeleteButton {
-  background-color: var(--red); /* Màu đỏ */
-}
-
-/* QUAN TRỌNG: Ghi đè lên các style đang ẩn nút.
-  Dòng này buộc các nút trong vùng actionButtons phải luôn hiện rõ.
-*/
-.actionButtons .buttonBase {
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-.editInputContainer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.inlineInput {
-  flex-grow: 1;
-  padding: 6px 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.inlineSaveButton,
-.inlineCancelButton {
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
+/* Kiểu nút LƯU (màu xanh dương) */
+.blueButton {
+  background-color: #3b82f6; /* Nền xanh dương */
   color: white;
-  cursor: pointer;
-}
-
-.inlineSaveButton {
-  background-color: var(--blue, #3b82f6);
-}
-
-.inlineCancelButton {
-  background-color: var(--gray-400, #9ca3af);
-}
-
-.stageSelector {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  position: relative;
-  padding: 10px 0;
-}
-
-.stageSelector::before {
-  content: "";
-  position: absolute;
-  top: 10px; /* Căn chỉnh lại line theo vị trí mới của dot */
-  /* Tăng left/right để line ngắn lại, tạo cảm giác gọn gàng */
-  left: 15%;
-  right: 15%;
-  height: 2px;
-  background-color: #e5e7eb;
-  transform: translateY(-50%);
-  z-index: 1;
-}
-
-.stageStep {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  cursor: pointer;
-  z-index: 2;
-  background-color: #ffffff;
-  /* Giảm padding ngang */
-  padding: 0 4px;
-}
-
-.stageDot {
-  /* Cho chấm nhỏ lại */
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid #d1d5db;
-  background-color: #ffffff;
-  transition: all 0.2s;
-  /* Đẩy chấm lên trên một chút */
-  margin-top: 4px;
-}
-
-.stageLabel {
-  font-size: 11px;
-  color: #6b7280;
-  margin-top: 5px;
-  text-align: center;
-}
-
-.stageStep.active .stageDot {
-  background-color: #3b82f6;
   border-color: #3b82f6;
 }
-
-.stageStep.active .stageLabel {
-  color: #1f2937;
-  font-weight: 600;
+.blueButton:hover {
+  background-color: #2563eb; /* Đậm hơn khi hover */
 }
 
-.noteSection {
-  padding: 10px 16px;
-  border-top: 1px solid #f3f4f6;
+/* Kiểu nút XÓA/NGUY HIỂM (màu đỏ) */
+.dangerButton {
+  background-color: #ef4444; /* Nền đỏ */
+  color: white;
+  border-color: #ef4444;
 }
-
-.noteLabel {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 8px;
-}
-
-.noteTextArea {
-  width: 100%;
-  min-height: 80px;
-  padding: 10px;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  font-size: 14px;
-  resize: vertical; /* Cho phép người dùng kéo dãn chiều cao */
-}
-
-.noteTextArea:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 1px #3b82f6;
+.dangerButton:hover {
+  background-color: #dc2626; /* Đậm hơn khi hover */
 }

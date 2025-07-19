@@ -29,105 +29,28 @@ async function getGoogleSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
+/**
+ * API endpoint này phục vụ cho việc tải thêm dữ liệu từ client.
+ * Nó nhận các tham số (limit, skip, filter) từ URL và trả về dữ liệu tương ứng.
+ */
 export async function GET(request) {
-  /* 0. Lấy & xác thực token */
-  const authHeader = request.headers.get("authorization") || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
-  if (!token) {
-    return NextResponse.json(
-      { status: false, message: "Missing token" },
-      { status: 401 },
-    );
-  }
-
-  let decodedToken;
-  try {
-    decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-  } catch (err) {
-    return NextResponse.json(
-      { status: false, message: "Invalid/Expired token" },
-      { status: 401 },
-    );
-  }
-  /* decodedToken.id  => _id user
-     decodedToken.role => mảng quyền */
-
-  await dbConnect();
-
   try {
     const { searchParams } = new URL(request.url);
-    const page = Number(searchParams.get("page")) || 1;
-    const limit = Number(searchParams.get("limit")) || 10;
-    const skip = (page - 1) * limit;
-    const query = (searchParams.get("query") || "").trim();
-    const statusId = searchParams.get("status")?.trim();
-    const uidStatus = searchParams.get("uidStatus");
 
-    /* 1. Xây filter động */
-    const conditions = [];
+    // Chuyển URLSearchParams thành object filters
+    const filters = Object.fromEntries(searchParams.entries());
 
-    // Nếu KHÔNG phải admin ⇒ chỉ xem KH do mình phụ trách
-    const isAdmin =
-      Array.isArray(decodedToken.role) && decodedToken.role.includes("Admin");
+    // Lấy limit và skip từ params, cung cấp giá trị mặc định
+    const limit = parseInt(filters.limit) || 10;
+    const skip = parseInt(filters.skip) || 0;
 
-    if (!isAdmin && Types.ObjectId.isValid(decodedToken.id)) {
-      conditions.push({ auth: decodedToken.id }); // auth chứa _id user
-    }
+    // Gọi hàm data-fetching ở server với các tham số này
+    const clientResponse = await Data_Client({ limit, skip, filters });
 
-    /* bộ lọc status */
-    if (statusId && Types.ObjectId.isValid(statusId)) {
-      conditions.push({ status: statusId });
-    }
-
-    /* bộ lọc uid */
-    if (uidStatus === "exists") {
-      conditions.push({ uid: { $exists: true, $nin: ["", null] } });
-    } else if (uidStatus === "missing") {
-      conditions.push({
-        $or: [{ uid: { $exists: false } }, { uid: "" }, { uid: null }],
-      });
-    }
-
-    /* bộ lọc text */
-    if (query) {
-      conditions.push({
-        $or: [
-          { name: { $regex: query, $options: "i" } },
-          { phone: { $regex: query, $options: "i" } },
-        ],
-      });
-    }
-
-    const filter = conditions.length ? { $and: conditions } : {};
-
-    /* 2. Truy vấn & phân trang */
-    const [data, total] = await Promise.all([
-      Customer.find(filter)
-        .populate("status", "_id name")
-        .populate("auth", "name email")
-        .sort({ createdAt: -1, _id: 1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Customer.countDocuments(filter),
-    ]);
-
-    return NextResponse.json({
-      status: true,
-      data,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    });
-  } catch (err) {
-    return NextResponse.json(
-      { status: false, message: "Server Error", error: err.message },
-      { status: 500 },
-    );
+    return NextResponse.json(clientResponse);
+  } catch (error) {
+    console.error("API Error in /api/clients:", error);
+    return NextResponse.json({ message: "Lỗi phía máy chủ." }, { status: 500 });
   }
 }
 

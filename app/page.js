@@ -1,28 +1,33 @@
+// app/page.js
+import { getCurrentUser } from "@/lib/session";
 import Client from "./client";
-import { Data_Client, Data_Label } from "@/data/client";
-import { Get_user } from "@/data/users";
-import { Data_Status } from "@/data/status";
+import { Data_Client, Data_Label, Data_Status } from "@/data/client";
 
 export default async function Page({ searchParams }) {
-  const [clientResponse, labelResponse, userData, statusResponse] =
-    await Promise.all([
-      Data_Client(await searchParams),
-      Data_Label(),
-      Get_user(),
-      Data_Status(),
-    ]);
+  // SỬA LẠI: Đọc và xử lý searchParams ngay tại đây
+  const page = parseInt(searchParams.page) || 1;
+  const limit = parseInt(searchParams.limit) || 10;
+  const status = searchParams.status || null;
+  const query = searchParams.query || null;
+  const uidStatus = searchParams.uidStatus || null;
 
-  const dataclient = clientResponse.data;
-  const pagination = clientResponse.pagination;
-  const initialStatuses = statusResponse.data;
+  // Gọi hàm đã được cache để lấy user
+  const userData = await getCurrentUser();
+
+  // Truyền các giá trị đơn giản vào hàm Data_Client
+  const [clientResponse, labelResponse, statusResponse] = await Promise.all([
+    Data_Client(page, limit, status, query, uidStatus),
+    Data_Label(),
+    Data_Status(),
+  ]);
 
   return (
     <>
       <Client
-        initialData={dataclient}
-        initialPagination={pagination}
+        initialData={clientResponse.data}
+        initialPagination={clientResponse.pagination}
         initialLabels={labelResponse.data}
-        initialStatuses={initialStatuses}
+        initialStatuses={statusResponse.data}
         user={userData}
       />
     </>

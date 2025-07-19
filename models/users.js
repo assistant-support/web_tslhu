@@ -1,16 +1,34 @@
-import { Schema, model, models } from 'mongoose'
+// models/users.js
+import { Schema, model, models } from "mongoose";
 
-const postUser = new Schema({
-  name: { type: String },
-  address: { type: String },
-  avt: { type: String },
-  role: { type: Array },
-  phone: { type: String },
-  email: { type: String },
-  uid: { type: String },
-  zalo: { type: Schema.Types.ObjectId, ref: 'zaloaccount' }
-})
+/**
+ * Schema cho một người dùng hệ thống (nhân viên).
+ */
+const UserSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    // Mật khẩu đã được mã hóa (hash).
+    password: { type: String, required: true },
+    // Lưu trữ CCCD hoặc mã nhân viên.
+    iduser: { type: String, unique: true, sparse: true },
+    // Vai trò của người dùng trong hệ thống.
+    role: {
+      type: String,
+      enum: ["Admin", "Employee"],
+      default: "Employee",
+    },
+    // Tham chiếu đến tài khoản Zalo mà người dùng đang "kích hoạt".
+    // Sẽ là null nếu chưa chọn tài khoản nào.
+    zaloActive: {
+      type: Schema.Types.ObjectId,
+      ref: "zaloaccount",
+      default: null,
+    },
+  },
+  { timestamps: true },
+);
 
-const users = models.user || model('user', postUser)
+const User = models.user || model("user", UserSchema);
 
-export default users
+export default User;
