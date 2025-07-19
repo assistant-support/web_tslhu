@@ -7,6 +7,7 @@ import Link from 'next/link';
 
 const SNAP_OFFSET = 5;
 const MENU_GAP = 5;
+
 export default function AdminPage({ children }) {
     const [position, setPosition] = useState({ x: -100, y: -100 });
     const [isDragging, setIsDragging] = useState(false);
@@ -14,7 +15,29 @@ export default function AdminPage({ children }) {
 
     const containerRef = useRef(null);
     const indicatorRef = useRef(null);
+    const menuRef = useRef(null);
     const dragStartRef = useRef({ moved: false });
+
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (
+                menuRef.current &&
+                !menuRef.current.contains(event.target) &&
+                indicatorRef.current &&
+                !indicatorRef.current.contains(event.target)
+            ) {
+                setIsMenuOpen(false);
+            }
+        }
+
+        if (isMenuOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isMenuOpen]);
 
     useEffect(() => {
         if (containerRef.current && indicatorRef.current) {
@@ -58,8 +81,8 @@ export default function AdminPage({ children }) {
         e.preventDefault();
         setIsDragging(true);
         dragStartRef.current.moved = false;
-        setIsMenuOpen(false);
-    }, []);
+        if (isMenuOpen) setIsMenuOpen(false);
+    }, [isMenuOpen]);
 
     const handleMouseUp = useCallback(() => {
         setIsDragging(false);
@@ -142,8 +165,10 @@ export default function AdminPage({ children }) {
 
             {isMenuOpen && (
                 <div
+                    ref={menuRef}
                     className={styles.floatingMenu}
                     style={getMenuStyles()}
+                    onClick={() => setIsMenuOpen(false)} // <-- THAY ĐỔI Ở ĐÂY
                 >
                     <Link href={'/admin'} className='input'>Khách hàng</Link>
                     <Link href={'/admin/user'} className='input'>Sản Phẩm</Link>
