@@ -17,19 +17,32 @@ const cors = {
 export const OPTIONS = () => new NextResponse(null, { headers: cors })
 
 const exec = async (type, acc, person, cfg) => {
+    const wordList = [
+        'chứ', 'chớ', 'mừ', 'mờ', 'cơ', 'dzậy', 'hăm', 'lắm á', 'luôn á',
+        'luôn nhen', 'à nghen', 'ơi', 'ớ', 'đi ha', 'nha', 'nà', 'nhé', 'nhá',
+        'nhen', 'nghen', 'đó', 'á', 'à', 'ha'
+    ];
+    let message;
+    if (type == 'sendMessage') {
+        message = cfg.messageTemplate;
+        if (message.includes('{bienthe1}')) {
+            const randomIndex = Math.floor(Math.random() * wordList.length);
+            const randomWord = wordList[randomIndex];
+            message = message.replace('{bienthe1}', randomWord);
+        }
+    }
     const r = await fetch(acc.action, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
             uid: acc.uid,
             phone: person.phone,
-            uidPerson: person.uid || '',
+            uidPerson: person.uid || null,
             actionType: type,
-            message: cfg.messageTemplate || ''
+            message: message || ''
         }),
         cache: 'no-store'
     })
-    console.log(acc.uid, person.phone, person.uid, type, cfg.messageTemplate);
 
     const j = await r.json()
     if (!r.ok || j.status === 'error') throw new Error(j.message || 'script error')
@@ -162,7 +175,7 @@ export const GET = async () => {
         )
     } catch (err) {
         console.log('Cron job error:', err);
-        
+
         return NextResponse.json(
             { message: 'Lỗi xử lý cron job.', error: err.message },
             { status: 500, headers: cors }
