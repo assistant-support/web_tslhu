@@ -45,6 +45,8 @@ const exec = async (type, acc, person, cfg) => {
     })
 
     const j = await r.json()
+    console.log(j);
+    
     if (!r.ok || j.status === 'error') throw new Error(j.message || 'script error')
     return j.data
 }
@@ -106,7 +108,6 @@ export const GET = async () => {
             const status = api.actionStatus === 'success' ? 'completed' : 'failed'
 
             await Promise.all([
-                actionType === 'findUid' &&
                 Customer.updateOne(
                     { phone: task.person.phone },
                     {
