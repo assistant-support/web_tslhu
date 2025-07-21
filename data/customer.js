@@ -2,7 +2,7 @@
 "use server";
 
 import connectDB from "@/config/connectDB";
-import Client from "@/models/client";
+import Client from "@/models/customer";
 import Label from "@/models/label";
 import Status from "@/models/status";
 import User from "@/models/users"; // Import User để populate
@@ -58,35 +58,30 @@ async function fetchAdmissionDataForClients(clients) {
  * @param {object} [options.filters] - (Tùy chọn) Object chứa các bộ lọc (status, query, uidStatus).
  * @returns {Promise<object>} - Trả về object chứa data và thông tin phân trang.
  */
-export async function Data_Client({ limit = 10, skip = 0, filters = {} }) {
+export async function Data_Client(searchParams = {}) {
   try {
     await connectDB();
 
-    // --- KHỐI XÂY DỰNG QUERY ĐỘNG TỪ FILTERS ---
+    // SỬA LỖI: Đọc dữ liệu từ `searchParams` được truyền vào
+    const page = parseInt(searchParams.page) || 1;
+    const limit = parseInt(searchParams.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const query = {};
-
-    // 1. Lọc theo Trạng thái (Status)
-    if (filters.status) {
-      query.status = filters.status;
+    if (searchParams.status) {
+      query.status = searchParams.status;
     }
-
-    // 2. Lọc theo Từ khóa Tìm kiếm (Tên hoặc SĐT)
-    if (filters.query) {
-      const searchRegex = new RegExp(filters.query, "i");
+    if (searchParams.query) {
+      const searchRegex = new RegExp(searchParams.query, "i");
       query.$or = [{ name: searchRegex }, { phone: searchRegex }];
     }
-
-    // 3. Lọc theo Trạng thái UID
-    if (filters.uidStatus === "exists") {
+    if (searchParams.uidStatus === "exists") {
       query.uid = { $exists: true, $ne: null, $ne: "" };
-    } else if (filters.uidStatus === "missing") {
+    } else if (searchParams.uidStatus === "missing") {
       query.uid = { $in: [null, ""] };
     }
 
-    // --- KẾT THÚC KHỐI XÂY DỰNG QUERY ---
-
-    // Bước 1: Lấy dữ liệu khách hàng cơ bản từ DB
-    const clientsFromDB = await Client.find(query)
+    const clientsQuery = Client.find(query)
       .populate({ path: "status", model: Status, select: "name" })
       .populate({ path: "users", model: User, select: "name" })
       .sort({ createdAt: -1 })
@@ -94,32 +89,34 @@ export async function Data_Client({ limit = 10, skip = 0, filters = {} }) {
       .limit(limit)
       .lean();
 
-    // Bước 2: Lấy dữ liệu xét tuyển từ API bên ngoài
-    const admissionDataMap = await fetchAdmissionDataForClients(clientsFromDB);
+    const [clientsFromDB, totalClients] = await Promise.all([
+      clientsQuery,
+      Client.countDocuments(query),
+    ]);
 
-    // Bước 3: Gộp hai nguồn dữ liệu lại
+    const admissionDataMap = await fetchAdmissionDataForClients(clientsFromDB);
     const finalClients = clientsFromDB.map((client) => ({
       ...client,
-      // Nhét dữ liệu xét tuyển vào một object riêng
       admissionData: admissionDataMap.get(client._id.toString()) || {
         TinhTrang: "Chưa tra cứu",
       },
     }));
 
-    // Lấy tổng số lượng khách hàng khớp với bộ lọc (không bị ảnh hưởng bởi limit/skip)
-    const totalClients = await Client.countDocuments(query);
-
     return {
       data: JSON.parse(JSON.stringify(finalClients)),
-      // Trả về thông tin để client biết còn dữ liệu để tải thêm hay không
       pagination: {
+        page,
+        limit,
         total: totalClients,
-        hasMore: skip + finalClients.length < totalClients,
+        totalPages: Math.ceil(totalClients / limit),
       },
     };
   } catch (error) {
     console.error("Lỗi trong Data_Client:", error);
-    return { data: [], pagination: { total: 0, hasMore: false } };
+    return {
+      data: [],
+      pagination: { page: 1, limit: 10, total: 0, totalPages: 1 },
+    };
   }
 }
 

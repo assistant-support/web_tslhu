@@ -19,7 +19,6 @@ const UserSchema = new Schema(
       default: "Employee",
     },
     // Tham chiếu đến tài khoản Zalo mà người dùng đang "kích hoạt".
-    // Sẽ là null nếu chưa chọn tài khoản nào.
     zaloActive: {
       type: Schema.Types.ObjectId,
       ref: "zaloaccount",

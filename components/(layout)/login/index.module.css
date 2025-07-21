@@ -1,15 +1,6 @@
 /* components/(layout)/login/index.module.css */
 
-.container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  background-color: #f3f4f6; /* Nền xám nhạt cho cả trang */
-  padding: 20px;
-}
-
-.form {
+.formContainer {
   background-color: white;
   padding: 40px;
   border-radius: 12px;
@@ -18,7 +9,6 @@
   max-width: 420px;
   display: flex;
   flex-direction: column;
-  gap: 20px; /* Khoảng cách giữa các thành phần trong form */
 }
 
 .title {
@@ -26,13 +16,14 @@
   font-weight: 700;
   color: #111827;
   text-align: center;
-  margin-bottom: 10px;
+  margin-bottom: 24px;
 }
 
 .inputGroup {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Khoảng cách giữa label và input */
+  gap: 8px;
+  margin-bottom: 20px;
 }
 
 .inputGroup label {
@@ -41,8 +32,7 @@
   color: #374151;
 }
 
-/* Áp dụng style này cho cả input email và password */
-.inputGroup input {
+.inputField {
   width: 100%;
   padding: 12px 16px;
   border-radius: 8px;
@@ -51,31 +41,13 @@
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.inputGroup input:focus {
+.inputField:focus {
   outline: none;
   border-color: #3b82f6; /* Viền xanh khi focus */
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
-.rememberGroup {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.rememberGroup input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-.rememberGroup label {
-  font-size: 14px;
-  color: #4b5563;
-  cursor: pointer;
-}
-
-.button {
+.submitButton {
   width: 100%;
   padding: 14px;
   border: none;
@@ -89,11 +61,16 @@
   margin-top: 10px;
 }
 
-.button:hover {
+.submitButton:hover:not(:disabled) {
   background-color: #2563eb; /* Màu đậm hơn khi hover */
 }
 
-.error {
+.submitButton:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.errorMessage {
   background-color: #fee2e2;
   color: #b91c1c;
   padding: 12px;
@@ -101,4 +78,5 @@
   font-size: 14px;
   font-weight: 500;
   text-align: center;
+  margin-top: 16px;
 }

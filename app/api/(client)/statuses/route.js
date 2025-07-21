@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/config/connectDB";
 import Status from "@/models/status"; // Import model Status bạn vừa tạo
-import Customer from "@/models/client"; // Import Customer để kiểm tra trước khi xóa
+import Customer from "@/models/customer"; // Import Customer để kiểm tra trước khi xóa
 import { revalidateTag } from "next/cache";
 
 // --- LẤY TẤT CẢ TRẠNG THÁI ---

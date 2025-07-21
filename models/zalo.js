@@ -1,45 +1,33 @@
-// /models/zalo.js
+// models/zalo.js
 import { Schema, model, models } from "mongoose";
 
-const TaskRefSchema = new Schema(
+/**
+ * Schema con để lưu trữ thông tin về phiên làm việc đang hoạt động.
+ */
+const ActiveSessionSchema = new Schema(
   {
-    id: { type: Schema.Types.ObjectId, ref: "scheduledjob", required: true },
-    actionType: {
-      type: String,
-      enum: ["sendMessage", "addFriend", "findUid"],
-      required: true,
-    },
+    userId: { type: Schema.Types.ObjectId, ref: "user", required: true },
+    activatedAt: { type: Date, default: Date.now },
   },
   { _id: false },
 );
 
+/**
+ * Schema cho một tài khoản Zalo.
+ */
 const ZaloAccountSchema = new Schema(
   {
-    uid: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-    },
+    uid: { type: String, required: true, unique: true, trim: true },
     name: { type: String, required: true, trim: true },
     phone: { type: String, required: true },
     avt: { type: String },
-    rateLimitPerHour: {
-      type: Number,
-      required: true,
-      default: 50,
-    },
+    rateLimitPerHour: { type: Number, required: true, default: 50 },
     actionsUsedThisHour: { type: Number, default: 0 },
-    rateLimitHourStart: { type: Date, default: Date.now },
-    task: { type: [TaskRefSchema], default: [] },
-    isLocked: { type: Boolean, default: false },
     users: [{ type: Schema.Types.ObjectId, ref: "user" }],
     activeSession: { type: ActiveSessionSchema, default: null },
-    action: { type: String },
+    isLocked: { type: Boolean, default: false },
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
 const ZaloAccount =

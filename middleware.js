@@ -9,20 +9,25 @@ export async function middleware(request) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(COOKIE_NAME)?.value;
 
-  // --- LOGIC KHI KHÔNG CÓ TOKEN ---
   if (!token) {
-    // Nếu là API, trả về lỗi 401
+    // THÊM LỐI ĐI RIÊNG: Nếu là API đăng nhập, cho phép đi tiếp
+    if (pathname === "/api/auth/login") {
+      return NextResponse.next();
+    }
+
+    // Nếu là các API khác, chặn lại
     if (pathname.startsWith("/api")) {
       return NextResponse.json(
         { message: "Yêu cầu xác thực" },
         { status: 401 },
       );
     }
+
     // Nếu là trang khác ngoài login, điều hướng về login
     if (!pathname.startsWith("/login")) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
-    // Nếu đang ở trang login, cho phép đi tiếp
+
     return NextResponse.next();
   }
 

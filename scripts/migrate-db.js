@@ -2,18 +2,26 @@
 
 /**
  * KỊCH BẢN DI CHUYỂN DỮ LIỆU
- * Chạy file này một lần duy nhất để cập nhật cấu trúc DB.
+ * Chạy file này một lần duy nhất để cập nhật cấu trúc DB sang phiên bản mới.
  * Lệnh chạy: node scripts/migrate-db.js
  */
 
 const mongoose = require("mongoose");
-require("dotenv").config({ path: "./.env.local" }); // Đảm bảo đọc file .env
+require("dotenv").config({ path: "./.env.local" });
+const { Schema } = mongoose;
+
+// =============================================================================
+// === BƯỚC 1: CẤU HÌNH SCRIPT ===
+// =============================================================================
+
+// !!! QUAN TRỌNG: Hãy thay thế giá trị này bằng một ID của user có vai trò Admin
+// trong database của bạn. Nó sẽ được dùng để gán cho các comment cũ.
+const DEFAULT_ADMIN_ID = "6865fe3ccdec836f29fabe4f"; // <--- THAY THẾ ID NÀY
 
 // --- ĐỊNH NGHĨA LẠI CÁC SCHEMA MỚI ---
-// (Copy-paste các model đã được cập nhật của bạn vào đây)
+// (Dán các schema đã được cập nhật của bạn vào đây)
 
-// Model User MỚI
-const UserSchema = new mongoose.Schema(
+const UserSchema = new Schema(
   {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
@@ -21,170 +29,188 @@ const UserSchema = new mongoose.Schema(
     iduser: { type: String, unique: true, sparse: true },
     role: { type: String, enum: ["Admin", "Employee"], default: "Employee" },
     zaloActive: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "zaloaccount",
       default: null,
     },
   },
   { timestamps: true },
 );
-const User = mongoose.models.user || mongoose.model("user", UserSchema);
 
-// Model Customer MỚI
-const CommentSchema = new mongoose.Schema(
-  {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
-    stage: { type: Number, required: true },
-    detail: { type: String, required: true },
-    time: { type: Date, default: Date.now },
-  },
-  { _id: false },
-);
+const CommentSchema = new Schema({
+  user: { type: Schema.Types.ObjectId, ref: "user", required: true },
+  stage: { type: Number, required: true },
+  detail: { type: String, required: true },
+  time: { type: Date, default: Date.now },
+});
 
-const CustomerSchema = new mongoose.Schema(
+const CustomerSchema = new Schema(
   {
     name: { type: String },
     phone: { type: String, required: true },
     uid: { type: String },
-    status: { type: mongoose.Schema.Types.ObjectId, ref: "status" },
+    status: { type: Schema.Types.ObjectId, ref: "status" },
     stageLevel: { type: Number, default: 0 },
     comments: [CommentSchema],
-    users: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
+    users: [{ type: Schema.Types.ObjectId, ref: "user" }],
   },
   { timestamps: true, strict: false },
 );
+
+const ActiveSessionSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: "user", required: true },
+    activatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const ZaloAccountSchema = new Schema(
+  {
+    uid: { type: String, required: true, unique: true, trim: true },
+    name: { type: String, required: true, trim: true },
+    phone: { type: String, required: true },
+    avt: { type: String },
+    rateLimitPerHour: { type: Number, required: true, default: 50 },
+    users: [{ type: Schema.Types.ObjectId, ref: "user" }],
+    activeSession: { type: ActiveSessionSchema, default: null },
+    isLocked: { type: Boolean, default: false },
+  },
+  { timestamps: true },
+);
+
+// --- ĐĂNG KÝ MODEL ---
+const User = mongoose.models.user || mongoose.model("user", UserSchema);
 const Customer =
   mongoose.models.customer || mongoose.model("customer", CustomerSchema);
+const ZaloAccount =
+  mongoose.models.zaloaccount ||
+  mongoose.model("zaloaccount", ZaloAccountSchema);
 
-// --- HÀM THỰC THI DI CHUYỂN ---
+// =============================================================================
+// === BƯỚC 2: CÁC HÀM DI CHUYỂN DỮ LIỆU ===
+// =============================================================================
+
+async function migrateUsers() {
+  console.log("\n[1/3] Bắt đầu di chuyển collection 'users'...");
+  const roleMigrationLogic = {
+    $cond: {
+      if: { $isArray: "$role" },
+      then: { $ifNull: [{ $arrayElemAt: ["$role", 0] }, "Employee"] },
+      else: "$role",
+    },
+  };
+  const result = await User.updateMany({}, [
+    {
+      $set: { password: "$uid", zaloActive: "$zalo", role: roleMigrationLogic },
+    },
+    { $unset: ["uid", "zalo", "address", "avt"] },
+  ]);
+  console.log(`Hoàn tất: Đã xử lý ${result.matchedCount} users.`);
+}
+
+/**
+ * Di chuyển collection 'customers' bằng Aggregation Pipeline.
+ * Đã sửa lỗi không thêm comment rỗng.
+ */
+async function migrateCustomers() {
+  console.log("\n[2/3] Bắt đầu di chuyển collection 'customers'...");
+
+  // SỬA LỖI: Điều kiện `if` giờ đây sẽ kiểm tra cả trường hợp chuỗi rỗng
+  const createCommentIfNotEmpty = (noteField) => ({
+    $cond: {
+      if: {
+        $and: [
+          { $ne: [`$${noteField}`, null] },
+          { $ne: [`$${noteField}`, ""] },
+        ],
+      },
+      then: [
+        {
+          user: { $ifNull: [{ $arrayElemAt: ["$auth", 0] }, DEFAULT_ADMIN_ID] },
+          stage: { $ifNull: ["$stageLevel", 0] },
+          detail: `$${noteField}`,
+        },
+      ],
+      else: [],
+    },
+  });
+
+  const commentsPipeline = {
+    $concatArrays: [
+      { $ifNull: ["$comments", []] },
+      createCommentIfNotEmpty("careNote"),
+      createCommentIfNotEmpty("studyTryNote"),
+      createCommentIfNotEmpty("studyNote"),
+    ],
+  };
+
+  const result = await Customer.updateMany({}, [
+    {
+      $set: {
+        users: { $ifNull: ["$auth", "$users"] },
+        comments: commentsPipeline,
+      },
+    },
+    {
+      $unset: ["auth", "careNote", "studyTryNote", "studyNote"],
+    },
+  ]);
+
+  console.log(`Hoàn tất: Đã xử lý ${result.matchedCount} customers.`);
+}
+
+async function migrateZaloAccounts() {
+  console.log("\n[3/3] Bắt đầu di chuyển collection 'zaloaccounts'...");
+
+  // SỬA LỖI: Sử dụng điều kiện tìm kiếm linh hoạt hơn.
+  // Nó sẽ tìm tất cả các document có trường 'user' (dấu hiệu của dữ liệu cũ)
+  // và chưa có trường 'users' (dấu hiệu chưa được di chuyển).
+  const result = await ZaloAccount.updateMany(
+    { user: { $exists: true }, users: { $exists: false } },
+    [
+      {
+        $set: {
+          users: ["$user"], // Chuyển user thành một mảng chứa chính nó
+          activeSession: null,
+        },
+      },
+      {
+        $unset: ["user"], // Xóa trường 'user' cũ
+      },
+    ],
+  );
+  console.log(`Hoàn tất: Đã xử lý ${result.matchedCount} zaloaccounts.`);
+}
+
+// =============================================================================
+// === BƯỚC 3: HÀM CHẠY CHÍNH ===
+// =============================================================================
 async function runMigration() {
   if (!process.env.MONGODB_URI) {
-    console.error("Lỗi: Không tìm thấy biến MONGODB_URI trong file .env.local");
-    return;
+    throw new Error(
+      "Lỗi: Không tìm thấy biến MONGODB_URI trong file .env.local",
+    );
   }
-
+  if (DEFAULT_ADMIN_ID === "YOUR_REAL_ADMIN_ID_HERE") {
+    throw new Error(
+      "Lỗi: Vui lòng cập nhật DEFAULT_ADMIN_ID trong script trước khi chạy.",
+    );
+  }
   console.log("Đang kết nối đến cơ sở dữ liệu...");
   await mongoose.connect(process.env.MONGODB_URI);
-  console.log("Kết nối thành công!");
+  console.log("✅ Kết nối thành công!");
 
-  // --- 1. Di chuyển Collection 'users' ---
-  console.log("\nBắt đầu di chuyển collection 'users'...");
-  const allUsers = await User.find({});
-  let usersUpdated = 0;
+  // await migrateUsers();
+  await migrateCustomers();
+  // await migrateZaloAccounts();
 
-  for (const user of allUsers) {
-    let needsSave = false;
-
-    // Đổi tên uid -> password
-    if (user.uid) {
-      user.password = user.uid;
-      user.uid = undefined; // Xóa trường cũ
-      needsSave = true;
-    }
-
-    // Đổi tên zalo -> zaloActive
-    if (user.zalo) {
-      user.zaloActive = user.zalo;
-      user.zalo = undefined;
-      needsSave = true;
-    }
-
-    // Chuyển role từ mảng sang string
-    if (Array.isArray(user.role) && user.role.length > 0) {
-      user.role = user.role[0]; // Lấy phần tử đầu tiên
-      needsSave = true;
-    }
-
-    // Xóa address và avt
-    if (user.address !== undefined) {
-      user.address = undefined;
-      needsSave = true;
-    }
-    if (user.avt !== undefined) {
-      user.avt = undefined;
-      needsSave = true;
-    }
-
-    if (needsSave) {
-      await user.save();
-      usersUpdated++;
-    }
-  }
-  console.log(
-    `Hoàn tất: Đã cập nhật ${usersUpdated} / ${allUsers.length} users.`,
-  );
-
-  // --- 2. Di chuyển Collection 'customers' ---
-  console.log("\nBắt đầu di chuyển collection 'customers'...");
-  const allCustomers = await Customer.find({});
-  let customersUpdated = 0;
-
-  for (const customer of allCustomers) {
-    let needsSave = false;
-
-    // Đổi tên auth -> users
-    if (customer.auth) {
-      customer.users = customer.auth;
-      customer.auth = undefined;
-      needsSave = true;
-    }
-
-    // Gộp các trường Note vào comments
-    const newComments = [];
-    // Giả định rằng không thể biết user nào đã ghi chú cũ, nên ta có thể gán cho một admin mặc định
-    // LƯU Ý: Bạn cần thay 'ADMIN_USER_ID_HERE' bằng ID của một user admin thực tế trong DB của bạn.
-    const defaultUserId = "ADMIN_USER_ID_HERE";
-
-    if (customer.careNote) {
-      newComments.push({
-        user: defaultUserId,
-        stage: customer.stageLevel || 0,
-        detail: customer.careNote,
-      });
-      customer.careNote = undefined;
-      needsSave = true;
-    }
-    if (customer.studyTryNote) {
-      newComments.push({
-        user: defaultUserId,
-        stage: customer.stageLevel || 0,
-        detail: customer.studyTryNote,
-      });
-      customer.studyTryNote = undefined;
-      needsSave = true;
-    }
-    if (customer.studyNote) {
-      newComments.push({
-        user: defaultUserId,
-        stage: customer.stageLevel || 0,
-        detail: customer.studyNote,
-      });
-      customer.studyNote = undefined;
-      needsSave = true;
-    }
-
-    if (newComments.length > 0) {
-      customer.comments = [...(customer.comments || []), ...newComments];
-    }
-
-    // Xóa trường action
-    if (customer.action) {
-      customer.action = undefined;
-      needsSave = true;
-    }
-
-    if (needsSave) {
-      await customer.save();
-      customersUpdated++;
-    }
-  }
-  console.log(
-    `Hoàn tất: Đã cập nhật ${customersUpdated} / ${allCustomers.length} customers.`,
-  );
-
-  console.log("\nQuá trình di chuyển dữ liệu đã hoàn tất!");
+  console.log("\n🎉 Quá trình di chuyển dữ liệu đã hoàn tất thành công!");
   await mongoose.connection.close();
 }
 
-// Chạy hàm
-runMigration().catch(console.error);
+runMigration().catch((error) => {
+  console.error("\n❌ Đã xảy ra lỗi trong quá trình di chuyển:", error);
+  mongoose.connection.close();
+  process.exit(1);
+});

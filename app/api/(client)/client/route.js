@@ -4,10 +4,11 @@ import { revalidateTag } from "next/cache";
 import { google } from "googleapis";
 import { Types } from "mongoose";
 import dbConnect from "@/config/connectDB";
-import Customer from "@/models/client";
+import Customer from "@/models/customer";
 import Status from "@/models/status";
 import User from "@/models/users";
 import jwt from "jsonwebtoken";
+import { Data_Client } from "@/data/customer";
 /* ─────────────── CONSTANTS ─────────────── */
 const TAG = "customer_data";
 const TARGET_EMAIL = "phihung.tgdd2003@gmail.com"; // email của nhân viên cần gán quyền
@@ -37,14 +38,13 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
 
-    // Chuyển URLSearchParams thành object filters
+    // Chuyển URLSearchParams thành một object filters đơn giản
     const filters = Object.fromEntries(searchParams.entries());
 
     // Lấy limit và skip từ params, cung cấp giá trị mặc định
-    const limit = parseInt(filters.limit) || 10;
-    const skip = parseInt(filters.skip) || 0;
+    const limit = parseInt(searchParams.get("limit")) || 10;
+    const skip = parseInt(searchParams.get("skip")) || 0;
 
-    // Gọi hàm data-fetching ở server với các tham số này
     const clientResponse = await Data_Client({ limit, skip, filters });
 
     return NextResponse.json(clientResponse);

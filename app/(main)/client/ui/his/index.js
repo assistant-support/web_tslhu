@@ -8,7 +8,7 @@ import React, {
   useEffect,
 } from "react";
 import FlexiblePopup from "@/components/(features)/(popup)/popup_right";
-import { Data_History_User } from "@/data/client"; // Đảm bảo đường dẫn đúng
+import { Data_History_User } from "@/data/customer"; // Đảm bảo đường dẫn đúng
 
 // Component nhỏ, an toàn để hiển thị ngày giờ
 const ClientSideTime = ({ date }) => {
