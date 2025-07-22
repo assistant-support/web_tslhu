@@ -5,10 +5,18 @@ import { google } from "googleapis";
 import { Types } from "mongoose";
 import dbConnect from "@/config/connectDB";
 import Customer from "@/models/customer";
+import { getCurrentUser } from "@/lib/session";
 import Status from "@/models/status";
 import User from "@/models/users";
 import jwt from "jsonwebtoken";
 import { Data_Client } from "@/data/customer";
+
+import {
+  logUpdateName,
+  logUpdateStatus,
+  logUpdateStage,
+  logAddComment,
+} from "@/app/actions/historyActions";
 /* ─────────────── CONSTANTS ─────────────── */
 const TAG = "customer_data";
 const TARGET_EMAIL = "phihung.tgdd2003@gmail.com"; // email của nhân viên cần gán quyền
@@ -320,92 +328,130 @@ export async function PUT(request) {
   }
 }
 
+// Thêm import getCurrentUser để lấy thông tin người dùng an toàn
+
 export async function PATCH(request) {
   await dbConnect();
 
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json(
+        { status: false, message: "Yêu cầu đăng nhập." },
+        { status: 401 },
+      );
+    }
+
     const body = await request.json();
     const { customerId, updateData } = body;
 
-    // --- Kiểm tra đầu vào ---
+    // --- Kiểm tra đầu vào (không đổi) ---
     if (!customerId || !Types.ObjectId.isValid(customerId)) {
       return NextResponse.json(
         { status: false, message: "ID khách hàng không hợp lệ." },
         { status: 400 },
       );
     }
-
     if (
       !updateData ||
       typeof updateData !== "object" ||
       Object.keys(updateData).length === 0
     ) {
       return NextResponse.json(
-        { status: false, message: "Vui lòng cung cấp dữ liệu cần cập nhật." },
+        { status: false, message: "Vui lòng cung cấp dữ liệu." },
         { status: 400 },
       );
     }
 
-    // --- Cập nhật linh hoạt ---
-    const updatedCustomer = await Customer.findByIdAndUpdate(
-      customerId,
-      { $set: updateData }, // Dùng $set để cập nhật các trường trong updateData
-      { new: true }, // Trả về document đã được cập nhật
-    )
-      .populate("status", "_id name")
+    // --- Lấy trạng thái cũ của khách hàng để ghi log ---
+    const oldCustomer = await Customer.findById(customerId)
+      .populate("status")
       .lean();
-
-    if (!updatedCustomer) {
+    if (!oldCustomer) {
       return NextResponse.json(
         { status: false, message: "Không tìm thấy khách hàng." },
         { status: 404 },
       );
     }
 
-    // --- Revalidate và trả về kết quả ---
-    revalidateTag(TAG);
+    let updateOperation;
+    let newCommentData = null;
+
+    // --- Phân loại hành động ---
+    if (updateData._comment) {
+      // Xử lý thêm bình luận mới
+      const newComment = {
+        user: currentUser._id,
+        stage: oldCustomer.stageLevel,
+        detail: updateData._comment.trim(),
+      };
+      updateOperation = {
+        $push: { comments: { $each: [newComment], $sort: { time: -1 } } },
+      };
+      newCommentData = newComment;
+
+      // START: THÊM LOGIC XÓA TRẠNG THÁI
+    } else if (updateData.status === null) {
+      // Xử lý xóa trạng thái
+      // Nếu status được gán giá trị null, chúng ta sẽ unset (xóa) trường này khỏi DB
+      updateOperation = { $unset: { status: "" } };
+      // END: THÊM LOGIC XÓA TRẠNG THÁI
+    } else {
+      // Xử lý cập nhật các trường thông thường
+      updateOperation = { $set: updateData };
+    }
+
+    // --- Thực thi cập nhật ---
+    const updatedCustomer = await Customer.findByIdAndUpdate(
+      customerId,
+      updateOperation,
+      { new: true },
+    )
+      .populate("status")
+      .populate({ path: "comments.user", select: "name" })
+      .lean();
+
+    if (!updatedCustomer) throw new Error("Cập nhật thất bại.");
+
+    // --- Ghi lại lịch sử hành động ---
+    if (updateData.name) {
+      await logUpdateName(
+        currentUser,
+        customerId,
+        oldCustomer.name,
+        updatedCustomer.name,
+      );
+    }
+    // Logic ghi log cho trạng thái giờ đây xử lý được cả cập nhật và xóa
+    if (updateData.status !== undefined) {
+      await logUpdateStatus(
+        currentUser,
+        customerId,
+        oldCustomer.status?.name || "Chưa có",
+        updatedCustomer.status?.name || "Chưa có",
+      );
+    }
+    if (updateData.stageLevel !== undefined) {
+      await logUpdateStage(
+        currentUser,
+        customerId,
+        oldCustomer.stageLevel,
+        updatedCustomer.stageLevel,
+      );
+    }
+    if (newCommentData) {
+      const addedComment = updatedCustomer.comments.find(
+        (c) =>
+          c.detail === newCommentData.detail &&
+          c.user._id.toString() === currentUser._id.toString(),
+      );
+      if (addedComment)
+        await logAddComment(currentUser, customerId, addedComment);
+    }
+
     return NextResponse.json({ status: true, data: updatedCustomer });
   } catch (error) {
     console.error("PATCH Error:", error);
-    return NextResponse.json(
-      { status: false, message: "Lỗi phía máy chủ.", error: error.message },
-      { status: 500 },
-    );
-  }
-}
-
-export async function DELETE(request) {
-  await dbConnect();
-
-  try {
-    const body = await request.json();
-    const { customerId } = body;
-
-    if (!customerId || !Types.ObjectId.isValid(customerId)) {
-      return NextResponse.json(
-        { status: false, message: "ID khách hàng không hợp lệ." },
-        { status: 400 },
-      );
-    }
-
-    // Dùng $unset để xóa hoàn toàn trường 'status' khỏi document
-    const updatedCustomer = await Customer.findByIdAndUpdate(
-      customerId,
-      { $unset: { status: "" } }, // Giá trị của status không quan trọng, chỉ cần key
-      { new: true },
-    ).lean();
-
-    if (!updatedCustomer) {
-      return NextResponse.json(
-        { status: false, message: "Không tìm thấy khách hàng." },
-        { status: 404 },
-      );
-    }
-
-    revalidateTag(TAG);
-    return NextResponse.json({ status: true, data: updatedCustomer });
-  } catch (error) {
-    console.error("DELETE Error:", error);
     return NextResponse.json(
       { status: false, message: "Lỗi phía máy chủ.", error: error.message },
       { status: 500 },

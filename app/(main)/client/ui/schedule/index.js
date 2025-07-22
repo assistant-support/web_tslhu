@@ -92,6 +92,7 @@ const ScheduleForm = ({
   onSubmit,
   isSubmitting,
   onEditRecipients,
+  user,
   estimatedTime,
   maxLimit,
 }) => (
@@ -164,6 +165,12 @@ const ScheduleForm = ({
         max={maxLimit}
         disabled={isSubmitting}
       />
+    </div>
+    <div className={styles.accountDisplay}>
+      <p className="text_6_400">
+        Thực hiện bằng tài khoản:{" "}
+        <strong>{user?.zaloActive?.name || "Chưa chọn"}</strong>
+      </p>
     </div>
     <div className={styles.summary}>
       <div className={styles.summaryInfo}>
@@ -288,6 +295,11 @@ export default function Schedule({
   const handleSubmit = useCallback(async () => {
     if (activeRecipients.length === 0)
       return alert("Không có người nhận nào được chọn.");
+    if (!user?.zaloActive?._id) {
+      return alert(
+        "Vui lòng chọn một tài khoản Zalo đang hoạt động trước khi tạo lịch trình.",
+      );
+    }
     setIsSubmitting(true);
     try {
       const scheduleData = {
@@ -296,7 +308,7 @@ export default function Schedule({
           `Lịch trình ngày ${new Date().toLocaleDateString("vi-VN")}`,
         actionType,
         config: { messageTemplate: message, actionsPerHour },
-        zaloAccountId: user.zalo._id,
+        zaloAccountId: user.zaloActive._id,
         tasks: activeRecipients.map((c) => ({
           person: { name: c.name, phone: c.phone, uid: c.uid, _id: c._id },
         })),
@@ -349,6 +361,7 @@ export default function Schedule({
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
         onEditRecipients={() => setIsRecipientPopupOpen(true)}
+        user={user}
         estimatedTime={estimatedTime}
         maxLimit={user?.zalo?.rateLimitPerHour || 50}
       />

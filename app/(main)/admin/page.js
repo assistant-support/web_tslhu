@@ -1,29 +1,36 @@
+// File: app/(main)/admin/page.js
 "use client";
 
 import React, { useState } from "react";
 import styles from "./admin.module.css";
 
-// 1. Import các component con mà bạn vừa tạo
+// 1. Import các component con
 import Dashboard from "./components/Dashboard";
 import UserManagement from "./components/UserManagement";
 import AssignFromSheet from "./components/AssignFromSheet";
 import CenterPopup from "@/components/(features)/(popup)/popup_center";
+// START: THÊM IMPORT
+import CampaignManagement from "./components/CampaignManagement";
+import AccountManagement from "./components/AccountManagement";
+// END: THÊM IMPORT
 
 // Component chính của trang Admin
 export default function AdminPage() {
-  // State để quyết định xem nên hiển thị view nào
-  const [activeView, setActiveView] = useState("dashboard"); // Mặc định là dashboard
+  const [activeView, setActiveView] = useState("dashboard");
   const [isAssignPopupOpen, setIsAssignPopupOpen] = useState(false);
-  // Hàm để render component tương ứng với view đang active
+
   const renderActiveView = () => {
     switch (activeView) {
       case "users":
         return <UserManagement />;
+      // START: THÊM CASE MỚI
+      case "campaigns":
+        return <CampaignManagement />;
+      case "accounts":
+        return <AccountManagement />;
+      // END: THÊM CASE MỚI
       case "kpi":
-        // Bạn có thể tạo component cho KPI và gọi ở đây
         return <div>Giao diện Phân tích & Báo cáo (KPI)</div>;
-      case "settings":
-        return <div>Giao diện Cài đặt Hệ thống</div>;
       case "dashboard":
       default:
         return <Dashboard />;
@@ -55,6 +62,26 @@ export default function AdminPage() {
         >
           Quản lý Nhân viên
         </button>
+
+        {/* START: THÊM 2 NÚT MỚI */}
+        <button
+          className={`${styles.adminMenuItem} ${
+            activeView === "campaigns" ? styles.active : ""
+          }`}
+          onClick={() => setActiveView("campaigns")}
+        >
+          Quản lý Chiến dịch
+        </button>
+        <button
+          className={`${styles.adminMenuItem} ${
+            activeView === "accounts" ? styles.active : ""
+          }`}
+          onClick={() => setActiveView("accounts")}
+        >
+          Quản lý Tài khoản
+        </button>
+        {/* END: THÊM 2 NÚT MỚI */}
+
         <button
           className={styles.adminMenuItem}
           onClick={() => setIsAssignPopupOpen(true)}
@@ -71,12 +98,12 @@ export default function AdminPage() {
         </button>
       </nav>
 
-      {/* Phần nội dung chính sẽ render component con tương ứng */}
       <main className={styles.adminContent}>{renderActiveView()}</main>
+
       <CenterPopup
         open={isAssignPopupOpen}
         onClose={() => setIsAssignPopupOpen(false)}
-        size="md" // hoặc size="auto" nếu bạn đã nâng cấp
+        size="md"
       >
         <AssignFromSheet />
       </CenterPopup>

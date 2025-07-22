@@ -1,46 +1,80 @@
-// app/client/ui/setting/index.js
+// File: app/client/ui/setting/index.js
+
 "use client";
 
-import React, { useState, useCallback, useMemo, useTransition } from "react";
+import React, { useState, useEffect, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Svg_Setting } from "@/components/(icon)/svg";
 import styles from "./index.module.css";
-import { usePanels } from "@/contexts/PanelContext"; // Import hook panel chung
-import { setActiveZalo } from "@/app/actions/zaloActions"; // Import action mới
+import { usePanels } from "@/contexts/PanelContext";
+import {
+  setActiveZalo,
+  getAvailableZaloAccounts,
+} from "@/app/actions/zaloActions";
 import Noti from "@/components/(features)/(noti)/noti";
 import Loading from "@/components/(ui)/(loading)/loading";
 
 // --- COMPONENT CON: NỘI DUNG PANEL QUẢN LÝ TÀI KHOẢN ---
-const AccountManagerPanel = ({ user }) => {
+// Component này giờ sẽ tự fetch dữ liệu Zalo khi được mount
+const AccountManagerPanel = ({ user, onUpdate }) => {
   const router = useRouter();
   const [isSubmitting, startTransition] = useTransition();
+  const [availableAccounts, setAvailableAccounts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // State để lưu trữ tài khoản đang active, lấy từ prop user
+  const [activeZaloId, setActiveZaloId] = useState(
+    user?.zaloActive?._id || null,
+  );
+
   const [notification, setNotification] = useState({
     open: false,
     status: true,
     mes: "",
   });
 
-  const allZaloAccounts = useMemo(() => user?.zaloAccounts || [], [user]);
-  const activeZaloId = useMemo(() => user?.zalo?._id || null, [user]);
+  // Lấy danh sách tài khoản Zalo được gán cho user khi component được mở
+  useEffect(() => {
+    setIsLoading(true);
+    getAvailableZaloAccounts()
+      .then((accounts) => {
+        setAvailableAccounts(accounts);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
 
+  // Hàm xử lý khi người dùng chọn/bỏ chọn một tài khoản
   const handleAccountSelection = (accountId) => {
     startTransition(async () => {
       const result = await setActiveZalo(accountId);
       if (result.success) {
         setNotification({ open: true, status: true, mes: result.message });
-        router.refresh();
+        // Cập nhật state nội bộ ngay lập tức
+        setActiveZaloId(accountId);
+        // Gọi hàm onUpdate để ClientPage có thể refresh
+        onUpdate();
       } else {
         setNotification({ open: true, status: false, mes: result.error });
       }
     });
   };
 
-  const selectedAccount = allZaloAccounts.find(
-    (acc) => acc._id === activeZaloId,
+  // Tính toán tài khoản đang được chọn và danh sách còn lại
+  const selectedAccount = useMemo(
+    () => availableAccounts.find((acc) => acc._id === activeZaloId),
+    [availableAccounts, activeZaloId],
   );
-  const availableAccounts = allZaloAccounts.filter(
-    (acc) => acc._id !== activeZaloId,
+
+  const otherAccounts = useMemo(
+    () => availableAccounts.filter((acc) => acc._id !== activeZaloId),
+    [availableAccounts, activeZaloId],
   );
+
+  if (isLoading) {
+    return <Loading content="Đang tải danh sách tài khoản..." />;
+  }
 
   return (
     <div className={styles.account_list_container}>
@@ -59,11 +93,11 @@ const AccountManagerPanel = ({ user }) => {
               </span>
             </div>
             <button
-              onClick={() => handleAccountSelection(null)}
+              onClick={() => handleAccountSelection(null)} // Bỏ chọn
               className={styles.deselect_btn}
               disabled={isSubmitting}
             >
-              Bỏ chọn
+              {isSubmitting ? "..." : "Bỏ chọn"}
             </button>
           </div>
         ) : (
@@ -73,15 +107,17 @@ const AccountManagerPanel = ({ user }) => {
         )}
       </div>
 
-      {availableAccounts.length > 0 && (
+      {otherAccounts.length > 0 && (
         <div className={styles.available_list_section}>
           <h4 className={styles.section_title}>Chọn từ các tài khoản khác</h4>
           <div className={styles.account_list}>
-            {availableAccounts.map((acc) => (
+            {otherAccounts.map((acc) => (
               <div
                 key={acc._id}
-                className={`${styles.account_item} ${styles.clickable}`}
-                onClick={() => handleAccountSelection(acc._id)}
+                className={`${styles.account_item} ${styles.clickable} ${
+                  isSubmitting ? styles.disabled : ""
+                }`}
+                onClick={() => !isSubmitting && handleAccountSelection(acc._id)}
               >
                 <img
                   src={acc.avt}
@@ -106,8 +142,9 @@ const AccountManagerPanel = ({ user }) => {
   );
 };
 
-// --- COMPONENT CON: NỘI DUNG PANEL CÀI ĐẶT CHÍNH ---
-const SettingsPanel = ({ user }) => {
+// --- COMPONENT CHÍNH (BUTTON KÍCH HOẠT) ---
+export default function Setting({ user, onUserUpdate }) {
+  // Nhận thêm prop onUserUpdate
   const { openPanel } = usePanels();
 
   const handleOpenAccountManager = () => {
@@ -115,44 +152,11 @@ const SettingsPanel = ({ user }) => {
       id: "account-manager",
       title: "Quản lý tài khoản Zalo",
       component: AccountManagerPanel,
-      props: { user },
-    });
-  };
-
-  const mainDisplayAccountName = useMemo(
-    () => user?.zalo?.name || "Chưa chọn",
-    [user],
-  );
-
-  return (
-    <div style={{ padding: "8px" }}>
-      <div
-        className={`${styles.popup_t} ${styles.clickable}`}
-        onClick={handleOpenAccountManager}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Svg_Setting w={16} h={16} c="var(--main_d)" />
-          <p className="text_6" style={{ color: "var(--main_d)" }}>
-            Tài khoản
-          </p>
-        </div>
-        <p className="text_6_400">{mainDisplayAccountName}</p>
-      </div>
-      {/* Thêm các mục cài đặt khác ở đây nếu cần */}
-    </div>
-  );
-};
-
-// --- COMPONENT CHÍNH (BUTTON KÍCH HOẠT) ---
-export default function Setting({ user }) {
-  const { openPanel } = usePanels();
-
-  const handleOpenSettings = () => {
-    openPanel({
-      id: "main-settings",
-      title: "Cài đặt & Cấu hình",
-      component: SettingsPanel,
-      props: { user },
+      props: {
+        user: user,
+        // Truyền hàm onUserUpdate xuống panel con
+        onUpdate: onUserUpdate,
+      },
     });
   };
 
@@ -168,7 +172,7 @@ export default function Setting({ user }) {
         borderRadius: "0 5px 5px 0",
         background: "#e2e8f0",
       }}
-      onClick={handleOpenSettings}
+      onClick={handleOpenAccountManager}
     >
       <Svg_Setting w={16} h={16} c={"var(--main_b)"} />
       <p className="text_6_400">Cấu hình</p>

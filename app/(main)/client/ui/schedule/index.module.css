@@ -268,3 +268,14 @@
 .recipientPopupTitle {
   margin: 0 0 16px 0;
 }
+
+/* Thêm vào cuối file */
+.accountDisplay {
+  padding: 10px 12px;
+  background-color: #f0fdf4; /* Màu nền xanh lá nhạt */
+  border: 1px solid #bbf7d0; /* Viền xanh lá */
+  border-radius: 6px;
+  text-align: center;
+  margin-top: 16px;
+  font-size: 14px;
+}

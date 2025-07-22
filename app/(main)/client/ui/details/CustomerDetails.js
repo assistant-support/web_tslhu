@@ -13,6 +13,7 @@ import {
   Svg_Notes,
   Svg_Edit,
   Svg_Pen,
+  Svg_Send,
 } from "@/components/(icon)/svg";
 import Loading from "@/components/(ui)/(loading)/loading";
 import StageIndicator from "@/components/(ui)/progress/StageIndicator";
@@ -52,7 +53,7 @@ const InfoRow = ({ label, value, children, statusColor }) => (
  * @param {function} onSelect - Hàm callback được gọi khi một giai đoạn được chọn.
  */
 const StageSelector = ({ currentLevel, onSelect }) => {
-  const stages = ["Chưa có", "Chăm sóc", "Học thử", "Vào học"];
+  const stages = ["Chưa có", "Chăm sóc", "OTP", "Nhập học"];
   return (
     <div className={styles.stageSelector}>
       {stages.map((stage, index) => (
@@ -71,6 +72,126 @@ const StageSelector = ({ currentLevel, onSelect }) => {
   );
 };
 
+/**
+ * Định dạng thời gian thành dạng tương đối (vd: 5 phút trước)
+ * @param {Date | string} date - Thời gian cần định dạng
+ */
+function formatRelativeTime(date) {
+  const now = new Date();
+  const seconds = Math.round((now - new Date(date)) / 1000);
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.round(minutes / 60);
+  const days = Math.round(hours / 24);
+  const months = Math.round(days / 30.44);
+  const years = Math.round(days / 365.25);
+
+  if (seconds < 60) return "vài giây trước";
+  if (minutes < 60) return `${minutes} phút trước`;
+  if (hours < 24) return `${hours} giờ trước`;
+  if (days < 30) return `${days} ngày trước`;
+  if (months < 12) return `${months} tháng trước`;
+  return `${years} năm trước`;
+}
+
+const CommentSection = ({ customer, user, onUpdateCustomer }) => {
+  const [newComment, setNewComment] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+    setIsSubmitting(true);
+    try {
+      // GỌI ĐẾN API PATCH THỐNG NHẤT
+      const res = await fetch(`/api/client`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: customer._id,
+          // Gửi payload đặc biệt để API nhận biết đây là yêu cầu thêm comment
+          updateData: { _comment: newComment },
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Thêm bình luận thất bại");
+      }
+
+      const responseJson = await res.json();
+
+      // Gọi callback onUpdateCustomer để kích hoạt hiệu ứng làm mới
+      onUpdateCustomer(responseJson.data);
+      setNewComment(""); // Xóa nội dung trong ô nhập
+    } catch (error) {
+      alert(`Lỗi: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className={styles.commentSection}>
+      {/* --- Ô NHẬP BÌNH LUẬN --- */}
+      <div className={styles.commentInputArea}>
+        <textarea
+          className={styles.commentTextarea}
+          placeholder="Viết bình luận..."
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          rows={2}
+          disabled={isSubmitting}
+        />
+        <button
+          className={styles.commentSubmitButton}
+          onClick={handleAddComment}
+          disabled={isSubmitting || !newComment.trim()}
+        >
+          {isSubmitting ? (
+            <Loading small />
+          ) : (
+            <Svg_Send w={18} h={18} c={"currentColor"} />
+          )}
+        </button>
+      </div>
+
+      {/* --- HEADER DANH SÁCH BÌNH LUẬN --- */}
+      <div className={styles.commentListHeader}>
+        <span>Sắp xếp theo: Mới nhất</span>
+        <span className={styles.commentCount}>
+          {customer.comments?.length || 0} bình luận
+        </span>
+      </div>
+
+      {/* --- DANH SÁCH BÌNH LUẬN --- */}
+      <div className={styles.commentList}>
+        {customer.comments && customer.comments.length > 0 ? (
+          customer.comments.map((comment) => (
+            <div key={comment._id} className={styles.commentItem}>
+              {/* Icon Giai đoạn */}
+              <div className={styles.commentStageIcon}>
+                <span>GĐ</span>
+                <strong>{comment.stage}</strong>
+              </div>
+              <div className={styles.commentContent}>
+                <div className={styles.commentHeader}>
+                  <span className={styles.commentUser}>
+                    {comment.user?.name || "Một nhân viên"}
+                  </span>
+                  <span className={styles.commentTime}>
+                    {formatRelativeTime(comment.time)}
+                  </span>
+                </div>
+                <p className={styles.commentDetail}>{comment.detail}</p>
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className={styles.noComments}>Chưa có bình luận nào.</p>
+        )}
+      </div>
+    </div>
+  );
+};
 //================================================================================
 // --- MAIN COMPONENT (Thành phần chính) ---
 //================================================================================
@@ -229,7 +350,8 @@ export default function CustomerDetails({
     ) {
       return;
     }
-    await handleSaveField("status", null); // Gửi null để API hiểu là unset
+    // Gọi hàm handleSaveField với giá trị `null` để API hiểu là "xóa"
+    await handleSaveField("status", null);
     setStatusSelectorVisible(false); // Ẩn dropdown
   };
 
@@ -382,8 +504,8 @@ export default function CustomerDetails({
         {/* === SECTION: THÔNG TIN XÉT TUYỂN === */}
         <div className={styles.section}>
           <h3 className={styles.sectionTitle}>Thông tin xét tuyển</h3>
-          <InfoRow label="Tên" value={customer.admissionName} />
-          <InfoRow label="Di động" value={customer.admissionPhone} />
+          <InfoRow label="Tên" value={customer.name} />
+          <InfoRow label="Di động" value={customer.DienThoai} />
           <InfoRow label="Mã ĐK" value={customer.MaDangKy} />
           <InfoRow label="CMND/CCCD" value={customer.CMND} />
           <InfoRow label="Ngày ĐK" value={customer.NgayDK} />
@@ -473,57 +595,11 @@ export default function CustomerDetails({
                   onSelect={(level) => handleSaveField("stageLevel", level)}
                 />
               </div>
-              <div className={styles.noteSection}>
-                <label className={styles.noteLabel}>Ghi chú Chăm sóc:</label>
-                <textarea
-                  className={styles.noteTextArea}
-                  placeholder="Nhập ghi chú giai đoạn chăm sóc..."
-                  value={editableNotes.careNote}
-                  onChange={(e) =>
-                    setEditableNotes({
-                      ...editableNotes,
-                      careNote: e.target.value,
-                    })
-                  }
-                  onBlur={() =>
-                    handleSaveField("careNote", editableNotes.careNote)
-                  }
-                />
-              </div>
-              <div className={styles.noteSection}>
-                <label className={styles.noteLabel}>Ghi chú Học thử:</label>
-                <textarea
-                  className={styles.noteTextArea}
-                  placeholder="Nhập ghi chú giai đoạn học thử..."
-                  value={editableNotes.studyTryNote}
-                  onChange={(e) =>
-                    setEditableNotes({
-                      ...editableNotes,
-                      studyTryNote: e.target.value,
-                    })
-                  }
-                  onBlur={() =>
-                    handleSaveField("studyTryNote", editableNotes.studyTryNote)
-                  }
-                />
-              </div>
-              <div className={styles.noteSection}>
-                <label className={styles.noteLabel}>Ghi chú Vào học:</label>
-                <textarea
-                  className={styles.noteTextArea}
-                  placeholder="Nhập ghi chú giai đoạn vào học..."
-                  value={editableNotes.studyNote}
-                  onChange={(e) =>
-                    setEditableNotes({
-                      ...editableNotes,
-                      studyNote: e.target.value,
-                    })
-                  }
-                  onBlur={() =>
-                    handleSaveField("studyNote", editableNotes.studyNote)
-                  }
-                />
-              </div>
+              <CommentSection
+                customer={customer}
+                user={user}
+                onUpdateCustomer={onUpdateCustomer}
+              />
             </div>
           )}
           <InfoRow label="NV Chăm sóc">

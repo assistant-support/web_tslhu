@@ -329,3 +329,145 @@
 .dangerButton:hover {
   background-color: #dc2626; /* Đậm hơn khi hover */
 }
+
+.commentSection {
+  margin-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
+.commentInputArea {
+  display: flex;
+  gap: 8px;
+  align-items: center; /* Căn giữa nút và textarea */
+}
+
+.commentTextarea {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 20px; /* Bo tròn giống hình */
+  font-size: 14px;
+  resize: vertical;
+  min-height: 40px;
+  transition: border-color 0.2s;
+  background-color: #f8fafc;
+}
+
+.commentTextarea:focus {
+  outline: none;
+  border-color: #4f46e5;
+  background-color: white;
+}
+
+.commentSubmitButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: transparent;
+  color: #64748b; /* Màu icon mặc định */
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.commentSubmitButton:hover:not(:disabled) {
+  color: #4f46e5;
+  background-color: #eef2ff;
+}
+
+.commentSubmitButton:disabled {
+  color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.commentListHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  padding: 0 4px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.commentCount {
+  font-weight: 500;
+}
+
+.commentList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.commentItem {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* Đây là icon Giai đoạn thay thế cho Avatar */
+.commentStageIcon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: #eef2ff;
+  color: #4338ca;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1.2;
+  border: 1px solid #c7d2fe;
+}
+
+.commentStageIcon strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.commentContent {
+  flex-grow: 1;
+}
+
+.commentHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.commentUser {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.commentTime {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.commentDetail {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #334155;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.noComments {
+  text-align: center;
+  font-size: 14px;
+  color: #94a3b8;
+  padding: 20px 0;
+}

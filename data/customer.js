@@ -1,4 +1,4 @@
-// data/client.js
+// data/customer.js
 "use server";
 
 import connectDB from "@/config/connectDB";
@@ -9,60 +9,14 @@ import User from "@/models/users"; // Import User để populate
 import { revalidateTag } from "next/cache";
 
 /**
- * [Hàm nội bộ] Lấy dữ liệu xét tuyển từ API bên ngoài cho một danh sách khách hàng.
- * @param {Array<object>} clients - Mảng khách hàng lấy từ DB.
- * @returns {Promise<Map<string, object>>} - Trả về một Map với key là ID khách hàng và value là dữ liệu xét tuyển.
- */
-async function fetchAdmissionDataForClients(clients) {
-  const admissionDataMap = new Map();
-
-  const fetchPromises = clients.map(async (client) => {
-    if (!client.phone) return;
-
-    try {
-      const res = await fetch(
-        "https://tapi.lhu.edu.vn/TS/AUTH/XetTuyen_TraCuu",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: client.phone }),
-          cache: "no-store",
-        },
-      );
-      if (!res.ok) {
-        admissionDataMap.set(client._id.toString(), {
-          TinhTrang: "Lỗi tra cứu",
-        });
-        return;
-      }
-      const raw = await res.json();
-      const data = (Array.isArray(raw) ? raw[0] : raw?.data?.[0]) || {
-        TinhTrang: "Không có thông tin",
-      };
-      admissionDataMap.set(client._id.toString(), data);
-    } catch (error) {
-      admissionDataMap.set(client._id.toString(), { TinhTrang: "Lỗi kết nối" });
-    }
-  });
-
-  await Promise.all(fetchPromises);
-  return admissionDataMap;
-}
-
-/**
- * Lấy một "lô" dữ liệu khách hàng từ DB, hỗ trợ logic "Tải thêm",
- * và làm giàu với dữ liệu xét tuyển từ API bên ngoài.
- * @param {object} options - Các tùy chọn truy vấn.
- * @param {number} options.limit - Số lượng khách hàng cần lấy.
- * @param {number} options.skip - Số lượng khách hàng cần bỏ qua (dựa trên số lượng đã có ở client).
- * @param {object} [options.filters] - (Tùy chọn) Object chứa các bộ lọc (status, query, uidStatus).
+ * Lấy một "lô" dữ liệu khách hàng từ DB cho trang client.
+ * @param {object} searchParams - Các tham số tìm kiếm và phân trang từ URL.
  * @returns {Promise<object>} - Trả về object chứa data và thông tin phân trang.
  */
 export async function Data_Client(searchParams = {}) {
   try {
     await connectDB();
 
-    // SỬA LỖI: Đọc dữ liệu từ `searchParams` được truyền vào
     const page = parseInt(searchParams.page) || 1;
     const limit = parseInt(searchParams.limit) || 10;
     const skip = (page - 1) * limit;
@@ -81,10 +35,20 @@ export async function Data_Client(searchParams = {}) {
       query.uid = { $in: [null, ""] };
     }
 
+    // --- CÂU TRUY VẤN ĐÃ ĐƯỢC CẬP NHẬT ---
     const clientsQuery = Client.find(query)
+      // Populate trạng thái chăm sóc để lấy tên
       .populate({ path: "status", model: Status, select: "name" })
+      // Populate nhân viên được gán để chăm sóc khách hàng này
       .populate({ path: "users", model: User, select: "name" })
-      .sort({ createdAt: -1 })
+      // START: THÊM LOGIC POPULATE CHO BÌNH LUẬN
+      .populate({
+        path: "comments.user", // Đường dẫn đến trường 'user' bên trong mảng 'comments'
+        model: User,
+        select: "name", // Chỉ lấy trường 'name' của user đã bình luận
+      })
+      // END: THÊM LOGIC POPULATE CHO BÌNH LUẬN
+      .sort({ createdAt: -1 }) // Sắp xếp khách hàng mới nhất lên đầu
       .skip(skip)
       .limit(limit)
       .lean();
@@ -94,16 +58,15 @@ export async function Data_Client(searchParams = {}) {
       Client.countDocuments(query),
     ]);
 
-    const admissionDataMap = await fetchAdmissionDataForClients(clientsFromDB);
-    const finalClients = clientsFromDB.map((client) => ({
-      ...client,
-      admissionData: admissionDataMap.get(client._id.toString()) || {
-        TinhTrang: "Chưa tra cứu",
-      },
-    }));
+    // Sắp xếp lại comments trong từng customer để đảm bảo thứ tự mới nhất -> cũ nhất
+    clientsFromDB.forEach((client) => {
+      if (client.comments && Array.isArray(client.comments)) {
+        client.comments.sort((a, b) => new Date(b.time) - new Date(a.time));
+      }
+    });
 
     return {
-      data: JSON.parse(JSON.stringify(finalClients)),
+      data: JSON.parse(JSON.stringify(clientsFromDB)),
       pagination: {
         page,
         limit,

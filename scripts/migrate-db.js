@@ -111,12 +111,14 @@ async function migrateUsers() {
 
 /**
  * Di chuyển collection 'customers' bằng Aggregation Pipeline.
- * Đã sửa lỗi không thêm comment rỗng.
+ * Đã sửa lỗi không thêm comment rỗng và thêm logic gán thời gian.
  */
 async function migrateCustomers() {
   console.log("\n[2/3] Bắt đầu di chuyển collection 'customers'...");
 
-  // SỬA LỖI: Điều kiện `if` giờ đây sẽ kiểm tra cả trường hợp chuỗi rỗng
+  // Ghi lại thời điểm bắt đầu di chuyển để gán cho các comment cũ
+  const migrationTime = new Date();
+
   const createCommentIfNotEmpty = (noteField) => ({
     $cond: {
       if: {
@@ -130,6 +132,9 @@ async function migrateCustomers() {
           user: { $ifNull: [{ $arrayElemAt: ["$auth", 0] }, DEFAULT_ADMIN_ID] },
           stage: { $ifNull: ["$stageLevel", 0] },
           detail: `$${noteField}`,
+          // START: THÊM DÒNG NÀY
+          time: migrationTime, // Gán thời điểm chạy script cho comment
+          // END: THÊM DÒNG NÀY
         },
       ],
       else: [],
@@ -202,7 +207,7 @@ async function runMigration() {
   console.log("✅ Kết nối thành công!");
 
   // await migrateUsers();
-  await migrateCustomers();
+  // await migrateCustomers();
   // await migrateZaloAccounts();
 
   console.log("\n🎉 Quá trình di chuyển dữ liệu đã hoàn tất thành công!");

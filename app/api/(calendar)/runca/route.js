@@ -102,15 +102,20 @@ export async function POST(request) {
       );
     }
 
-    const { jobName, actionType, config = {}, zaloAccountId, tasks } = body;
-    if (
-      !zaloAccountId ||
-      !Array.isArray(tasks) ||
-      tasks.length === 0 ||
-      !actionType
-    ) {
+    const dbUser = await User.findById(user.id).populate("zaloActive").lean();
+    if (!dbUser || !dbUser.zaloActive?._id) {
       return NextResponse.json(
-        { status: 1, mes: "Thiếu dữ liệu: zaloAccountId, tasks, actionType." },
+        { status: 1, mes: "Người dùng chưa chọn tài khoản Zalo hoạt động." },
+        { status: 400 },
+      );
+    }
+    const zaloAccountId = dbUser.zaloActive._id.toString();
+    // END: THAY THẾ LOGIC LẤY ZALOACCOUNTID
+
+    const { jobName, actionType, config = {}, tasks } = body;
+    if (!Array.isArray(tasks) || tasks.length === 0 || !actionType) {
+      return NextResponse.json(
+        { status: 1, mes: "Thiếu dữ liệu: tasks, actionType." },
         { status: 400 },
       );
     }
