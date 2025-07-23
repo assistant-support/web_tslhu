@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useTransition } from "react";
-import styles from "../admin.module.css";
+import styles from "@/app/(main)/admin/admin.module.css";
 import {
   getZaloAccounts,
   getAllUsers,
@@ -21,13 +21,16 @@ const AssignUserPopup = ({ account, allUsers, onClose }) => {
     });
   };
 
-  const assignedUserIds = new Set(account.users.map((u) => u._id));
+  // ================= START: SỬA LỖI PHỤ TRONG POPUP =================
+  // Đảm bảo account.users luôn là mảng để tránh lỗi tương tự trong popup
+  const assignedUserIds = new Set((account.users || []).map((u) => u._id));
+  // =================  END: SỬA LỖI PHỤ TRONG POPUP  =================
 
   return (
     <div className={styles.popupForm}>
       <h3>Gán quyền cho tài khoản: {account.name}</h3>
       <div className={styles.userList}>
-        {allUsers.map((user) => (
+        {(allUsers || []).map((user) => (
           <div key={user._id} className={styles.userListItem}>
             <span>
               {user.name} ({user.email})
@@ -91,7 +94,6 @@ export default function AccountManagement() {
     <div className={styles.managementContainer}>
       <div className={styles.managementHeader}>
         <h2>Danh sách Tài khoản Zalo</h2>
-        {/* Nút thêm tài khoản mới có thể được thêm ở đây */}
       </div>
       <div className={styles.tableContainer}>
         <table>
@@ -109,7 +111,16 @@ export default function AccountManagement() {
                 <td>{account.name}</td>
                 <td>{account.phone}</td>
                 <td>
-                  {account.users.map((u) => u.name).join(", ") || "Chưa gán"}
+                  {/* ================= START: SỬA LỖI CHÍNH ================= */}
+                  {/*
+                    Thêm `(account.users || [])` để kiểm tra.
+                    Nếu `account.users` tồn tại và là một mảng, nó sẽ được sử dụng.
+                    Nếu `account.users` là `null` hoặc `undefined`, một mảng rỗng `[]` sẽ được sử dụng thay thế.
+                    Điều này giúp hàm `.map()` luôn chạy được mà không gây lỗi.
+                  */}
+                  {(account.users || []).map((u) => u.name).join(", ") ||
+                    "Chưa gán"}
+                  {/* =================  END: SỬA LỖI CHÍNH  ================= */}
                 </td>
                 <td>
                   <button

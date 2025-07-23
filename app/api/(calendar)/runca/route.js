@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 
 import connectToDatabase from "@/config/connectDB";
-import "@/models/users";
+import User from "@/models/users";
 import ZaloAccount from "@/models/zalo";
 import Customer from "@/models/customer";
 import ScheduledJob from "@/models/schedule";
 import authenticate from "@/utils/authenticate";
 import { Re_acc, Re_user } from "@/data/users";
 import { revalidateTag } from "next/cache";
+import { logCreateScheduleTask } from "@/app/actions/historyActions";
 
 // ---------- hằng số ----------
 const MIN_GAP_MS = 20_000; // 20 s
@@ -89,19 +90,19 @@ function schedulePersons(
 
 // ---------- POST handler ----------
 export async function POST(request) {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  // ================= START: VÔ HIỆU HÓA TRANSACTION =================
+  // const session = await mongoose.startSession(); // Bỏ
+  // session.startTransaction(); // Bỏ
+  // =================  END: VÔ HIỆU HÓA TRANSACTION  =================
   try {
     await connectToDatabase();
     const { user, body } = await authenticate(request);
-
     if (!user) {
       return NextResponse.json(
         { status: 1, mes: "Xác thực không thành công." },
         { status: 401 },
       );
     }
-
     const dbUser = await User.findById(user.id).populate("zaloActive").lean();
     if (!dbUser || !dbUser.zaloActive?._id) {
       return NextResponse.json(
@@ -110,8 +111,6 @@ export async function POST(request) {
       );
     }
     const zaloAccountId = dbUser.zaloActive._id.toString();
-    // END: THAY THẾ LOGIC LẤY ZALOACCOUNTID
-
     const { jobName, actionType, config = {}, tasks } = body;
     if (!Array.isArray(tasks) || tasks.length === 0 || !actionType) {
       return NextResponse.json(
@@ -120,7 +119,6 @@ export async function POST(request) {
       );
     }
 
-    // Kiểm tra job trùng
     const dup = await ScheduledJob.findOne({
       zaloAccount: zaloAccountId,
       actionType,
@@ -133,8 +131,8 @@ export async function POST(request) {
       );
     }
 
-    // Lấy bot
-    const account = await ZaloAccount.findById(zaloAccountId).session(session);
+    // Lấy bot mà không cần session
+    const account = await ZaloAccount.findById(zaloAccountId); // Bỏ .session(session)
     if (!account) {
       return NextResponse.json(
         { status: 1, mes: "Không tìm thấy tài khoản." },
@@ -142,57 +140,44 @@ export async function POST(request) {
       );
     }
 
-    // Tính lịch
     let scheduledTasks;
     const personIds = tasks.map((t) => t.person);
 
-    // Nếu chỉ có 1 người, xếp lịch chạy ngay lập tức
     if (personIds.length === 1) {
-      console.log("LOGIC: Tối ưu cho 1 người, xếp lịch ngay lập tức.");
       scheduledTasks = [
-        {
-          person: personIds[0],
-          scheduledFor: new Date(), // Thời gian là NGAY BÂY GIỜ
-          status: "pending",
-        },
+        { person: personIds[0], scheduledFor: new Date(), status: "pending" },
       ];
-    }
-    // Nếu có nhiều người, mới dùng thuật toán dàn trải
-    else {
-      console.log(
-        `LOGIC: Dùng thuật toán dàn trải cho ${personIds.length} người.`,
-      );
+    } else {
       scheduledTasks = schedulePersons(
         personIds,
         new Date(),
         config.actionsPerHour || account.rateLimitPerHour,
-        MIN_GAP_MS,
+        20_000,
       );
     }
 
-    // Tạo ScheduledJob
-    const [newJob] = await ScheduledJob.create(
-      [
-        {
-          jobName: jobName || `Lịch ${actionType} cho ${tasks.length} người`,
-          status: "processing",
-          actionType,
-          zaloAccount: zaloAccountId,
-          tasks: scheduledTasks,
-          config,
-          statistics: { total: tasks.length, completed: 0, failed: 0 },
-          estimatedCompletionTime: scheduledTasks.at(-1).scheduledFor,
-          createdBy: user.id,
-        },
-      ],
-      { session },
-    );
+    // Tạo ScheduledJob mà không cần session
+    const newJob = await ScheduledJob.create({
+      jobName: jobName || `Lịch ${actionType} cho ${tasks.length} người`,
+      status: "processing",
+      actionType,
+      zaloAccount: zaloAccountId,
+      tasks: scheduledTasks,
+      config,
+      statistics: { total: tasks.length, completed: 0, failed: 0 },
+      estimatedCompletionTime: scheduledTasks.at(-1).scheduledFor,
+      createdBy: user.id,
+    });
 
-    await ZaloAccount.findByIdAndUpdate(
-      zaloAccountId,
-      { $addToSet: { task: { id: newJob._id, actionType } } },
-      { session },
-    );
+    for (const task of newJob.tasks) {
+      await logCreateScheduleTask(user, newJob, task);
+    }
+
+    // Cập nhật các document khác mà không cần session
+    await ZaloAccount.findByIdAndUpdate(zaloAccountId, {
+      $addToSet: { task: { id: newJob._id, actionType } },
+    });
+
     await Customer.updateMany(
       { _id: { $in: personIds } },
       {
@@ -205,11 +190,12 @@ export async function POST(request) {
           },
         },
       },
-      { session },
     );
 
-    await session.commitTransaction();
-    session.endSession();
+    // ================= START: VÔ HIỆU HÓA TRANSACTION =================
+    // await session.commitTransaction(); // Bỏ
+    // session.endSession(); // Bỏ
+    // =================  END: VÔ HIỆU HÓA TRANSACTION  =================
 
     revalidateTag("customer_data");
     Re_acc();
@@ -220,8 +206,10 @@ export async function POST(request) {
       data: newJob,
     });
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
+    // ================= START: VÔ HIỆU HÓA TRANSACTION =================
+    // await session.abortTransaction(); // Bỏ
+    // session.endSession(); // Bỏ
+    // =================  END: VÔ HIỆU HÓA TRANSACTION  =================
     console.error(err);
     return NextResponse.json(
       { status: 0, mes: "Lỗi khi tạo lịch.", data: err.message },

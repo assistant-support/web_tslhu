@@ -22,8 +22,17 @@ export async function Data_Client(searchParams = {}) {
     const skip = (page - 1) * limit;
 
     const query = {};
+
     if (searchParams.status) {
-      query.status = searchParams.status;
+      // Nếu người dùng chọn bộ lọc "Chưa có"
+      if (searchParams.status === "none") {
+        // Tìm các document có trường `status` là null hoặc không tồn tại.
+        // Trong Mongoose, `$in: [null]` thường bao gồm cả `undefined`.
+        query.status = { $in: [null] };
+      } else {
+        // Giữ nguyên logic cũ cho các trạng thái khác
+        query.status = searchParams.status;
+      }
     }
     if (searchParams.query) {
       const searchRegex = new RegExp(searchParams.query, "i");

@@ -26,6 +26,7 @@ const ZaloAccountSchema = new Schema(
     users: [{ type: Schema.Types.ObjectId, ref: "user" }],
     activeSession: { type: ActiveSessionSchema, default: null },
     isLocked: { type: Boolean, default: false },
+    action: { type: String, trim: true, default: null },
   },
   { timestamps: true },
 );

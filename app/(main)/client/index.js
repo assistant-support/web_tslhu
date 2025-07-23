@@ -635,6 +635,7 @@ function ClientPage({
               onChange={(e) => handleNavigation("status", e.target.value)}
             >
               <option value="">-- Tất cả --</option>
+              <option value="none">Chưa có</option>
               {initialStatuses?.map((status) => (
                 <option key={status._id} value={status._id}>
                   {status.name}

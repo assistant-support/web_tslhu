@@ -85,7 +85,6 @@ const PanelControls = ({ autoCollapsed, manualCollapsed }) => {
 // --- Component Quản Lý Chính ---
 const PanelManager = () => {
   const { panels, collapsed, closePanel, collapsePanel } = usePanels();
-
   const numToCollapseAuto = Math.max(0, panels.length - MAX_VISIBLE_PANELS);
   const autoCollapsedPanels = panels.slice(0, numToCollapseAuto);
   const visiblePanels = panels.slice(numToCollapseAuto);

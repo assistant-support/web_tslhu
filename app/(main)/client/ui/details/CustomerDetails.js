@@ -360,7 +360,7 @@ export default function CustomerDetails({
    */
   const handleOpenActionPanel = () => {
     // BƯỚC KIỂM TRA AN TOÀN: Đảm bảo user và user.zalo tồn tại
-    if (!user || !user.zalo) {
+    if (!user || !user.zaloActive) {
       setNotification({
         show: true,
         title: "Lỗi",

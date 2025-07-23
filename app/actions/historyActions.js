@@ -135,3 +135,68 @@ export async function logCreateSchedule(user, job) {
     },
   });
 }
+/**
+ * Ghi log cho việc TẠO một task trong lịch trình mới.
+ * Hàm này được gọi lặp lại cho mỗi khách hàng trong lịch trình.
+ * @param {object} user - Người dùng tạo lịch trình.
+ * @param {object} job - Toàn bộ object lịch trình (ScheduledJob).
+ * @param {object} task - Task (khách hàng) cụ thể được lên lịch.
+ */
+export async function logCreateScheduleTask(user, job, task) {
+  // Xác định đúng loại action dựa trên job.actionType
+  const actionTypeMap = {
+    sendMessage: "CREATE_SCHEDULE_SEND_MESSAGE",
+    addFriend: "CREATE_SCHEDULE_ADD_FRIEND",
+    findUid: "CREATE_SCHEDULE_FIND_UID",
+  };
+  const action = actionTypeMap[job.actionType] || "UNKNOWN_SCHEDULE_CREATED";
+
+  await logAction({
+    action,
+    user: user.id || user._id,
+    customer: task.person._id, // Ghi log cho khách hàng cụ thể
+    zaloActive: job.zaloAccount,
+    status: { status: "SUCCESS" },
+    actionDetail: {
+      scheduleId: job._id.toString(),
+      scheduleName: job.jobName,
+      // Chi tiết của riêng task này
+      scheduledFor: task.scheduledFor,
+      ...(job.actionType === "sendMessage" && {
+        messageTemplate: job.config.messageTemplate,
+      }),
+    },
+  });
+}
+
+/**
+ * Ghi log cho việc XÓA một task khỏi lịch trình.
+ * Áp dụng cho cả khi xóa 1 task hoặc xóa toàn bộ lịch trình.
+ * @param {object} user - Người dùng thực hiện hành động.
+ * @param {object} job - Toàn bộ object lịch trình (ScheduledJob).
+ * @param {object} task - Task (khách hàng) cụ thể bị xóa.
+ */
+export async function logDeleteScheduleTask(user, job, task) {
+  const actionTypeMap = {
+    sendMessage: "DELETE_SCHEDULE_SEND_MESSAGE",
+    addFriend: "DELETE_SCHEDULE_ADD_FRIEND",
+    findUid: "DELETE_SCHEDULE_FIND_UID",
+  };
+  const action = actionTypeMap[job.actionType] || "UNKNOWN_SCHEDULE_DELETED";
+
+  await logAction({
+    action,
+    user: user.id || user._id,
+    customer: task.person._id,
+    zaloActive: job.zaloAccount,
+    status: { status: "SUCCESS" },
+    actionDetail: {
+      scheduleId: job._id.toString(),
+      scheduleName: job.jobName,
+      removedPerson: {
+        name: task.person.name,
+        phone: task.person.phone,
+      },
+    },
+  });
+}
