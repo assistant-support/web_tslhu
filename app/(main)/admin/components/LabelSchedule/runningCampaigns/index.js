@@ -16,162 +16,6 @@ const calcTimeLeft = (until) => {
   return h > 0 ? `~ ${h}h ${m}m` : `~ ${m} phút`;
 };
 
-// ---------- small render blocks (tái sử dụng từ file cũ) ----------
-const RecipientList = ({ job, removedIds, onToggle }) => (
-  <div className={styles.taskList}>
-    {(job.tasks || []).map((t) => {
-      const removed = removedIds.has(t._id);
-      const processed = t.status !== "pending";
-      return (
-        <div
-          key={t._id}
-          className={`${styles.taskItem} ${removed ? styles.removed : ""} ${
-            processed ? styles.processed : ""
-          }`}
-        >
-          <div className={styles.taskInfo}>
-            <span className={styles.taskName}>{t.person.name}</span>
-            <span className={styles.taskStatus}>
-              {processed ? `Đã ${t.status}` : "Đang chờ"}
-            </span>
-          </div>
-          <button
-            onClick={() => onToggle(t._id)}
-            className={`${styles.toggleTaskBtn} ${
-              removed ? styles.reAdd : styles.remove
-            }`}
-            disabled={processed}
-          >
-            {removed ? "Thêm lại" : "Bỏ"}
-          </button>
-        </div>
-      );
-    })}
-  </div>
-);
-
-const DetailContent = ({
-  job,
-  onEditRecipients,
-  onSave,
-  onStop,
-  isSubmitting,
-  timeLeft,
-}) => {
-  const st = job.statistics || { total: 0, completed: 0, failed: 0 };
-  const success = st.total ? (st.completed / st.total) * 100 : 0;
-  const failure = st.total ? (st.failed / st.total) * 100 : 0;
-  return (
-    <div className={styles.popupContainer}>
-      <div className={styles.popupGroup}>
-        <p className={styles.popupLabel}>Tên lịch trình</p>
-        <p className={styles.popupValue}>{job.jobName}</p>
-      </div>
-      <div className={styles.popupGroup}>
-        <p className={styles.popupLabel}>Thông tin chung</p>
-        <div className={styles.statGrid}>
-          <div>
-            <span className={styles.statTitle}>Trạng thái</span>
-            <span className={`${styles.statValue} ${styles.statusProcessing}`}>
-              {job.status}
-            </span>
-          </div>
-          <div>
-            <span className={styles.statTitle}>Hành động</span>
-            <span className={styles.statValue}>{job.actionType}</span>
-          </div>
-          <div>
-            <span className={styles.statTitle}>Tốc độ</span>
-            <span className={styles.statValue}>
-              {job.config?.actionsPerHour || 0} / giờ
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className={styles.popupGroup}>
-        <p className={styles.popupLabel}>Tiến độ & Tỉ lệ</p>
-        <div className={styles.statGrid}>
-          <div>
-            <span className={styles.statTitle}>Hoàn thành</span>
-            <span className={styles.statValue}>
-              {st.completed} / {st.total}
-            </span>
-          </div>
-          <div>
-            <span className={styles.statTitle}>Thất bại</span>
-            <span className={styles.statValue}>{st.failed}</span>
-          </div>
-          <div>
-            <span className={`${styles.statTitle} ${styles.successRate}`}>
-              Thành công
-            </span>
-            <span className={`${styles.statValue} ${styles.successRate}`}>
-              {success.toFixed(1)}%
-            </span>
-          </div>
-          <div>
-            <span className={`${styles.statTitle} ${styles.failureRate}`}>
-              Thất bại
-            </span>
-            <span className={`${styles.statValue} ${styles.failureRate}`}>
-              {failure.toFixed(1)}%
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className={styles.popupGroup}>
-        <p className={styles.popupLabel}>Thời gian</p>
-        <div className={styles.statGrid}>
-          <div>
-            <span className={styles.statTitle}>Bắt đầu</span>
-            <span className={styles.statValue}>
-              {new Date(job.createdAt).toLocaleString("vi-VN")}
-            </span>
-          </div>
-          <div>
-            <span className={styles.statTitle}>Dự kiến xong</span>
-            <span className={styles.statValue}>
-              {new Date(job.estimatedCompletionTime).toLocaleString("vi-VN")}
-            </span>
-          </div>
-          <div>
-            <span className={styles.statTitle}>Còn lại</span>
-            <span className={styles.statValue}>{timeLeft}</span>
-          </div>
-        </div>
-      </div>
-      <div className={styles.popupGroup}>
-        <div className={styles.recipientSummary}>
-          <p className={styles.popupLabel}>Danh sách người nhận</p>
-          <button
-            className={styles.editRecipientsBtn}
-            onClick={onEditRecipients}
-          >
-            Chỉnh sửa
-          </button>
-        </div>
-      </div>
-      <div className={styles.popupActions}>
-        <button
-          onClick={onStop}
-          className={`${styles.actionButton} ${styles.stopButton}`}
-          disabled={isSubmitting}
-        >
-          Dừng & Hủy
-        </button>
-        <button
-          onClick={onSave}
-          className="btn"
-          disabled={isSubmitting}
-          style={{ borderRadius: 5, margin: 0, transform: "none" }}
-        >
-          {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
-        </button>
-      </div>
-    </div>
-  );
-};
-
 // --- Component Card cho mỗi chiến dịch ---
 const CampaignRow = ({ job, onOpenDetail }) => {
   const { statistics: st, jobName, estimatedCompletionTime } = job;
@@ -179,7 +23,11 @@ const CampaignRow = ({ job, onOpenDetail }) => {
   const timeLeft = calcTimeLeft(estimatedCompletionTime);
 
   return (
-    <div className={styles.row}>
+    // Thêm onClick vào cả dòng và thêm class để thay đổi con trỏ
+    <div
+      className={`${styles.row} ${styles.clickableRow}`}
+      onClick={() => onOpenDetail(job)}
+    >
       <div className={`${styles.rowCell} ${styles.jobName}`} title={jobName}>
         <span>{jobName}</span>
       </div>
@@ -196,14 +44,15 @@ const CampaignRow = ({ job, onOpenDetail }) => {
         {st.completed} / {st.total}
       </div>
       <div className={`${styles.rowCell} ${styles.timeCell}`}>{timeLeft}</div>
-      <div className={`${styles.rowCell} ${styles.actionCell}`}>
-        <button
-          onClick={() => onOpenDetail(job)}
-          className={styles.detailButton}
-        >
-          Chi tiết
-        </button>
+
+      {/* Bổ sung cột thời gian hoàn thành dự kiến */}
+      <div className={`${styles.rowCell} ${styles.timeCell}`}>
+        {estimatedCompletionTime
+          ? new Date(estimatedCompletionTime).toLocaleString("vi-VN")
+          : "N/A"}
       </div>
+
+      {/* Xóa bỏ div chứa nút "Chi tiết" */}
     </div>
   );
 };
@@ -298,8 +147,9 @@ export default function RunningCampaigns({
             Hoàn thành
           </div>
           <div className={`${styles.rowCell} ${styles.timeCell}`}>Còn lại</div>
-          <div className={`${styles.rowCell} ${styles.actionCell}`}>
-            Hành động
+          {/* Thêm header cho cột mới */}
+          <div className={`${styles.rowCell} ${styles.timeCell}`}>
+            Dự kiến xong
           </div>
         </div>
         <div className={styles.tableBody}>

@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import ScheduledJob from "@/models/schedule";
 import { getCurrentUser } from "@/lib/session";
 import { logDeleteScheduleTask } from "./historyActions";
+import ArchivedJob from "@/models/archivedJob";
 
 /**
  * Lấy tất cả các chiến dịch (labels) từ database.
@@ -82,16 +83,48 @@ export async function deleteLabel(id) {
 export async function getRunningJobs() {
   try {
     await connectDB();
-    const runningJobs = await ScheduledJob.find({
-      status: { $in: ["processing", "scheduled"] },
+    const jobsFromDB = await ScheduledJob.find({
+      status: { $in: ["scheduled", "processing"] },
     })
-      .sort({ createdAt: -1 }) // Ưu tiên hiển thị job mới nhất
-      .lean(); // .lean() để tăng tốc độ truy vấn, chỉ trả về object thuần túy
+      .populate([
+        {
+          path: "createdBy",
+          select: "name",
+        },
+        {
+          path: "zaloAccount",
+          select: "name",
+        },
+      ])
+      .sort({ createdAt: -1 })
+      .lean();
 
-    return JSON.parse(JSON.stringify(runningJobs));
+    // "Làm phẳng" dữ liệu một cách thủ công để đảm bảo an toàn tuyệt đối
+    const safeJobs = jobsFromDB.map((job) => ({
+      ...job,
+      _id: job._id.toString(),
+      createdBy: {
+        ...job.createdBy,
+        _id: job.createdBy?._id.toString(),
+      },
+      zaloAccount: {
+        ...job.zaloAccount,
+        _id: job.zaloAccount?._id.toString(),
+      },
+      tasks: job.tasks.map((task) => ({
+        ...task,
+        _id: task._id.toString(),
+        person: {
+          ...task.person,
+          _id: task.person._id.toString(),
+        },
+      })),
+    }));
+
+    return safeJobs; // Trả về mảng đã được làm sạch
   } catch (error) {
-    console.error("Lỗi trong getRunningJobs:", error);
-    return []; // Luôn trả về một mảng rỗng nếu có lỗi
+    console.error("Lỗi khi lấy danh sách chiến dịch đang chạy:", error);
+    return []; // Luôn trả về mảng rỗng khi có lỗi
   }
 }
 
@@ -161,5 +194,23 @@ export async function removeTaskFromSchedule(scheduleId, taskId) {
     return { success: true, message: "Đã xóa người nhận khỏi lịch trình." };
   } catch (error) {
     return { error: error.message };
+  }
+}
+export async function getArchivedJobs() {
+  try {
+    await connectDB();
+    const jobs = await ArchivedJob.find({})
+      .populate([
+        { path: "createdBy", select: "name" },
+        { path: "zaloAccount", select: "name" },
+      ])
+      .sort({ completedAt: -1 }) // Sắp xếp theo ngày hoàn thành
+      .limit(50) // Giới hạn 50 chiến dịch gần nhất cho hiệu năng
+      .lean();
+
+    return JSON.parse(JSON.stringify(jobs));
+  } catch (error) {
+    console.error("Lỗi khi lấy lịch sử chiến dịch:", error);
+    return [];
   }
 }

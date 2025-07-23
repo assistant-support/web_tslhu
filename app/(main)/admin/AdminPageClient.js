@@ -14,12 +14,14 @@ import AssignFromSheet from "./components/AssignFromSheet";
 export default function AdminPageClient({
   initialRunningJobs,
   initialCampaigns,
+  initialArchivedJobs,
 }) {
   const { openPanel, closePanel } = usePanels();
   const [activeComponentKey, setActiveComponentKey] =
     React.useState("labelSchedule");
-  const [runningJobs, setRunningJobs] = useState(initialRunningJobs);
-  const [campaigns, setCampaigns] = useState(initialCampaigns);
+  const [runningJobs, setRunningJobs] = useState(initialRunningJobs || []);
+  const [campaigns, setCampaigns] = useState(initialCampaigns || []);
+  const [archivedJobs, setArchivedJobs] = useState(initialArchivedJobs || []);
 
   const menuItems = [
     { key: "labelSchedule", label: "🚀 Nhãn & Lịch trình" },
@@ -36,6 +38,8 @@ export default function AdminPageClient({
             closePanel={closePanel}
             runningJobs={runningJobs}
             setRunningJobs={setRunningJobs}
+            archivedJobs={archivedJobs}
+            setArchivedJobs={setArchivedJobs}
             campaigns={campaigns}
             setCampaigns={setCampaigns}
           />

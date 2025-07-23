@@ -19,7 +19,27 @@ const { Schema } = mongoose;
 const DEFAULT_ADMIN_ID = "6865fe3ccdec836f29fabe4f"; // <--- THAY THẾ ID NÀY
 
 // --- ĐỊNH NGHĨA LẠI CÁC SCHEMA MỚI ---
-// (Dán các schema đã được cập nhật của bạn vào đây)
+
+const StatusDetailSchema = new Schema(
+  {
+    status: { type: String, required: true },
+    detail: { type: Schema.Types.Mixed, default: null },
+  },
+  { _id: false },
+);
+
+const ActionHistorySchema = new Schema(
+  {
+    action: { type: String, required: true },
+    user: { type: Schema.Types.ObjectId, ref: "user", required: true },
+    status: { type: StatusDetailSchema, required: true },
+    customer: { type: Schema.Types.ObjectId, ref: "customer" },
+    // Đổi tên trường ở đây để nhất quán
+    zalo: { type: Schema.Types.ObjectId, ref: "zaloaccount" },
+    actionDetail: { type: Schema.Types.Mixed },
+  },
+  { timestamps: { createdAt: "time" } },
+);
 
 const UserSchema = new Schema(
   {
@@ -86,6 +106,9 @@ const Customer =
 const ZaloAccount =
   mongoose.models.zaloaccount ||
   mongoose.model("zaloaccount", ZaloAccountSchema);
+const ActionHistory =
+  mongoose.models.actionhistory ||
+  mongoose.model("actionhistory", ActionHistorySchema);
 
 // =============================================================================
 // === BƯỚC 2: CÁC HÀM DI CHUYỂN DỮ LIỆU ===
@@ -206,9 +229,9 @@ async function runMigration() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log("✅ Kết nối thành công!");
 
-  // await migrateUsers();
-  // await migrateCustomers();
-  // await migrateZaloAccounts();
+  await migrateUsers();
+  await migrateCustomers();
+  await migrateZaloAccounts();
 
   console.log("\n🎉 Quá trình di chuyển dữ liệu đã hoàn tất thành công!");
   await mongoose.connection.close();

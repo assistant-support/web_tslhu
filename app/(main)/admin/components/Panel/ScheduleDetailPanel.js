@@ -1,46 +1,36 @@
+// File: ScheduleDetailPanel.js (Đã cập nhật)
 "use client";
 
 import React, { useState, useTransition } from "react";
 import styles from "./ScheduleDetailPanel.module.css";
-import { useRouter } from "next/navigation";
-import {
-  stopSchedule,
-  removeTaskFromSchedule,
-} from "@/app/actions/campaignActions";
+import { usePanels } from "@/contexts/PanelContext";
+import { stopSchedule } from "@/app/actions/campaignActions";
+import PendingQueuePanel from "./PendingQueuePanel";
+import ExecutionHistoryPanel from "./ExecutionHistoryPanel";
 
-const RecipientRow = ({ task, onRemove, isPending }) => {
-  return (
-    <div className={styles.recipientRow}>
-      <div className={styles.recipientInfo}>
-        <span className={styles.recipientName}>{task.person.name}</span>
-        <span className={styles.recipientPhone}>{task.person.phone}</span>
-      </div>
-      <div className={styles.recipientStatus} data-status={task.status}>
-        {task.status}
-      </div>
-      <div className={styles.recipientAction}>
-        {task.status === "pending" && (
-          <button
-            onClick={onRemove}
-            className={styles.removeButton}
-            disabled={isPending}
-          >
-            Xóa
-          </button>
-        )}
-      </div>
-    </div>
-  );
-};
+// Một component nhỏ cho các nút bấm, cho code sạch hơn
+const ActionButton = ({ onClick, label, icon }) => (
+  <button className={styles.actionButton} onClick={onClick}>
+    {icon}
+    <span>{label}</span>
+  </button>
+);
+const InfoRow = ({ icon, label, value }) => (
+  <div className={styles.infoRow}>
+    <span className={styles.infoIcon}>{icon}</span>
+    <span className={styles.infoLabel}>{label}</span>
+    <span className={styles.infoValue}>{value || "Không có"}</span>
+  </div>
+);
 
 export default function ScheduleDetailPanel({
   panelData: job,
   closePanel,
   onScheduleUpdate,
+  isArchived = false,
 }) {
-  const router = useRouter();
+  const { openPanel } = usePanels();
   const [isPending, startTransition] = useTransition();
-  const [tasks, setTasks] = useState(job.tasks || []);
 
   const handleStopSchedule = () => {
     if (
@@ -53,49 +43,115 @@ export default function ScheduleDetailPanel({
         if (result.error) alert(`Lỗi: ${result.error}`);
         else {
           onScheduleUpdate({ type: "STOP_SCHEDULE", jobId: job._id });
-          closePanel(); // Đóng panel lại
+          closePanel();
         }
       });
     }
   };
 
-  const handleRemoveTask = (taskId) => {
-    startTransition(async () => {
-      const result = await removeTaskFromSchedule(job._id, taskId);
-      if (result.error) alert(`Lỗi: ${result.error}`);
-      else {
-        setTasks((currentTasks) =>
-          currentTasks.filter((t) => t._id !== taskId),
-        );
-        // Gọi callback để báo cho cha biết cần cập nhật UI
-        onScheduleUpdate({
-          type: "REMOVE_TASK",
-          jobId: job._id,
-          taskId: taskId,
-        });
-      }
+  // Mở panel hàng đợi
+  const handleOpenQueuePanel = () => {
+    const panelId = `queue-${job._id}`;
+    openPanel({
+      id: panelId,
+      title: `👥 Hàng đợi: ${job.jobName}`,
+      component: PendingQueuePanel,
+      props: { panelData: { tasks: job.tasks } },
     });
   };
 
-  const st = job.statistics;
-  const progress = st.total > 0 ? (st.completed / st.total) * 100 : 0;
+  // Mở panel lịch sử
+  const handleOpenHistoryPanel = () => {
+    const panelId = `history-${job._id}`;
+    openPanel({
+      id: panelId,
+      title: `📜 Lịch sử: ${job.jobName}`,
+      component: ExecutionHistoryPanel,
+      props: { panelData: { jobId: job._id } },
+    });
+  };
+
+  const st = job.statistics || { total: 0, completed: 0, failed: 0 };
+  const tasks = job.tasks || [];
+  const progressValue =
+    st.total > 0 ? ((st.completed + st.failed) / st.total) * 100 : 0;
 
   return (
     <div className={styles.panelContainer}>
-      <div className={styles.panelHeader}>
-        <h3>{job.jobName}</h3>
-        <div className={styles.headerStats}>
-          <span>
-            Trạng thái:{" "}
-            <strong className={styles.statusProcessing}>{job.status}</strong>
-          </span>
-          <span>
-            Loại: <strong>{job.actionType}</strong>
-          </span>
+      {/* Phần thông tin tổng quan */}
+      <div className={styles.overviewSection}>
+        <div className={styles.overviewItem}>
+          <span>Bắt đầu</span>
+          <strong>{new Date(job.createdAt).toLocaleString("vi-VN")}</strong>
+        </div>
+        <div className={styles.overviewItem}>
+          <span>{isArchived ? "Hoàn thành" : "Dự kiến xong"}</span>
+          <strong>
+            {job.estimatedCompletionTime
+              ? new Date(job.estimatedCompletionTime).toLocaleString("vi-VN")
+              : "N/A"}
+          </strong>
         </div>
       </div>
 
-      {/* Hiển thị nội dung tin nhắn nếu có */}
+      {/* Thanh tiến độ */}
+      <div className={styles.progressSection}>
+        <div className={styles.progressStats}>
+          <span>
+            Hoàn thành: <strong>{st.completed}</strong>
+          </span>
+          <span>
+            Thất bại: <strong>{st.failed}</strong>
+          </span>
+          {!isArchived && (
+            <span>
+              Đang chờ: <strong>{tasks.length}</strong>
+            </span>
+          )}
+          <span>
+            Tổng: <strong>{st.total}</strong>
+          </span>
+        </div>
+        <div className={styles.progressBarContainer}>
+          <div
+            className={styles.progressBar}
+            style={{ width: `${progressValue}%` }}
+          />
+        </div>
+      </div>
+
+      <div className={styles.configSection}>
+        <h4 className={styles.sectionTitle}>Chi tiết Cấu hình</h4>
+        <InfoRow icon="⚙️" label="Loại hành động" value={job.actionType} />
+        <InfoRow
+          icon="👤"
+          label="Tài khoản Zalo"
+          value={job.zaloAccount?.name}
+        />
+        <InfoRow icon="🧑‍💻" label="Người tạo lịch" value={job.createdBy?.name} />
+        <InfoRow
+          icon="⚡"
+          label="Tốc độ"
+          value={`${job.config?.actionsPerHour || 50} hành động/giờ`}
+        />
+      </div>
+
+      {/* Các nút hành động để mở panel con */}
+      <div className={styles.actionsContainer}>
+        {!isArchived && (
+          <ActionButton
+            label={`Hàng đợi (${tasks.length})`}
+            icon="👥"
+            onClick={handleOpenQueuePanel}
+          />
+        )}
+        <ActionButton
+          label="Lịch sử thực thi"
+          icon="📜"
+          onClick={handleOpenHistoryPanel}
+        />
+      </div>
+
       {job.actionType === "sendMessage" && job.config.messageTemplate && (
         <div className={styles.messageSection}>
           <h4>Nội dung tin nhắn</h4>
@@ -105,29 +161,17 @@ export default function ScheduleDetailPanel({
         </div>
       )}
 
-      <div className={styles.recipientSection}>
-        <h4>Quản lý Người nhận ({tasks.length})</h4>
-        <div className={styles.recipientList}>
-          {tasks.map((task) => (
-            <RecipientRow
-              key={task._id}
-              task={task}
-              onRemove={() => handleRemoveTask(task._id)}
-              isPending={isPending}
-            />
-          ))}
+      {!isArchived && (
+        <div className={styles.panelFooter}>
+          <button
+            onClick={handleStopSchedule}
+            className={styles.stopButton}
+            disabled={isPending || job.status === "completed"}
+          >
+            {isPending ? "Đang xử lý..." : "Dừng & Hủy Lịch trình"}
+          </button>
         </div>
-      </div>
-
-      <div className={styles.panelFooter}>
-        <button
-          onClick={handleStopSchedule}
-          className={styles.stopButton}
-          disabled={isPending}
-        >
-          {isPending ? "Đang xử lý..." : "Dừng & Hủy toàn bộ Lịch trình"}
-        </button>
-      </div>
+      )}
     </div>
   );
 }

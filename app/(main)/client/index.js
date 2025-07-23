@@ -11,7 +11,6 @@ import React, {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import styles from "./index.module.css";
 import Setting from "./ui/setting";
-import HistoryPopup from "./ui/his";
 import { PanelProvider, usePanels } from "@/contexts/PanelContext";
 import CustomerDetails from "./ui/details/CustomerDetails"; // Import nội dung chi tiết khách hàng
 import StageIndicator from "@/components/(ui)/progress/StageIndicator";
@@ -824,8 +823,6 @@ function ClientPage({
           </div>
         )}
       </div>
-
-      <HistoryPopup ref={historyRef} />
     </div>
   );
 }

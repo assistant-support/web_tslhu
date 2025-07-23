@@ -19,7 +19,7 @@ const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 export async function getAvailableZaloAccounts() {
   try {
     await connectDB();
-    const token = cookies().get(COOKIE_NAME)?.value;
+    const token = await cookies().get(COOKIE_NAME)?.value;
     if (!token) return [];
 
     const { payload } = await jwtVerify(token, JWT_SECRET);
@@ -43,7 +43,7 @@ export async function getAvailableZaloAccounts() {
 export async function setActiveZalo(zaloAccountId) {
   try {
     await connectDB();
-    const token = cookies().get(COOKIE_NAME)?.value;
+    const token = await cookies().get(COOKIE_NAME)?.value;
     if (!token) throw new Error("Yêu cầu đăng nhập.");
 
     const { payload } = await jwtVerify(token, JWT_SECRET);

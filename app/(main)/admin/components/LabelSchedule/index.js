@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useTransition } from "react";
+import React, { useState, useTransition } from "react";
 import styles from "../../admin.module.css";
 import { useRouter } from "next/navigation";
 
@@ -10,6 +10,7 @@ import {
 } from "@/app/actions/campaignActions";
 import CampaignPanel from "../Panel/editLabelPanel";
 import RunningCampaigns from "./runningCampaigns";
+import ArchivedCampaigns from "./archivedCampaigns";
 
 // Component này giờ quản lý cả RunningCampaigns và bảng Labels
 export default function LabelManager({
@@ -17,11 +18,13 @@ export default function LabelManager({
   closePanel,
   runningJobs,
   setRunningJobs,
+  archivedJobs,
   campaigns,
   setCampaigns,
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [activeTab, setActiveTab] = useState("running");
 
   const handleSave = (data) => {
     startTransition(async () => {
@@ -86,13 +89,38 @@ export default function LabelManager({
 
   return (
     <div>
-      {/* 1. Hiển thị các chiến dịch đang chạy ở trên cùng */}
-      <RunningCampaigns
-        jobs={runningJobs}
-        setJobs={setRunningJobs}
-        openPanel={openPanel}
-        closePanel={closePanel}
-      />
+      <div className={styles.componentHeader}>
+        <h2>🗓️ Quản lý Chiến dịch</h2>
+        <div className={styles.tabContainer}>
+          <button
+            className={`${styles.tabButton} ${
+              activeTab === "running" ? styles.active : ""
+            }`}
+            onClick={() => setActiveTab("running")}
+          >
+            Đang chạy ({runningJobs.length})
+          </button>
+          <button
+            className={`${styles.tabButton} ${
+              activeTab === "history" ? styles.active : ""
+            }`}
+            onClick={() => setActiveTab("history")}
+          >
+            Lịch sử
+          </button>
+        </div>
+      </div>
+
+      {/* Hiển thị component tương ứng với tab */}
+      {activeTab === "running" && (
+        <RunningCampaigns
+          jobs={runningJobs}
+          setJobs={setRunningJobs}
+          openPanel={openPanel}
+          closePanel={closePanel}
+        />
+      )}
+      {activeTab === "history" && <ArchivedCampaigns jobs={archivedJobs} />}
 
       {/* 2. Hiển thị bảng quản lý Nhãn ở dưới */}
       <div className={styles.componentHeader} style={{ marginTop: "24px" }}>

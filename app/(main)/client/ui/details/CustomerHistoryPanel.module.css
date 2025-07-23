@@ -1,0 +1,55 @@
+.container {
+  padding: 16px;
+}
+.loading,
+.noHistory {
+  text-align: center;
+  padding: 32px;
+  color: #888;
+}
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.item {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #3b82f6; /* Viền xanh bên trái */
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+.itemHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.itemTitle {
+  display: flex;
+  flex-direction: column;
+}
+.itemAction {
+  font-weight: 600;
+  font-size: 15px;
+  color: #1f2937;
+}
+.itemUser {
+  font-size: 12px;
+  color: #6b7280;
+}
+.itemTime {
+  font-size: 12px;
+  color: #6b7280;
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+.itemBody {
+  font-size: 13px;
+  color: #374151;
+  padding-top: 8px;
+  border-top: 1px dashed #d1d5db;
+}
+.itemBody p {
+  margin: 4px 0;
+}

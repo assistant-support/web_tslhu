@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/config/connectDB";
 import Customer from "@/models/customer";
-import Zalo from "@/models/zalo";
-import Job from "@/models/schedule";
-import History from "@/models/historyClient";
-import { Re_acc, Re_user } from "@/data/users";
-import { Re_History, Re_History_User } from "@/data/customer";
+import ZaloAccount from "@/models/zalo";
+import ScheduledJob from "@/models/schedule";
+import ArchivedJob from "@/models/archivedJob"; // 1. Import model mới
 import { revalidateTag } from "next/cache";
+import { logExecuteScheduleTask } from "@/app/actions/historyActions";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access--Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
@@ -30,24 +29,42 @@ const exec = async (type, acc, person, cfg) => {
     cache: "no-store",
   });
   const j = await r.json();
-  if (!r.ok || j.status === "error")
+  if (!r.ok || j.status === "error") {
     throw new Error(j.message || "script error");
+  }
   return j.data;
 };
 
-const detachJobRef = (zaloId, jobId) =>
-  Zalo.findByIdAndUpdate(zaloId, { $pull: { task: { id: jobId } } });
+// 2. Thay thế hàm xóa bằng hàm lưu trữ mạnh mẽ hơn
 
-const removeJobCompletely = (jobId, zaloId) =>
-  Promise.all([Job.deleteOne({ _id: jobId }), detachJobRef(zaloId, jobId)]);
+const archiveAndRemoveJob = async (jobId) => {
+  const finishedJob = await ScheduledJob.findById(jobId).lean();
+  if (!finishedJob) return;
 
+  // Tạo bản ghi lưu trữ
+  await ArchivedJob.create({
+    _id: finishedJob._id,
+    jobName: finishedJob.jobName,
+    status: "completed",
+    actionType: finishedJob.actionType,
+    zaloAccount: finishedJob.zaloAccount,
+    config: finishedJob.config,
+    statistics: finishedJob.statistics,
+    createdAt: finishedJob.createdAt,
+    completedAt: new Date(),
+    estimatedCompletionTime: finishedJob.estimatedCompletionTime,
+    createdBy: finishedJob.createdBy,
+  });
+
+  // Xóa job gốc khỏi hàng đợi
+  await ScheduledJob.findByIdAndDelete(jobId);
+};
 export const GET = async () => {
   try {
     await connectDB();
-
     const now = new Date();
-    const due = await Job.aggregate([
-      { $match: { status: "processing" } },
+    const dueJobs = await ScheduledJob.aggregate([
+      { $match: { status: { $in: ["scheduled", "processing"] } } },
       { $unwind: "$tasks" },
       {
         $match: {
@@ -64,119 +81,124 @@ export const GET = async () => {
         },
       },
       { $unwind: "$bot" },
+      {
+        $project: {
+          jobId: "$_id",
+          jobName: 1,
+          status: 1,
+          actionType: 1,
+          config: 1,
+          createdBy: 1,
+          bot: 1,
+          task: "$tasks",
+        },
+      },
     ]);
 
-    if (!due.length)
+    if (!dueJobs.length) {
       return NextResponse.json(
         { message: "Không có tác vụ nào đến hạn." },
         { headers: cors },
       );
+    }
 
-    let processed = 0;
+    let processedCount = 0;
 
-    for (const item of due) {
-      const {
-        bot,
-        tasks: task,
-        _id: jobId,
-        createdBy,
-        jobName,
-        actionType,
-        config,
-      } = item;
-
-      const acc = await Zalo.findById(bot._id);
+    for (const item of dueJobs) {
+      // ... (phần logic xử lý từng task không đổi)
+      const { bot, task, jobId, createdBy, jobName, actionType, config } = item;
+      if (item.status === "scheduled") {
+        await ScheduledJob.findByIdAndUpdate(jobId, { status: "processing" });
+      }
+      const acc = await ZaloAccount.findById(bot._id);
       if (
         !acc ||
-        (Date.now() - acc.rateLimitHourStart >= 3_600_000
+        (Date.now() - (acc.rateLimitHourStart || 0) >= 3600000
           ? ((acc.actionsUsedThisHour = 0),
             (acc.rateLimitHourStart = new Date()),
             await acc.save(),
             false)
           : acc.actionsUsedThisHour >= acc.rateLimitPerHour)
-      )
+      ) {
         continue;
-
-      let api;
-      try {
-        api = await exec(actionType, acc, task.person, config);
-      } catch (e) {
-        api = { actionStatus: "error", actionMessage: e.message };
       }
-
-      const status = api.actionStatus === "success" ? "completed" : "failed";
-
+      let apiResult;
+      try {
+        apiResult = await exec(actionType, acc, task.person, config);
+      } catch (e) {
+        apiResult = { actionStatus: "error", actionMessage: e.message };
+      }
+      const executionStatus =
+        apiResult.actionStatus === "success" ? "completed" : "failed";
+      const logStatus = executionStatus === "completed" ? "SUCCESS" : "FAILED";
+      const customer = await Customer.findOne({ phone: task.person.phone })
+        .select("_id")
+        .lean();
+      if (!customer) {
+        console.warn(
+          `Không tìm thấy khách hàng với SĐT: ${task.person.phone}. Bỏ qua task.`,
+        );
+        await ScheduledJob.updateOne(
+          { _id: jobId },
+          { $pull: { tasks: { _id: task._id } } },
+        );
+        continue;
+      }
+      await logExecuteScheduleTask(
+        { jobId, jobName, actionType, createdBy, zaloAccountId: acc._id },
+        task,
+        customer._id,
+        logStatus,
+        apiResult,
+      );
       await Promise.all([
         actionType === "findUid" &&
+          apiResult.uidStatus === "found_new" &&
+          apiResult.targetUid &&
           Customer.updateOne(
-            { phone: task.person.phone },
-            {
-              $set: {
-                uid:
-                  api.uidStatus === "found_new" && api.targetUid
-                    ? api.targetUid
-                    : "Lỗi tìm kiếm",
-              },
-            },
+            { _id: customer._id },
+            { $set: { uid: apiResult.targetUid } },
           ),
-        Job.updateOne(
+        ScheduledJob.updateOne(
           { _id: jobId },
           {
-            $inc: { [`statistics.${status}`]: 1 },
+            $inc: { [`statistics.${executionStatus}`]: 1 },
             $pull: { tasks: { _id: task._id } },
           },
         ),
         Customer.updateOne(
-          { phone: task.person.phone },
+          { _id: customer._id },
           { $pull: { action: { job: jobId } } },
         ),
-        Zalo.findByIdAndUpdate(acc._id, { $inc: { actionsUsedThisHour: 1 } }),
-        History.findOneAndUpdate(
-          { jobId },
-          {
-            $push: {
-              recipients: {
-                phone: task.person.phone,
-                name: task.person.name,
-                status,
-                details: api.actionMessage,
-                processedAt: new Date(),
-              },
-            },
-            $setOnInsert: {
-              jobId,
-              jobName,
-              actionType,
-              sentBy: createdBy,
-              message: config.messageTemplate || "",
-            },
-          },
-          { upsert: true },
-        ),
+        ZaloAccount.findByIdAndUpdate(acc._id, {
+          $inc: { actionsUsedThisHour: 1 },
+        }),
       ]);
+      processedCount++;
 
-      processed++;
-      Re_History_User(task.person.phone);
-
-      const left = await Job.findById(jobId, { tasks: 1 }).lean();
-      if (!left || !left.tasks.length)
-        await removeJobCompletely(jobId, acc._id);
+      // 3. Cập nhật logic kiểm tra và lưu trữ
+      const jobAfterUpdate = await ScheduledJob.findById(jobId).lean();
+      if (jobAfterUpdate && jobAfterUpdate.tasks.length === 0) {
+        await archiveAndRemoveJob(jobId);
+      }
     }
 
-    if (processed) {
-      Re_user();
-      Re_acc();
-      Re_History();
+    if (processedCount > 0) {
       revalidateTag("customer_data");
+      revalidateTag("running_jobs");
     }
 
     return NextResponse.json(
-      { message: `Cron job đã chạy • Xử lý ${processed} tác vụ.` },
+      { message: `Cron job đã chạy. Xử lý ${processedCount} tác vụ.` },
       { headers: cors },
     );
   } catch (err) {
+    console.error("CRON JOB FAILED:", err);
     return NextResponse.json(
-      { message: "Lỗi xử lý cron job.", error: err.message },
+      {
+        message: "Lỗi nghiêm trọng trong quá trình xử lý cron job.",
+        error: err.message,
+      },
       { status: 500, headers: cors },
     );
   }

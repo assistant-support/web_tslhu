@@ -62,7 +62,7 @@ const ActionHistorySchema = new Schema(
       ref: "customer",
     },
     // (Tùy chọn) Tài khoản Zalo được sử dụng khi thực hiện hành động.
-    zaloActive: {
+    zalo: {
       type: Schema.Types.ObjectId,
       ref: "zaloaccount",
     },

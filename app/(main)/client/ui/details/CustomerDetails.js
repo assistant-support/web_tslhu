@@ -19,6 +19,7 @@ import Loading from "@/components/(ui)/(loading)/loading";
 import StageIndicator from "@/components/(ui)/progress/StageIndicator";
 import TextNoti from "@/components/(features)/(noti)/textnoti";
 import Schedule from "../schedule";
+import CustomerHistoryPanel from "./CustomerHistoryPanel";
 
 //================================================================================
 // --- HELPER COMPONENTS (Thành phần phụ trợ) ---
@@ -197,9 +198,8 @@ const CommentSection = ({ customer, user, onUpdateCustomer }) => {
 //================================================================================
 
 export default function CustomerDetails({
-  customerData, // Dữ liệu khách hàng được truyền từ props, sẽ thay đổi
-  onUpdateCustomer, // Hàm callback để cập nhật dữ liệu ở component cha
-  onShowHistory,
+  customerData,
+  onUpdateCustomer,
   user,
   initialLabels,
   statuses,
@@ -397,6 +397,19 @@ export default function CustomerDetails({
       )}&htx=0`;
       window.open(url, "_blank");
     }
+  };
+
+  const handleShowHistory = (customer) => {
+    if (!customer) return;
+    const panelId = `history-${customer._id}`;
+    openPanel({
+      id: panelId,
+      title: `Lịch sử tương tác: ${customer.name}`,
+      component: CustomerHistoryPanel,
+      props: {
+        panelData: { customerId: customer._id },
+      },
+    });
   };
 
   //----------------------------------------------------------------
@@ -613,7 +626,7 @@ export default function CustomerDetails({
         <div className={styles.buttonContainer}>
           <button
             className={`${styles.buttonBase} ${styles.ghostButton} ${styles.fullWidthButton}`}
-            onClick={() => onShowHistory(customer)}
+            onClick={() => handleShowHistory(customer)}
           >
             <Svg_History w={16} h={16} /> Hiển thị lịch sử tương tác
           </button>

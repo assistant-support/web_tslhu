@@ -351,3 +351,48 @@
 .table th {
   background-color: #f8f9fa;
 }
+
+/* =================================== */
+/* === CSS CHO GIAO DIỆN TAB MỚI === */
+/* =================================== */
+
+.tabContainer {
+  display: flex;
+  gap: 8px;
+  margin-left: auto; /* Đẩy các tab về phía bên phải */
+  align-self: flex-end; /* Căn chỉnh với cuối header */
+}
+
+.tabButton {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
+  background-color: transparent;
+  border: none;
+  border-bottom: 2px solid transparent; /* Viền dưới trong suốt */
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  margin-bottom: -2px; /* Nâng nút lên để viền dưới trùng với viền header */
+}
+
+.tabButton:hover {
+  color: #007bff;
+  background-color: #f0f5ff; /* Màu nền nhẹ khi hover */
+}
+
+/* Kiểu của tab đang được chọn */
+.tabButton.active {
+  color: #007bff; /* Màu chữ xanh */
+  border-bottom: 2px solid #007bff; /* Viền dưới màu xanh */
+}
+
+/* Ghi đè lại style mặc định của componentHeader để chứa các tab */
+.componentHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #dee2e6; /* Thêm một đường kẻ dưới cho toàn bộ header */
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+}
