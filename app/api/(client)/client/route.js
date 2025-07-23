@@ -19,9 +19,6 @@ import {
 } from "@/app/actions/historyActions";
 /* ─────────────── CONSTANTS ─────────────── */
 const TAG = "customer_data";
-const TARGET_EMAIL = "phihung.tgdd2003@gmail.com"; // email của nhân viên cần gán quyền
-const COL_F_INDEX = 10; // cột F (0-based: A=0 … F=5)
-const DATA_START_ROW = 385; // chỉ đọc từ dòng này trở xuống (1-based)
 /* ────────────────────────────────────────── */
 
 /* Google Sheets client (readonly) */
@@ -79,13 +76,13 @@ export async function POST(request) {
     }
 
     // Gán cứng ID và Range của Google Sheet
-    const spreadsheetId = "1atiuB7QC_pZiGzb4fwhrkh2wIgif3z4Hjyp3mWyNUvQ";
+    const spreadsheetId = "1H5Z1OJxzvk39vjtrdDYzESU61NV7DGPw6K_iD97nh7U";
     const range = "Data!A:K";
 
     // Thiết lập các hằng số động
     const DATA_START_ROW = Number(startRow) || 1; // Mặc định là 1 nếu không có hoặc không hợp lệ
     const TARGET_EMAIL = targetEmail.trim().toLowerCase();
-    const COL_F_INDEX = 10; // Cột K (index 10)
+    const COL_F_INDEX =5; // Cột K (index 10)
 
     // --- BƯỚC 1: LẤY ID CỦA NHÂN VIÊN CẦN GÁN QUYỀN ---
     const authUser = await User.findOne({ email: TARGET_EMAIL })
@@ -157,7 +154,6 @@ export async function POST(request) {
       processedPhones.add(phone);
 
       const assignedEmail = (row[COL_F_INDEX] || "").trim().toLowerCase();
-
       sheetRows.push({
         phone,
         name: nameIdx !== -1 ? row[nameIdx] || "" : "",
@@ -165,6 +161,7 @@ export async function POST(request) {
         needAuth: assignedEmail === TARGET_EMAIL,
       });
     });
+
 
     if (!sheetRows.length) {
       return NextResponse.json({

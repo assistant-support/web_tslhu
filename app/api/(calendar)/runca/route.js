@@ -11,84 +11,29 @@ import { Re_acc, Re_user } from "@/data/users";
 import { revalidateTag } from "next/cache";
 import { logCreateScheduleTask } from "@/app/actions/historyActions";
 
-// ---------- hằng số ----------
-const MIN_GAP_MS = 20_000; // 20 s
-const LIMIT_PER_HR = 50; // mặc định 50 hành động / giờ
+const LIMIT_PER_HR = 50;
 
-// ---------- helper ----------
-function randomTimes(start, end, count, minGapMs) {
-  const arr = [];
-  let last = null;
-
-  for (let i = 0; i < count; i++) {
-    const earliest = last
-      ? new Date(last.getTime() + minGapMs)
-      : new Date(start);
-    const latest = new Date(end.getTime() - (count - i - 1) * minGapMs);
-
-    if (earliest > latest)
-      throw new Error("Không đủ khoảng trống để xếp lịch; thử giảm giới hạn.");
-
-    const ms =
-      earliest.getTime() + Math.floor(Math.random() * (latest - earliest));
-    last = new Date(ms);
-    arr.push(last);
-  }
-  return arr;
-}
-
-function schedulePersons(
+function schedulePersonsWithFixedInterval(
   personIds,
   startDate = new Date(),
   limitPerHour = LIMIT_PER_HR,
-  minGapMs = MIN_GAP_MS,
 ) {
   const result = [];
-  let idx = 0;
-  let last = null;
-  let winStart = new Date(startDate);
+  const fixedIntervalMs = 3_600_000 / limitPerHour;
+  let scheduledTime = new Date(startDate.getTime());
 
-  while (idx < personIds.length) {
-    const winEnd = new Date(winStart);
-    winEnd.setHours(winEnd.getHours() + 1, 0, 0, 0);
-
-    const effectiveStart = last
-      ? new Date(Math.max(winStart.getTime(), last.getTime() + minGapMs))
-      : winStart;
-
-    let remainingMs = winEnd - effectiveStart;
-    if (remainingMs <= 0) {
-      winStart = winEnd;
-      continue;
-    }
-
-    let capacity = Math.floor(limitPerHour * (remainingMs / 3_600_000)); // quota theo giờ
-    capacity = Math.min(
-      capacity,
-      Math.floor(remainingMs / minGapMs), // quota theo gap
-      personIds.length - idx, // còn bao nhiêu người
-    );
-    if (capacity <= 0) {
-      winStart = winEnd;
-      continue;
-    }
-
-    const times = randomTimes(effectiveStart, winEnd, capacity, minGapMs);
-    times.forEach((t) => {
-      result.push({
-        person: personIds[idx++],
-        scheduledFor: t,
-        status: "pending",
-      });
-      last = t;
+  for (const personId of personIds) {
+    result.push({
+      person: personId,
+      scheduledFor: new Date(scheduledTime.getTime()),
+      status: "pending",
     });
-
-    winStart = winEnd;
+    scheduledTime.setTime(scheduledTime.getTime() + fixedIntervalMs);
   }
   return result;
 }
 
-// ---------- POST handler ----------
+// ---------- POST handler (đã cập nhật) ----------
 export async function POST(request) {
   // ================= START: VÔ HIỆU HÓA TRANSACTION =================
   // const session = await mongoose.startSession(); // Bỏ

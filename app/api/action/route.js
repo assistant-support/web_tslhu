@@ -3,45 +3,83 @@ import connectDB from "@/config/connectDB";
 import Customer from "@/models/customer";
 import ZaloAccount from "@/models/zalo";
 import ScheduledJob from "@/models/schedule";
-import ArchivedJob from "@/models/archivedJob"; // 1. Import model mới
+import ArchivedJob from "@/models/archivedJob";
 import { revalidateTag } from "next/cache";
 import { logExecuteScheduleTask } from "@/app/actions/historyActions";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access--Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 export const OPTIONS = () => new NextResponse(null, { headers: cors });
 
+// Hợp nhất logic "biến thể" vào hàm exec
 const exec = async (type, acc, person, cfg) => {
+  const wordList = [
+    "chứ",
+    "chớ",
+    "mừ",
+    "mờ",
+    "cơ",
+    "dzậy",
+    "hăm",
+    "lắm á",
+    "luôn á",
+    "luôn nhen",
+    "à nghen",
+    "ơi",
+    "ớ",
+    "đi ha",
+    "nha",
+    "nà",
+    "nhé",
+    "nhá",
+    "nhen",
+    "nghen",
+    "đó",
+    "á",
+    "à",
+    "ha",
+  ];
+  let message;
+
+  if (type === "sendMessage" && cfg.messageTemplate) {
+    message = cfg.messageTemplate;
+    if (message.includes("{bienthe1}")) {
+      const randomIndex = Math.floor(Math.random() * wordList.length);
+      const randomWord = wordList[randomIndex];
+      message = message.replace("{bienthe1}", randomWord);
+    }
+  }
+
   const r = await fetch(acc.action, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({
       uid: acc.uid,
       phone: person.phone,
-      uidPerson: person.uid || "",
+      uidPerson: person.uid || null,
       actionType: type,
-      message: cfg.messageTemplate || "",
+      message: message || "",
     }),
     cache: "no-store",
   });
+
   const j = await r.json();
+  console.log("Kết quả từ script:", j); // Giữ lại log để debug nếu cần
+
   if (!r.ok || j.status === "error") {
     throw new Error(j.message || "script error");
   }
   return j.data;
 };
 
-// 2. Thay thế hàm xóa bằng hàm lưu trữ mạnh mẽ hơn
-
 const archiveAndRemoveJob = async (jobId) => {
   const finishedJob = await ScheduledJob.findById(jobId).lean();
   if (!finishedJob) return;
 
-  // Tạo bản ghi lưu trữ
   await ArchivedJob.create({
     _id: finishedJob._id,
     jobName: finishedJob.jobName,
@@ -56,9 +94,9 @@ const archiveAndRemoveJob = async (jobId) => {
     createdBy: finishedJob.createdBy,
   });
 
-  // Xóa job gốc khỏi hàng đợi
   await ScheduledJob.findByIdAndDelete(jobId);
 };
+
 export const GET = async () => {
   try {
     await connectDB();
@@ -105,11 +143,11 @@ export const GET = async () => {
     let processedCount = 0;
 
     for (const item of dueJobs) {
-      // ... (phần logic xử lý từng task không đổi)
       const { bot, task, jobId, createdBy, jobName, actionType, config } = item;
       if (item.status === "scheduled") {
         await ScheduledJob.findByIdAndUpdate(jobId, { status: "processing" });
       }
+
       const acc = await ZaloAccount.findById(bot._id);
       if (
         !acc ||
@@ -122,18 +160,21 @@ export const GET = async () => {
       ) {
         continue;
       }
+
       let apiResult;
       try {
         apiResult = await exec(actionType, acc, task.person, config);
       } catch (e) {
         apiResult = { actionStatus: "error", actionMessage: e.message };
       }
+
       const executionStatus =
         apiResult.actionStatus === "success" ? "completed" : "failed";
       const logStatus = executionStatus === "completed" ? "SUCCESS" : "FAILED";
       const customer = await Customer.findOne({ phone: task.person.phone })
         .select("_id")
         .lean();
+
       if (!customer) {
         console.warn(
           `Không tìm thấy khách hàng với SĐT: ${task.person.phone}. Bỏ qua task.`,
@@ -144,6 +185,7 @@ export const GET = async () => {
         );
         continue;
       }
+
       await logExecuteScheduleTask(
         { jobId, jobName, actionType, createdBy, zaloAccountId: acc._id },
         task,
@@ -151,6 +193,7 @@ export const GET = async () => {
         logStatus,
         apiResult,
       );
+
       await Promise.all([
         actionType === "findUid" &&
           apiResult.uidStatus === "found_new" &&
@@ -174,9 +217,9 @@ export const GET = async () => {
           $inc: { actionsUsedThisHour: 1 },
         }),
       ]);
+
       processedCount++;
 
-      // 3. Cập nhật logic kiểm tra và lưu trữ
       const jobAfterUpdate = await ScheduledJob.findById(jobId).lean();
       if (jobAfterUpdate && jobAfterUpdate.tasks.length === 0) {
         await archiveAndRemoveJob(jobId);
