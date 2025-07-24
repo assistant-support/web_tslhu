@@ -82,7 +82,7 @@ export async function POST(request) {
     // Thiết lập các hằng số động
     const DATA_START_ROW = Number(startRow) || 1; // Mặc định là 1 nếu không có hoặc không hợp lệ
     const TARGET_EMAIL = targetEmail.trim().toLowerCase();
-    const COL_F_INDEX =5; // Cột K (index 10)
+    const COL_F_INDEX = 5; // Cột K (index 10)
 
     // --- BƯỚC 1: LẤY ID CỦA NHÂN VIÊN CẦN GÁN QUYỀN ---
     const authUser = await User.findOne({ email: TARGET_EMAIL })
@@ -161,7 +161,6 @@ export async function POST(request) {
         needAuth: assignedEmail === TARGET_EMAIL,
       });
     });
-
 
     if (!sheetRows.length) {
       return NextResponse.json({

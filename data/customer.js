@@ -126,3 +126,7 @@ export async function Data_Status() {
 export async function Re_data_client() {
   revalidateTag("data_client");
 }
+
+export async function Re_Label() {
+  revalidateTag("data_label");
+}
