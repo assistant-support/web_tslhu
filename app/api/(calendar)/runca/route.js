@@ -13,7 +13,7 @@ import { logCreateScheduleTask } from "@/app/actions/historyActions";
 
 const LIMIT_PER_HR = 50;
 
-function schedulePersonsWithFixedInterval(
+function schedulePersons(
   personIds,
   startDate = new Date(),
   limitPerHour = LIMIT_PER_HR,
