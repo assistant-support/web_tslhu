@@ -15,7 +15,6 @@ const cors = {
 
 export const OPTIONS = () => new NextResponse(null, { headers: cors });
 
-// Hợp nhất logic "biến thể" vào hàm exec
 const exec = async (type, acc, person, cfg) => {
   const wordList = [
     "chứ",
@@ -68,7 +67,7 @@ const exec = async (type, acc, person, cfg) => {
   });
 
   const j = await r.json();
-  console.log("Kết quả từ script:", j); // Giữ lại log để debug nếu cần
+  console.log("Kết quả từ script:", j);
 
   if (!r.ok || j.status === "error") {
     throw new Error(j.message || "script error");
@@ -76,26 +75,37 @@ const exec = async (type, acc, person, cfg) => {
   return j.data;
 };
 
-const archiveAndRemoveJob = async (jobId) => {
-  const finishedJob = await ScheduledJob.findById(jobId).lean();
-  if (!finishedJob) return;
+// ================= START: SỬA LỖI LOGIC =================
+/**
+ * Hàm lưu trữ giờ đây nhận vào object job đầy đủ từ vòng lặp CRON.
+ * @param {object} jobData - Object job từ pipeline aggregate.
+ */
+const archiveAndRemoveJob = async (jobData) => {
+  // Chỉ cần một truy vấn cuối cùng để lấy statistics mới nhất.
+  const finalJobState = await ScheduledJob.findById(jobData.jobId)
+    .select("statistics")
+    .lean();
+
+  // Nếu job đã bị xóa bởi một tiến trình khác, dừng lại.
+  if (!finalJobState) return;
 
   await ArchivedJob.create({
-    _id: finishedJob._id,
-    jobName: finishedJob.jobName,
+    _id: jobData.jobId,
+    jobName: jobData.jobName,
     status: "completed",
-    actionType: finishedJob.actionType,
-    zaloAccount: finishedJob.zaloAccount,
-    config: finishedJob.config,
-    statistics: finishedJob.statistics,
-    createdAt: finishedJob.createdAt,
+    actionType: jobData.actionType,
+    zaloAccount: jobData.bot._id, // Lấy ID từ object bot đã được populate
+    config: jobData.config,
+    statistics: finalJobState.statistics, // Sử dụng statistics mới nhất
+    createdAt: jobData.createdAt,
     completedAt: new Date(),
-    estimatedCompletionTime: finishedJob.estimatedCompletionTime,
-    createdBy: finishedJob.createdBy,
+    estimatedCompletionTime: jobData.estimatedCompletionTime,
+    createdBy: jobData.createdBy,
   });
 
-  await ScheduledJob.findByIdAndDelete(jobId);
+  await ScheduledJob.findByIdAndDelete(jobData.jobId);
 };
+// =================  END: SỬA LỖI LOGIC  =================
 
 export const GET = async () => {
   try {
@@ -127,8 +137,10 @@ export const GET = async () => {
           actionType: 1,
           config: 1,
           createdBy: 1,
-          bot: 1,
+          bot: 1, // Vẫn lấy cả object bot
           task: "$tasks",
+          createdAt: 1,
+          estimatedCompletionTime: 1,
         },
       },
     ]);
@@ -220,9 +232,12 @@ export const GET = async () => {
 
       processedCount++;
 
-      const jobAfterUpdate = await ScheduledJob.findById(jobId).lean();
+      const jobAfterUpdate = await ScheduledJob.findById(jobId)
+        .select("tasks")
+        .lean();
       if (jobAfterUpdate && jobAfterUpdate.tasks.length === 0) {
-        await archiveAndRemoveJob(jobId);
+        // Truyền toàn bộ object `item` đã được làm giàu dữ liệu
+        await archiveAndRemoveJob(item);
       }
     }
 

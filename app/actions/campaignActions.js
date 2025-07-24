@@ -199,16 +199,34 @@ export async function removeTaskFromSchedule(scheduleId, taskId) {
 export async function getArchivedJobs() {
   try {
     await connectDB();
-    const jobs = await ArchivedJob.find({})
+    const jobsFromDB = await ArchivedJob.find({})
       .populate([
         { path: "createdBy", select: "name" },
         { path: "zaloAccount", select: "name" },
       ])
-      .sort({ completedAt: -1 }) // Sắp xếp theo ngày hoàn thành
-      .limit(50) // Giới hạn 50 chiến dịch gần nhất cho hiệu năng
+      .sort({ completedAt: -1 })
+      .limit(50)
       .lean();
 
-    return JSON.parse(JSON.stringify(jobs));
+    // "Làm phẳng" dữ liệu để đảm bảo an toàn tuyệt đối khi gửi cho Client
+    const safeJobs = jobsFromDB.map((job) => ({
+      ...job,
+      _id: job._id.toString(),
+      createdBy: job.createdBy
+        ? {
+            ...job.createdBy,
+            _id: job.createdBy._id.toString(),
+          }
+        : null,
+      zaloAccount: job.zaloAccount
+        ? {
+            ...job.zaloAccount,
+            _id: job.zaloAccount._id.toString(),
+          }
+        : null,
+    }));
+
+    return safeJobs;
   } catch (error) {
     console.error("Lỗi khi lấy lịch sử chiến dịch:", error);
     return [];

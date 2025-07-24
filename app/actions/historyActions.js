@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/session";
 import connectDB from "@/config/connectDB";
 import mongoose from "mongoose";
 import ActionHistory from "@/models/history";
+import Customer from "@/models/customer";
 
 /**
  * Ghi log cho hành động Đăng nhập của người dùng.
@@ -219,7 +220,7 @@ export async function logExecuteScheduleTask(
   statusName,
   executionResult,
 ) {
-  console.log("\n[DEBUG] Bắt đầu thực thi logExecuteScheduleTask...");
+  // console.log("\n[DEBUG] Bắt đầu thực thi logExecuteScheduleTask...");
   try {
     const actionTypeMap = {
       sendMessage: "DO_SCHEDULE_SEND_MESSAGE",
@@ -259,7 +260,7 @@ export async function logExecuteScheduleTask(
     // để bắt lỗi schema một cách tường minh.
     await ActionHistory.create(logData);
 
-    console.log("✅ [DEBUG] Ghi log thành công cho khách hàng:", customerId);
+    // console.log("✅ [DEBUG] Ghi log thành công cho khách hàng:", customerId);
   } catch (error) {
     // Nếu có lỗi schema, nó sẽ bị bắt và in ra ở đây
     console.error("❌ [DEBUG] ĐÃ XẢY RA LỖI KHI GHI LOG TRỰC TIẾP:", error);
@@ -268,8 +269,6 @@ export async function logExecuteScheduleTask(
 
 /**
  * Lấy tất cả lịch sử THỰC THI (DO_...) của một chiến dịch.
- * @param {string} scheduleId - ObjectId của chiến dịch cần lấy lịch sử.
- * @returns {Promise<Array>} - Trả về một MẢNG các bản ghi lịch sử đã được làm sạch.
  */
 export async function getHistoryForSchedule(scheduleId) {
   try {
@@ -280,11 +279,9 @@ export async function getHistoryForSchedule(scheduleId) {
       return [];
     }
 
-    // TẠO MỘT BIẾN OBJECTID TỪ CHUỖI ĐẦU VÀO
     const scheduleObjectId = new mongoose.Types.ObjectId(scheduleId);
 
     const historyRecords = await ActionHistory.find({
-      // SỬ DỤNG BIẾN OBJECTID ĐỂ TRUY VẤN
       "actionDetail.scheduleId": scheduleObjectId,
       action: {
         $in: [
@@ -301,7 +298,7 @@ export async function getHistoryForSchedule(scheduleId) {
       .sort({ time: -1 })
       .lean();
 
-    // "Làm phẳng" dữ liệu để đảm bảo an toàn
+    // "Làm phẳng" dữ liệu để đảm bảo an toàn tuyệt đối
     const safeHistory = historyRecords.map((log) => ({
       ...log,
       _id: log._id.toString(),
@@ -313,8 +310,13 @@ export async function getHistoryForSchedule(scheduleId) {
         : null,
       user: log.user?.toString(),
       zalo: log.zalo?.toString(),
+      // BỔ SUNG LOGIC XỬ LÝ CHO actionDetail
+      actionDetail: {
+        ...log.actionDetail,
+        scheduleId: log.actionDetail.scheduleId?.toString(),
+      },
     }));
-    console.log("Lịch sử đã được làm sạch và trả về:", safeHistory);
+
     return safeHistory;
   } catch (error) {
     console.error("Lỗi khi lấy lịch sử chiến dịch:", error);
@@ -323,8 +325,6 @@ export async function getHistoryForSchedule(scheduleId) {
 }
 /**
  * Lấy toàn bộ lịch sử hành động của một khách hàng cụ thể.
- * @param {string} customerId - ObjectId của khách hàng.
- * @returns {Promise<Array>} - Mảng các bản ghi lịch sử đã được làm sạch.
  */
 export async function getHistoryForCustomer(customerId) {
   try {
@@ -341,16 +341,24 @@ export async function getHistoryForCustomer(customerId) {
         { path: "zalo", select: "name" },
       ])
       .sort({ time: -1 })
-      .limit(100) // Giới hạn 100 hành động gần nhất
+      .limit(100)
       .lean();
 
-    // "Làm phẳng" dữ liệu
+    // "Làm phẳng" dữ liệu, bao gồm cả scheduleId lồng bên trong
     const safeHistory = historyRecords.map((log) => ({
       ...log,
       _id: log._id.toString(),
       customer: log.customer?.toString(),
       user: log.user ? { ...log.user, _id: log.user._id.toString() } : null,
       zalo: log.zalo ? { ...log.zalo, _id: log.zalo._id.toString() } : null,
+      // BỔ SUNG LOGIC CÒN THIẾU Ở ĐÂY
+      actionDetail: log.actionDetail
+        ? {
+            ...log.actionDetail,
+            scheduleId: log.actionDetail.scheduleId?.toString(),
+            commentId: log.actionDetail.commentId?.toString(), // Xử lý luôn commentId cho chắc chắn
+          }
+        : {},
     }));
 
     return safeHistory;

@@ -4,12 +4,16 @@ import React, { useState, useEffect, useTransition } from "react";
 import styles from "./CustomerHistoryPanel.module.css";
 import { getHistoryForCustomer } from "@/app/actions/historyActions";
 
-// Helper để dịch tên action cho thân thiện
+// Cập nhật thêm các "bản dịch"
 const formatActionName = (action) => {
   const map = {
     DO_SCHEDULE_SEND_MESSAGE: "Gửi tin nhắn tự động",
     CREATE_SCHEDULE_SEND_MESSAGE: "Lên lịch gửi tin nhắn",
     DELETE_SCHEDULE_SEND_MESSAGE: "Xóa khỏi lịch gửi tin",
+    DO_SCHEDULE_FIND_UID: "Tìm UID tự động",
+    CREATE_SCHEDULE_FIND_UID: "Lên lịch tìm UID",
+    DO_SCHEDULE_ADD_FRIEND: "Kết bạn tự động",
+    CREATE_SCHEDULE_ADD_FRIEND: "Lên lịch kết bạn",
     UPDATE_NAME_CUSTOMER: "Cập nhật tên",
     UPDATE_STATUS_CUSTOMER: "Cập nhật trạng thái",
     UPDATE_STAGE_CUSTOMER: "Thay đổi giai đoạn",
@@ -18,81 +22,133 @@ const formatActionName = (action) => {
   return map[action] || action.replace(/_/g, " ").toLowerCase();
 };
 
+// ================= START: NÂNG CẤP LOGIC HIỂN THỊ =================
+// Component con để render chi tiết, đã được viết lại hoàn toàn
 const ActionDetails = ({ log }) => {
   const { action, status, actionDetail, zalo } = log;
   const result = status.detail || {};
 
-  // Mặc định hiển thị thông điệp từ script
-  let details = (
-    <p>
-      <strong>Kết quả:</strong> {result.actionMessage || "Không có chi tiết."}
-    </p>
+  const DetailRow = ({ label, value, isCode = false }) => (
+    <div className={styles.detailRow}>
+      <span className={styles.detailLabel}>{label}</span>
+      <span className={`${styles.detailValue} ${isCode ? styles.code : ""}`}>
+        {value}
+      </span>
+    </div>
+  );
+
+  const renderScheduleDetails = () => (
+    <>
+      {actionDetail.scheduleName && (
+        <DetailRow label="Tên chiến dịch" value={actionDetail.scheduleName} />
+      )}
+      {result.actionMessage && (
+        <DetailRow label="Kết quả" value={result.actionMessage} />
+      )}
+    </>
   );
 
   switch (action) {
     case "UPDATE_NAME_CUSTOMER":
-      details = (
-        <p>
-          <strong>Thay đổi:</strong> Từ "{actionDetail.oldName}" thành "
-          {actionDetail.newName}"
-        </p>
+      return (
+        <DetailRow
+          label="Thay đổi"
+          value={`Từ "${actionDetail.oldName}" thành "${actionDetail.newName}"`}
+        />
       );
-      break;
     case "UPDATE_STATUS_CUSTOMER":
-      details = (
-        <p>
-          <strong>Thay đổi:</strong> Từ "{actionDetail.oldStatus}" thành "
-          {actionDetail.newStatus}"
-        </p>
+      return (
+        <DetailRow
+          label="Thay đổi"
+          value={`Từ "${actionDetail.oldStatus}" thành "${actionDetail.newStatus}"`}
+        />
       );
-      break;
     case "UPDATE_STAGE_CUSTOMER":
-      details = (
-        <p>
-          <strong>Thay đổi:</strong> Từ giai đoạn "{actionDetail.oldStage}" sang
-          "{actionDetail.newStage}"
-        </p>
+      return (
+        <DetailRow
+          label="Thay đổi"
+          value={`Từ giai đoạn "${actionDetail.oldStage}" sang "${actionDetail.newStage}"`}
+        />
       );
-      break;
     case "ADD_COMMENT_CUSTOMER":
-      details = <p>Đã thêm một bình luận mới vào hồ sơ.</p>;
-      break;
-  }
+      return <p>Đã thêm một bình luận mới vào hồ sơ.</p>;
 
-  return (
-    <>
-      {details}
-      {zalo && (
-        <p>
-          <strong>Qua Zalo:</strong> {zalo.name}
-        </p>
-      )}
-    </>
-  );
+    case "DO_SCHEDULE_SEND_MESSAGE":
+      return (
+        <>
+          {renderScheduleDetails()}
+          {result.message && (
+            <DetailRow label="Nội dung gửi" value={result.message} />
+          )}
+        </>
+      );
+
+    case "DO_SCHEDULE_FIND_UID":
+      let uidStatusMessage = "Không xác định";
+      if (result.uidStatus === "found_new") {
+        uidStatusMessage = "Tìm thấy UID mới";
+      } else if (result.uidStatus === "already_exists") {
+        uidStatusMessage = "UID đã tồn tại trong hệ thống";
+      } else if (result.uidStatus === "not_found") {
+        uidStatusMessage = "Không tìm thấy UID cho SĐT này";
+      }
+      return (
+        <>
+          {renderScheduleDetails()}
+          <DetailRow label="Trạng thái tìm" value={uidStatusMessage} />
+          {result.targetUid && (
+            <DetailRow label="UID" value={result.targetUid} isCode={true} />
+          )}
+        </>
+      );
+
+    case "CREATE_SCHEDULE_SEND_MESSAGE":
+    case "DELETE_SCHEDULE_SEND_MESSAGE":
+    case "CREATE_SCHEDULE_FIND_UID":
+      return (
+        <DetailRow label="Tên chiến dịch" value={actionDetail.scheduleName} />
+      );
+
+    default:
+      return (
+        <DetailRow
+          label="Kết quả"
+          value={result.actionMessage || "Không có chi tiết."}
+        />
+      );
+  }
 };
 
 const HistoryItem = ({ log }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const statusClass =
+    log.status.status === "SUCCESS" ? styles.success : styles.failed;
 
   return (
-    // Gán sự kiện click vào item cha
-    <div className={styles.item} onClick={() => setIsExpanded(!isExpanded)}>
+    <div
+      className={`${styles.item} ${statusClass}`}
+      onClick={() => setIsExpanded(!isExpanded)}
+    >
       <div className={styles.itemHeader}>
         <div className={styles.itemTitle}>
-          {/* Tên hành động được đưa ra ngoài */}
           <span className={styles.itemAction}>
-            {log.status.status === "SUCCESS" ? "✅" : "❌"}{" "}
             {formatActionName(log.action)}
           </span>
-          <span className={styles.itemUser}>
-            bởi {log.user?.name || "Hệ thống"}
-          </span>
+          <div className={styles.itemMeta}>
+            <span>
+              bởi <strong>{log.user?.name || "Hệ thống"}</strong>
+            </span>
+            {log.zalo && (
+              <span>
+                qua Zalo <strong>{log.zalo.name}</strong>
+              </span>
+            )}
+          </div>
         </div>
         <span className={styles.itemTime}>
           {new Date(log.time).toLocaleString("vi-VN")}
         </span>
       </div>
-      {/* Phần body chỉ hiển thị khi isExpanded là true */}
       {isExpanded && (
         <div className={styles.itemBody}>
           <ActionDetails log={log} />
@@ -101,6 +157,7 @@ const HistoryItem = ({ log }) => {
     </div>
   );
 };
+// =================  END: NÂNG CẤP LOGIC HIỂN THỊ  =================
 
 export default function CustomerHistoryPanel({ panelData: { customerId } }) {
   const [history, setHistory] = useState([]);

@@ -2,11 +2,12 @@
 import React from "react";
 import styles from "./ArchivedCampaigns.module.css";
 import { usePanels } from "@/contexts/PanelContext";
-import ExecutionHistoryPanel from "../../Panel/ExecutionHistoryPanel";
 import ScheduleDetailPanel from "../../Panel/ScheduleDetailPanel";
 
-const ArchivedRow = ({ job, onOpenHistory }) => (
-  <div className={styles.row} onClick={() => onOpenHistory(job)}>
+const ArchivedRow = (
+  { job, onOpenDetail }, // Đổi tên onOpenHistory -> onOpenDetail cho nhất quán
+) => (
+  <div className={styles.row} onClick={() => onOpenDetail(job)}>
     <div className={`${styles.rowCell} ${styles.jobName}`} title={job.jobName}>
       <span>{job.jobName}</span>
     </div>
@@ -23,15 +24,20 @@ const ArchivedRow = ({ job, onOpenHistory }) => (
 );
 
 export default function ArchivedCampaigns({ jobs }) {
-  const { openPanel, closePanel } = usePanels();
+  const { openPanel } = usePanels();
 
-  const handleOpenHistory = (job) => {
-    const panelId = `history-${job._id}`;
+  const handleOpenDetail = (job) => {
+    // Đổi tên hàm cho nhất quán
+    const panelId = `archived-detail-${job._id}`;
     openPanel({
       id: panelId,
-      title: `📜 Lịch sử: ${job.jobName}`,
+      title: `Lịch sử: ${job.jobName}`,
       component: ScheduleDetailPanel,
-      props: { panelData: { jobId: job._id } },
+      // SỬA LỖI Ở ĐÂY: Truyền toàn bộ object `job` và prop `isArchived`
+      props: {
+        panelData: job,
+        isArchived: true,
+      },
     });
   };
 
@@ -61,7 +67,7 @@ export default function ArchivedCampaigns({ jobs }) {
             <ArchivedRow
               key={job._id}
               job={job}
-              onOpenHistory={handleOpenHistory}
+              onOpenDetail={handleOpenDetail} // Cập nhật tên prop
             />
           ))}
         </div>

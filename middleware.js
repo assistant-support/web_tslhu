@@ -84,6 +84,6 @@ export const config = {
      * - _next/image (tối ưu hóa hình ảnh)
      * - favicon.ico (icon của trang)
      */
-    "/((?!api/action|api/auth|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api/action|api/resetgetuid|api/auth|_next/static|_next/image|favicon.ico).*)",
   ],
 };
