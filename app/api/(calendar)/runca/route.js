@@ -11,7 +11,7 @@ import { Re_acc, Re_user } from "@/data/users";
 import { revalidateTag } from "next/cache";
 import { logCreateScheduleTask } from "@/app/actions/historyActions";
 
-const LIMIT_PER_HR = 50;
+const LIMIT_PER_HR = 30;
 
 function schedulePersons(
   personIds,
