@@ -1,7 +1,13 @@
 // app/client/ui/schedule/index.js
 "use client";
 
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import Noti from "@/components/(features)/(noti)/noti";
 import styles from "./index.module.css";
@@ -9,6 +15,7 @@ import styles from "./index.module.css";
 import CenterPopup from "@/components/(features)/(popup)/popup_center";
 import RecipientList from "./RecipientList";
 import { useCampaigns } from "@/contexts/CampaignContext";
+import { getScheduleEstimation } from "@/app/actions/scheduleActions";
 
 const AVAILABLE_ACTIONS = [
   { key: "sendMessage", name: "Gửi tin" },
@@ -16,6 +23,41 @@ const AVAILABLE_ACTIONS = [
   { key: "findUid", name: "Tìm UID" },
   // Thêm các hành động khác ở đây
 ];
+
+const MessageEditorPopup = ({ open, content, onSave, onClose }) => {
+  const [localContent, setLocalContent] = useState(content);
+
+  useEffect(() => {
+    setLocalContent(content);
+  }, [content, open]);
+
+  const handleSave = () => {
+    onSave(localContent);
+    onClose();
+  };
+
+  return (
+    <CenterPopup open={open} onClose={onClose}>
+      <div className={styles.editorPopupContainer}>
+        <h3>Trình soạn thảo tin nhắn</h3>
+        <textarea
+          className={styles.editorTextarea}
+          value={localContent}
+          onChange={(e) => setLocalContent(e.target.value)}
+          placeholder="Nhập nội dung tin nhắn..."
+        />
+        <div className={styles.editorActions}>
+          <button onClick={onClose} className={styles.editorBtnCancel}>
+            Hủy
+          </button>
+          <button onClick={handleSave} className={styles.editorBtnSave}>
+            Lưu & Đóng
+          </button>
+        </div>
+      </div>
+    </CenterPopup>
+  );
+};
 
 const LimitInputRow = ({ label, value, onChange, min, max, disabled }) => {
   const handleInputChange = (e) => {
@@ -95,6 +137,10 @@ const ScheduleForm = ({
   user,
   estimatedTime,
   maxLimit,
+  onEstimate, // Prop mới
+  estimationResult, // Prop mới
+  isEstimating, // Prop mới
+  onOpenEditor,
 }) => (
   <div className={styles.formContainer}>
     <div className={styles.formGroup}>
@@ -142,8 +188,14 @@ const ScheduleForm = ({
             ))}
           </select>
         </div>
-        <div className={styles.formGroup}>
-          <p className="text_6">Nội dung tin nhắn</p>
+        <div className={`${styles.formGroup} ${styles.messageGroup}`}>
+          <div className={styles.messageHeader}>
+            <p className="text_6">Nội dung tin nhắn</p>
+            {/* Nút mở trình soạn thảo */}
+            <button onClick={onOpenEditor} className={styles.openEditorBtn}>
+              Mở trình soạn thảo
+            </button>
+          </div>
           <textarea
             id="message"
             className="input"
@@ -177,17 +229,31 @@ const ScheduleForm = ({
         <p className="text_6_400">
           Số người thực hiện: <strong>{activeRecipientCount} người</strong>
         </p>
-        <p className="text_6_400">
-          Thời gian hoàn thành: <strong>~{estimatedTime}</strong>
-        </p>
+        <div className={styles.estimationBox}>
+          {isEstimating ? (
+            <p className="text_6_400">Đang tính toán...</p>
+          ) : estimationResult ? (
+            <>
+              <p className="text_6_400">
+                Bắt đầu: <strong>{estimationResult.estimatedStart}</strong>
+              </p>
+              <p className="text_6_400">
+                Hoàn thành:{" "}
+                <strong>~{estimationResult.estimatedCompletion}</strong>
+              </p>
+            </>
+          ) : (
+            <p className="text_6_400">Nhấn nút để ước tính thời gian.</p>
+          )}
+        </div>
       </div>
       <button
         className="input"
-        onClick={onEditRecipients}
-        style={{ cursor: "pointer" }}
-        disabled={isSubmitting}
+        onClick={onEstimate} // Gọi hàm ước tính
+        style={{ cursor: "pointer", height: "fit-content" }}
+        disabled={isSubmitting || isEstimating}
       >
-        Chỉnh sửa
+        Ước tính
       </button>
     </div>
     <button
@@ -217,6 +283,7 @@ export default function Schedule({
   initialData,
 }) {
   const router = useRouter();
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [currentRecipients, setCurrentRecipients] = useState([]);
   const [removedIds, setRemovedIds] = useState(() => new Set());
   const [isRecipientPopupOpen, setIsRecipientPopupOpen] = useState(false);
@@ -226,6 +293,8 @@ export default function Schedule({
   const [message, setMessage] = useState("");
   const [actionsPerHour, setActionsPerHour] = useState(50);
   const [selectedLabelId, setSelectedLabelId] = useState("");
+  const [isEstimating, startEstimation] = useTransition(); // State cho việc ước tính
+  const [estimationResult, setEstimationResult] = useState(null);
   const [notification, setNotification] = useState({
     open: false,
     status: true,
@@ -279,6 +348,22 @@ export default function Schedule({
       return next;
     });
   }, []);
+
+  const handleEstimate = useCallback(() => {
+    if (activeRecipients.length === 0) return;
+    startEstimation(async () => {
+      const result = await getScheduleEstimation(
+        actionType,
+        activeRecipients.length,
+      );
+      if (result.success) {
+        setEstimationResult(result.data);
+      } else {
+        alert(`Lỗi ước tính: ${result.error}`);
+        setEstimationResult(null);
+      }
+    });
+  }, [actionType, activeRecipients.length]);
 
   const handleLabelChange = useCallback(
     (e) => {
@@ -364,6 +449,16 @@ export default function Schedule({
         user={user}
         estimatedTime={estimatedTime}
         maxLimit={user?.zalo?.rateLimitPerHour || 50}
+        onOpenEditor={() => setIsEditorOpen(true)}
+        onEstimate={handleEstimate} // Truyền hàm mới
+        estimationResult={estimationResult} // Truyền kết quả
+        isEstimating={isEstimating} // Truyền trạng thái loading
+      />
+      <MessageEditorPopup
+        open={isEditorOpen}
+        content={message}
+        onSave={setMessage} // Hàm onSave sẽ cập nhật lại state `message`
+        onClose={() => setIsEditorOpen(false)}
       />
 
       <CenterPopup

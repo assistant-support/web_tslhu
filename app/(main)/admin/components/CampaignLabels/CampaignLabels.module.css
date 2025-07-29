@@ -1,0 +1,104 @@
+/* app/(main)/admin/components/CampaignLabels/CampaignLabels.module.css */
+
+.container {
+  padding: 16px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: var(--boxshaw2);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.mainTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.btnAdd {
+  padding: 8px 16px;
+  background-color: var(--main);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.btnAdd:hover {
+  background-color: var(--main_d);
+}
+
+.listContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.desc {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnEdit {
+  background-color: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+.btnEdit:hover {
+  background-color: #e2e8f0;
+}
+
+.btnDelete {
+  background-color: #fee2e2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+.btnDelete:hover {
+  background-color: #fecaca;
+}

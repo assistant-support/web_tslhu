@@ -11,11 +11,10 @@ import React, {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import styles from "./index.module.css";
 import Setting from "./ui/setting";
-import { PanelProvider, usePanels } from "@/contexts/PanelContext";
+import { usePanels } from "@/contexts/PanelContext";
 import CustomerDetails from "./ui/details/CustomerDetails"; // Import nội dung chi tiết khách hàng
 import StageIndicator from "@/components/(ui)/progress/StageIndicator";
 import Loading from "@/components/(ui)/(loading)/loading";
-import PanelManager from "@/components/(features)/panel/PanelManager";
 import dynamic from "next/dynamic";
 
 const CollapseIcon = ({ isCollapsed }) => (
@@ -55,6 +54,28 @@ const useSelection = () => {
   return { selectedIds, toggleOne, setSelectedIds, size: selectedIds.size };
 };
 
+const Header = ({ allOnPageChecked, onTogglePage, viewMode }) => (
+  <div className={styles.header}>
+    <div className={styles.headerCell}>
+      <input
+        type="checkbox"
+        className={styles.bigCheckbox}
+        checked={allOnPageChecked}
+        onChange={onTogglePage}
+        disabled={viewMode === "selected"}
+      />
+    </div>
+    <div className={styles.headerCell}>STT</div>
+    <div className={styles.headerCell}>Di động</div>
+    <div className={styles.headerCell}>Tên</div>
+    <div className={styles.headerCell}>Giai đoạn</div>
+    <div className={styles.headerCell}>Trạng thái</div>
+    <div className={styles.headerCell}>Hành động</div>
+    <div className={styles.headerCell}>UID</div>
+    <div className={styles.headerCell}>TT Xét tuyển</div>
+  </div>
+);
+
 const Row = React.memo(function Row({
   row,
   rowIndex,
@@ -78,98 +99,39 @@ const Row = React.memo(function Row({
       className={`${styles.gridRow} ${isUpdated ? styles.rowUpdated : ""} ${
         isActive ? styles.activeRow : ""
       }`}
-      style={{ backgroundColor: row.remove ? "#ffd9dd" : "white" }}
       onClick={() => onRowClick(row)}
     >
-      <div style={{ display: "flex", flex: 5 }}>
-        <div
-          className={styles.gridCell}
-          style={{ justifyContent: "center", flex: "0 0 40px" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <input
-            type="checkbox"
-            className={styles.bigCheckbox}
-            checked={checked}
-            onChange={() => onToggle(row)}
-          />
-        </div>
-        <div
-          className={`${styles.gridCell} text_6_400`}
-          style={{
-            justifyContent: "center",
-            flex: "0 0 50px",
-            fontWeight: 600,
-          }}
-        >
-          {rowIndex + 1}
-        </div>
-        <div
-          className={`${styles.gridCell} text_6_400`}
-          style={{ justifyContent: "center", flex: 1 }}
-        >
-          {row.phone}
-        </div>
-        <div className={`${styles.gridCell} text_6_400`} style={{ flex: 1.5 }}>
-          {row.name}
-        </div>
-        <div
-          className={`${styles.gridCell} text_6_400`}
-          style={{ justifyContent: "center", flex: 0.5 }}
-        >
-          <StageIndicator level={row.stageLevel} />
-        </div>
-        <div
-          className={`${styles.gridCell} text_6_400`}
-          style={{ justifyContent: "center", flex: 1, overflow: "hidden" }}
-        >
-          <span
-            style={{
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-            title={row.status?.name}
-          >
-            {row.status?.name || "-"}
-          </span>
-        </div>
-        <div
-          className={`${styles.gridCell} text_6_400`}
-          style={{ justifyContent: "center", flex: 0.7 }}
-        >
-          {row.action && row.action.length > 0 ? row.action[0].actionType : "-"}
-        </div>
-        <div
-          className={`${styles.gridCell} text_7_400`}
-          style={{ justifyContent: "center", flex: 0.5 }}
-        >
-          <p
-            style={{
-              padding: "3px 12px",
-              color: "white",
-              fontSize: 12,
-              borderRadius: 12,
-              background:
-                row.uid === "Lỗi tìm kiếm"
-                  ? "var(--yellow)"
-                  : row.uid
-                  ? "var(--green)"
-                  : "var(--red)",
-            }}
-          >
-            {row.uid === "Lỗi tìm kiếm"
-              ? "Lỗi"
-              : row.uid
-              ? "Đã có"
-              : "Chưa tìm"}
-          </p>
-        </div>
+      <div className={styles.cell} onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          className={styles.bigCheckbox}
+          checked={checked}
+          onChange={() => onToggle(row)}
+        />
       </div>
-      <div
-        className={`${styles.gridCell} text_6_400`}
-        style={{ flex: 1, padding: "0 16px", justifyContent: "center" }}
-      >
+      <div className={styles.cell}>{rowIndex + 1}</div>
+      <div className={styles.cell}>{row.phone}</div>
+      <div className={`${styles.cell} ${styles.nameCell}`}>{row.name}</div>
+      <div className={styles.cell}>
+        <StageIndicator level={row.stageLevel} />
+      </div>
+      <div className={styles.cell} title={row.status?.name}>
+        {row.status?.name || "-"}
+      </div>
+      <div className={styles.cell}>
+        {row.action && row.action.length > 0 ? row.action[0].actionType : "-"}
+      </div>
+      <div className={styles.cell}>
+        <p
+          className={styles.uidBadge}
+          data-found={
+            row.uid ? (row.uid === "Lỗi tìm kiếm" ? "error" : "true") : "false"
+          }
+        >
+          {row.uid === "Lỗi tìm kiếm" ? "Lỗi" : row.uid ? "Đã có" : "Chưa tìm"}
+        </p>
+      </div>
+      <div className={styles.cell}>
         <span
           className={styles.lookupStatus}
           data-status={getLookupStatusType(row.TinhTrang)}
@@ -181,8 +143,7 @@ const Row = React.memo(function Row({
   );
 });
 
-// START: THAY THẾ TOÀN BỘ COMPONENT `ClientPage`
-function ClientPage({
+export default function ClientPage({
   initialData,
   initialPagination,
   initialLabels,
@@ -681,94 +642,28 @@ function ClientPage({
 
       {/* Yêu cầu 2 & 3: Bảng dữ liệu và chân trang gộp làm một */}
       <div className={styles.gridWrapper}>
-        <div className={styles.dataGrid}>
-          <div className={styles.gridHeader}>
-            <div style={{ display: "flex", flex: 5, color: "white" }}>
-              <div
-                style={{
-                  flex: "0 0 40px",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  padding: "0 16px",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  className={styles.bigCheckbox}
-                  checked={allOnPageChecked}
-                  onChange={handleTogglePageAndStoreData}
-                  disabled={viewMode === "selected"}
-                />
-              </div>
-              <div
-                className={styles.gridCell}
-                style={{ flex: "0 0 50px", justifyContent: "center" }}
-              >
-                STT
-              </div>
-              <div
-                className={styles.gridCell}
-                style={{ flex: 1, justifyContent: "center" }}
-              >
-                Di động
-              </div>
-              <div className={styles.gridCell} style={{ flex: 1.5 }}>
-                Tên
-              </div>
-              <div
-                className={styles.gridCell}
-                style={{ flex: 0.5, justifyContent: "center" }}
-              >
-                Giai đoạn
-              </div>
-              <div
-                className={styles.gridCell}
-                style={{ flex: 1, justifyContent: "center" }}
-              >
-                Trạng thái
-              </div>
-              <div
-                className={styles.gridCell}
-                style={{ flex: 0.7, justifyContent: "center" }}
-              >
-                Hành động
-              </div>
-              <div
-                className={styles.gridCell}
-                style={{ flex: 0.5, justifyContent: "center" }}
-              >
-                UID
-              </div>
-            </div>
-            <div
-              className={styles.gridCell}
-              style={{ flex: 1, justifyContent: "center", color: "white" }}
-            >
-              TT xét tuyển
-            </div>
-          </div>
-          <div className={styles.gridBody}>
-            {isOverallLoading ? (
-              <Loading content={"Đang tải..."} />
-            ) : (
-              (viewMode === "selected" ? scheduleData : customers).map(
-                (r, idx) => (
-                  <Row
-                    key={r._id}
-                    row={r}
-                    rowIndex={startIndex + idx}
-                    onToggle={toggleRowAndStoreData}
-                    checked={selectedIds.has(r._id)}
-                    onRowClick={handleRowClick}
-                    isUpdated={updatedIds.has(r._id)}
-                    isActive={activeRowIds.has(r._id)}
-                  />
-                ),
-              )
-            )}
-          </div>
+        <div className={styles.gridContainer}>
+          <Header
+            allOnPageChecked={allOnPageChecked}
+            onTogglePage={handleTogglePageAndStoreData}
+            viewMode={viewMode}
+          />
+          {(viewMode === "selected" ? scheduleData : customers).map(
+            (r, idx) => (
+              <Row
+                key={r._id}
+                row={r}
+                rowIndex={startIndex + idx}
+                onToggle={toggleRowAndStoreData}
+                checked={selectedIds.has(r._id)}
+                onRowClick={handleRowClick}
+                isUpdated={updatedIds.has(r._id)}
+                isActive={activeRowIds.has(r._id)}
+              />
+            ),
+          )}
         </div>
+        {isOverallLoading && <Loading content={"Đang tải..."} />}
         {serverTotalPages > 1 && viewMode === "all" && (
           <div className={styles.pagination}>
             <div className={styles.paginationInfo}>
@@ -824,15 +719,5 @@ function ClientPage({
         )}
       </div>
     </div>
-  );
-}
-// END: THAY THẾ TOÀN BỘ COMPONENT `ClientPage`
-
-export default function Client(props) {
-  return (
-    <PanelProvider>
-      <ClientPage {...props} />
-      <PanelManager />
-    </PanelProvider>
   );
 }

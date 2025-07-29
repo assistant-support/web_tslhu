@@ -1,35 +1,37 @@
+// web_tslhu/app/(main)/admin/components/Panel/LabelEditorPanel.js
+
 "use client";
 
 import React, { useState } from "react";
-// CSS dùng chung với các component admin khác
-import styles from "./editLabelPanel.module.css";
+import styles from "./LabelEditorPanel.module.css"; // Sẽ tạo file CSS này
 
-export default function EditLabelPanel({
-  panelData,
-  closePanel,
+export default function LabelEditorPanel({
+  initialData, // Đổi tên từ panelData
   onSave,
-  panelId,
+  closePanel,
+  isSubmitting, // Nhận prop này từ cha
 }) {
-  const isEditing = panelData && panelData._id;
+  const isEditing = initialData && initialData._id;
 
-  // State để quản lý dữ liệu form
-  const [title, setTitle] = useState(panelData?.title || "");
-  const [desc, setDesc] = useState(panelData?.desc || "");
-  const [content, setContent] = useState(panelData?.content || "");
+  const [title, setTitle] = useState(initialData?.title || "");
+  const [desc, setDesc] = useState(initialData?.desc || "");
+  const [content, setContent] = useState(initialData?.content || "");
 
-  const handleSubmit = (e) => {
+  //<-----------------THAY ĐỔI: Xử lý submit bất đồng bộ----------------->
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Kiểm tra xem hàm onSave có được truyền vào không
     if (typeof onSave === "function") {
-      // Gọi hàm onSave đã được truyền từ cha, gửi đi dữ liệu form
-      onSave({
-        id: isEditing ? panelData._id : undefined,
+      const result = await onSave({
+        id: isEditing ? initialData._id : undefined,
         title,
         desc,
         content,
       });
+      // Chỉ đóng panel nếu lưu thành công (result không phải là null)
+      if (result) {
+        closePanel();
+      }
     }
-    closePanel(); // Luôn đóng panel sau khi submit
   };
 
   return (
@@ -56,11 +58,11 @@ export default function EditLabelPanel({
         />
       </div>
       <div className={styles.formGroup}>
-        <label htmlFor="content">Nội dung chi tiết</label>
+        <label htmlFor="content">Nội dung chi tiết (Mẫu tin)</label>
         <textarea
           id="content"
           name="content"
-          rows="8"
+          rows="10"
           value={content}
           onChange={(e) => setContent(e.target.value)}
         ></textarea>
@@ -70,11 +72,20 @@ export default function EditLabelPanel({
           type="button"
           onClick={closePanel}
           className={styles.cancelButton}
+          disabled={isSubmitting}
         >
           Hủy
         </button>
-        <button type="submit" className={styles.saveButton}>
-          {isEditing ? "Lưu thay đổi" : "Tạo Nhãn"}
+        <button
+          type="submit"
+          className={styles.saveButton}
+          disabled={isSubmitting}
+        >
+          {isSubmitting
+            ? "Đang lưu..."
+            : isEditing
+            ? "Lưu thay đổi"
+            : "Tạo Nhãn"}
         </button>
       </div>
     </form>

@@ -1,10 +1,11 @@
-/* components/(layout)/nav/index.module.css */
+/* components/(layout)/nav/index.module.css (Đã tinh chỉnh) */
 
 .navContainer {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #0374da;
+  /* Bảng màu mới: Xanh navy đậm, hiện đại hơn */
+  background-color: #0d1b2a;
   padding: 16px;
   box-sizing: border-box;
 }
@@ -17,7 +18,8 @@
 .logoText {
   font-size: 28px;
   font-weight: 700;
-  color: #1e293b;
+  /* Màu logo trắng để nổi bật trên nền đậm */
+  color: #ffffff;
 }
 
 .menuSection {
@@ -25,15 +27,17 @@
   position: relative;
 }
 
+/* Hiệu ứng highlight mới: Nền xám mờ tinh tế */
 .highlight {
   position: absolute;
   left: 0;
   width: 100%;
-  height: 56px; /* Phải khớp với chiều cao của navItem */
-  background-color: #eff6ff; /* Nền xanh nhạt */
-  border-radius: 8px;
+  height: 56px;
+  /* Nền highlight mới: trong suốt nhẹ, tạo chiều sâu */
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 10px; /* Bo tròn nhiều hơn */
   z-index: 1;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* Hiệu ứng mượt mà */
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .navItem {
@@ -42,21 +46,24 @@
   gap: 12px;
   padding: 0 16px;
   height: 56px;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   text-decoration: none;
-  color: #475569; /* Màu chữ mặc định */
+  /* Màu chữ mặc định: Xám nhạt, dễ đọc trên nền tối */
+  color: #a0aec0;
   position: relative;
   z-index: 2;
   transition: color 0.3s ease;
 }
 
 .navItem:hover {
-  color: #1e293b; /* Đậm hơn khi hover */
+  /* Khi hover, chữ chuyển sang màu trắng sáng */
+  color: #ffffff;
 }
 
+/* Trạng thái active mới: Chữ trắng sáng và đậm */
 .navItem.active {
-  color: #2563eb; /* Màu xanh cho mục đang active */
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -65,7 +72,8 @@
 }
 
 .userSection {
-  border-top: 1px solid #f1f5f9;
+  /* Viền ngăn cách màu xám mờ */
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 16px;
   display: flex;
   align-items: center;
@@ -79,12 +87,14 @@
 
 .userName {
   font-weight: 600;
-  color: #1e293b;
+  /* Tên người dùng màu trắng */
+  color: #ffffff;
 }
 
 .userRole {
   font-size: 13px;
-  color: #64748b;
+  /* Vai trò màu vàng cam nổi bật */
+  color: #f59e0b;
 }
 
 .logoutButton {
@@ -95,13 +105,15 @@
   height: 40px;
   border-radius: 50%;
   border: none;
-  background-color: #f8fafc;
-  color: #64748b;
+  /* Nền nút logout xám đậm hơn */
+  background-color: rgba(255, 255, 255, 0.1);
+  /* Icon màu xám nhạt */
+  color: #a0aec0;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .logoutButton:hover {
-  background-color: #fee2e2; /* Nền đỏ nhạt */
-  color: #b91c1c; /* Màu đỏ đậm */
+  background-color: #fee2e2;
+  color: #ef4444; /* Chuyển màu đỏ đậm khi hover */
 }

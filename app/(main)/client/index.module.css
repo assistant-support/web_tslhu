@@ -152,56 +152,108 @@
 .gridWrapper {
   display: flex;
   flex-direction: column;
-  flex: 1; /* Lấp đầy không gian còn lại */
-  min-height: 0; /* Cực kỳ quan trọng cho flexbox */
-  background: white;
-  border-radius: 8px; /* Bo góc cho cả khối */
-  box-shadow: var(--boxshaw2);
-  overflow: hidden; /* Ẩn các phần thừa */
-}
-
-.dataGrid {
-  display: flex;
-  flex-direction: column;
   flex: 1;
   min-height: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: var(--boxshaw2);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
 }
 
-.gridHeader {
+.gridContainer {
+  flex-grow: 1;
+  overflow: auto;
+  display: grid;
+  /* Yêu cầu mới: Thêm align-content để ngăn các hàng bị kéo dài */
+  align-content: flex-start;
+
+  /* Định nghĩa cột */
+  grid-template-columns:
+    40px /* Checkbox */
+    50px /* STT */
+    120px /* Di động */
+    1fr /* Tên (linh hoạt) */
+    100px /* Giai đoạn */
+    140px /* Trạng thái */
+    120px /* Hành động */
+    80px /* UID */
+    1fr; /* TT Xét tuyển (linh hoạt) */
+}
+
+.header,
+.gridRow {
+  display: contents;
+}
+.gridRow:hover > .cell {
+  background-color: #f8fafc;
+  cursor: pointer;
+}
+
+/* 4. CELL (Ô) */
+.cell,
+.headerCell {
+  border-bottom: 1px solid #f1f5f9;
   display: flex;
-  background: var(--main_d);
-  color: white; /* Yêu cầu 3: Chữ trắng */
+  align-items: center;
+  overflow: hidden;
+  justify-content: flex-start;
+  text-align: left;
+  font-size: 13px;
+  color: #475569;
+
+  /* Yêu cầu mới: Giảm chiều cao hàng nội dung */
+  padding: 4px 12px;
+  min-height: 32px; /* Chiều cao tối thiểu cho hàng nội dung */
+}
+
+/* Style riêng cho các ô header */
+.headerCell {
   position: sticky;
   top: 0;
   z-index: 10;
-  flex-shrink: 0;
-  padding-block: 4px;
+  background-color: #0374da;
+  color: white; /* Đổi lại màu chữ cho header */
+  font-weight: 600;
+  border-bottom: 2px solid #e2e8f0;
+  border-right: 1px solid rgba(255, 255, 255, 0.2); /* Thêm lại đường kẻ cho header */
+
+  /* Yêu cầu mới: Giảm chiều cao header và làm nó cao hơn content */
+  padding: 6px 12px;
+  min-height: 38px;
+
+  justify-content: center;
+  text-align: center;
+}
+.headerCell:last-child {
+  border-right: none;
+}
+/* Ghi đè lại căn trái cho header cột Tên */
+.headerCell:nth-child(4) {
+  justify-content: flex-start;
+  text-align: left;
 }
 
-.gridBody {
-  overflow-y: auto; /* Chỉ cuộn phần body */
-}
-
-.gridRow {
-  display: flex;
-  border-bottom: 1px solid #f1f5f9;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.gridRow:hover {
-  background: #f8fafc;
-}
-
-.gridCell {
-  flex: 1;
-  padding: 8px 16px;
-  font-size: 14px;
-  color: #475569;
+/* 5. XỬ LÝ NỘI DUNG TRONG CELL */
+.cell {
   white-space: nowrap;
-  overflow: hidden;
   text-overflow: ellipsis;
-  display: flex;
-  align-items: center;
+}
+/* Căn giữa cho các cột cần thiết */
+.cell:nth-child(1),
+.cell:nth-child(2),
+.cell:nth-child(5) {
+  justify-content: center;
+}
+.uidBadge,
+.lookupStatus {
+  margin: 0 auto; /* Căn giữa các huy hiệu */
+}
+/* Cột Tên wrap text */
+.nameCell {
+  white-space: normal;
+  font-weight: 500;
+  color: #1e293b;
 }
 
 /* Yêu cầu 3: Chân trang tích hợp */

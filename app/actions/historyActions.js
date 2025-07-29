@@ -207,20 +207,22 @@ export async function logDeleteScheduleTask(user, job, task) {
 
 /**
  * Ghi log chi tiết cho một hành động được thực thi bởi CRON Job.
- * @param {object} jobInfo - Thông tin về job (chiến dịch) cha.
- * @param {object} task - Task được thực thi.
- * @param {string} customerId - ObjectId của khách hàng bị tác động.
- * @param {'SUCCESS' | 'FAILED'} statusName - Trạng thái thực thi.
- * @param {object} executionResult - Toàn bộ object kết quả trả về từ script.
+ * @param {object} logContext - Bối cảnh của log.
+ * @param {object} logContext.jobInfo - Thông tin về job cha.
+ * @param {object} logContext.task - Task được thực thi.
+ * @param {string} logContext.customerId - ID khách hàng.
+ * @param {'SUCCESS' | 'FAILED'} logContext.statusName - Trạng thái thực thi.
+ * @param {object} logContext.executionResult - Kết quả thô từ script.
+ * @param {string} [logContext.finalMessage] - (Optional) Tin nhắn cuối cùng đã gửi.
  */
-export async function logExecuteScheduleTask(
+export async function logExecuteScheduleTask({
   jobInfo,
   task,
   customerId,
   statusName,
   executionResult,
-) {
-  // console.log("\n[DEBUG] Bắt đầu thực thi logExecuteScheduleTask...");
+  finalMessage, // Tham số mới
+}) {
   try {
     const actionTypeMap = {
       sendMessage: "DO_SCHEDULE_SEND_MESSAGE",
@@ -234,36 +236,28 @@ export async function logExecuteScheduleTask(
       action,
       user: jobInfo.createdBy,
       customer: customerId,
-      zalo: jobInfo.zaloAccountId, // Đảm bảo tên trường là 'zalo'
+      zalo: jobInfo.zaloAccountId,
+      // status.detail: Lưu kết quả thô từ script, làm "bằng chứng"
       status: {
         status: statusName,
         detail: executionResult,
       },
+      // actionDetail: Lưu các thông tin "đã biết trước" hoặc "đã xử lý"
       actionDetail: {
         scheduleId: jobInfo.jobId,
         scheduleName: jobInfo.jobName,
         executedAt: new Date(),
-        resultMessage: executionResult.actionMessage,
-        ...(jobInfo.actionType === "findUid" && {
-          uidStatus: executionResult.uidStatus,
-          foundUid: executionResult.targetUid,
+        // Nếu là gửi tin, lưu lại cả tin nhắn gốc và tin nhắn cuối cùng
+        ...(jobInfo.actionType === "sendMessage" && {
+          messageTemplate: jobInfo.config.messageTemplate,
+          finalMessage: finalMessage, // Lưu tin nhắn đã sinh biến thể
         }),
       },
     };
 
-    console.log(
-      "[DEBUG] Dữ liệu chuẩn bị ghi vào log:",
-      JSON.stringify(logData, null, 2),
-    );
-
-    // THAY ĐỔI QUAN TRỌNG: Ghi trực tiếp bằng Model thay vì hàm logAction
-    // để bắt lỗi schema một cách tường minh.
     await ActionHistory.create(logData);
-
-    // console.log("✅ [DEBUG] Ghi log thành công cho khách hàng:", customerId);
   } catch (error) {
-    // Nếu có lỗi schema, nó sẽ bị bắt và in ra ở đây
-    console.error("❌ [DEBUG] ĐÃ XẢY RA LỖI KHI GHI LOG TRỰC TIẾP:", error);
+    console.error("❌ LỖI KHI GHI LOG HÀNH ĐỘNG:", error);
   }
 }
 
@@ -293,7 +287,7 @@ export async function getHistoryForSchedule(scheduleId) {
     })
       .populate({
         path: "customer",
-        select: "name phone",
+        select: "name phone", // Đảm bảo lấy cả name và phone
       })
       .sort({ time: -1 })
       .lean();
@@ -310,7 +304,6 @@ export async function getHistoryForSchedule(scheduleId) {
         : null,
       user: log.user?.toString(),
       zalo: log.zalo?.toString(),
-      // BỔ SUNG LOGIC XỬ LÝ CHO actionDetail
       actionDetail: {
         ...log.actionDetail,
         scheduleId: log.actionDetail.scheduleId?.toString(),

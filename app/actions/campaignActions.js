@@ -89,11 +89,11 @@ export async function getRunningJobs() {
       .populate([
         {
           path: "createdBy",
-          select: "name",
+          select: "name email", // Lấy thêm email
         },
         {
           path: "zaloAccount",
-          select: "name",
+          select: "name phone avt", // Lấy thêm phone và avatar
         },
       ])
       .sort({ createdAt: -1 })
@@ -103,14 +103,18 @@ export async function getRunningJobs() {
     const safeJobs = jobsFromDB.map((job) => ({
       ...job,
       _id: job._id.toString(),
-      createdBy: {
-        ...job.createdBy,
-        _id: job.createdBy?._id.toString(),
-      },
-      zaloAccount: {
-        ...job.zaloAccount,
-        _id: job.zaloAccount?._id.toString(),
-      },
+      createdBy: job.createdBy
+        ? {
+            ...job.createdBy,
+            _id: job.createdBy._id.toString(),
+          }
+        : null,
+      zaloAccount: job.zaloAccount
+        ? {
+            ...job.zaloAccount,
+            _id: job.zaloAccount._id.toString(),
+          }
+        : null,
       tasks: job.tasks.map((task) => ({
         ...task,
         _id: task._id.toString(),
@@ -121,10 +125,10 @@ export async function getRunningJobs() {
       })),
     }));
 
-    return safeJobs; // Trả về mảng đã được làm sạch
+    return safeJobs;
   } catch (error) {
     console.error("Lỗi khi lấy danh sách chiến dịch đang chạy:", error);
-    return []; // Luôn trả về mảng rỗng khi có lỗi
+    return [];
   }
 }
 
@@ -177,38 +181,49 @@ export async function removeTaskFromSchedule(scheduleId, taskId) {
     const schedule = await ScheduledJob.findById(scheduleId);
     if (!schedule) return { error: "Không tìm thấy lịch trình." };
 
-    const removedTask = schedule.tasks.find((t) => t._id.toString() === taskId);
-    if (!removedTask)
+    const taskToRemove = schedule.tasks.find(
+      (t) => t._id.toString() === taskId,
+    );
+    if (!taskToRemove)
       return { error: "Không tìm thấy người nhận trong lịch trình." };
 
-    // Ghi log cho hành động xóa task này
-    await logDeleteScheduleTask(user, schedule, removedTask);
+    // Ghi log cho hành động xóa (nếu cần)
+    await logDeleteScheduleTask(user, schedule, taskToRemove);
 
-    // Cập nhật lại DB
-    await ScheduledJob.findByIdAndUpdate(scheduleId, {
-      $pull: { tasks: { _id: taskId } },
-      $inc: { "statistics.total": -1 },
-    });
+    const result = await ScheduledJob.findByIdAndUpdate(
+      scheduleId,
+      {
+        $pull: { tasks: { _id: taskId } },
+        $inc: { "statistics.total": -1 },
+      },
+      { new: true },
+    ); // Lấy về job đã cập nhật
 
     revalidatePath("/admin");
-    return { success: true, message: "Đã xóa người nhận khỏi lịch trình." };
+    return { success: true, updatedJob: JSON.parse(JSON.stringify(result)) };
   } catch (error) {
     return { error: error.message };
   }
 }
+
 export async function getArchivedJobs() {
   try {
     await connectDB();
     const jobsFromDB = await ArchivedJob.find({})
       .populate([
-        { path: "createdBy", select: "name" },
-        { path: "zaloAccount", select: "name" },
+        {
+          path: "createdBy",
+          select: "name email", // Lấy thêm email
+        },
+        {
+          path: "zaloAccount",
+          select: "name phone avt", // Lấy thêm phone và avatar
+        },
       ])
       .sort({ completedAt: -1 })
       .limit(50)
       .lean();
 
-    // "Làm phẳng" dữ liệu để đảm bảo an toàn tuyệt đối khi gửi cho Client
     const safeJobs = jobsFromDB.map((job) => ({
       ...job,
       _id: job._id.toString(),

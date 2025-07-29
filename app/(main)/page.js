@@ -1,7 +1,7 @@
 // app/(main)/page.js
 
 import { getCurrentUser } from "@/lib/session";
-import Client from "./client/index"; // Import component từ file index.js
+import ClientPage from "./client/index"; // Import component từ file index.js
 import { Data_Client, Data_Label, Data_Status } from "@/data/customer"; // Đảm bảo đúng đường dẫn
 
 export default async function Page({ searchParams }) {
@@ -17,7 +17,7 @@ export default async function Page({ searchParams }) {
 
   // BƯỚC 2: Truyền dữ liệu ban đầu xuống Client Component
   return (
-    <Client
+    <ClientPage
       initialData={clientResponse.data}
       initialPagination={clientResponse.pagination}
       initialLabels={labelResponse.data}

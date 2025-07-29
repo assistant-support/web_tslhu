@@ -5,6 +5,8 @@ import React, { useState, useEffect, useMemo, useTransition } from "react";
 import styles from "./PanelStyles.module.css";
 import { getHistoryForSchedule } from "@/app/actions/historyActions";
 import HistoryDetailPanel from "./HistoryDetailPanel"; // Import panel cấp 3
+import { getCustomerDetails } from "@/app/actions/customerActions"; // Yêu cầu 9
+import CustomerDetails from "@/app/(main)/client/ui/details/CustomerDetails";
 import { usePanels } from "@/contexts/PanelContext";
 
 export default function ExecutionHistoryPanel({ panelData: { jobId } }) {
@@ -50,6 +52,25 @@ export default function ExecutionHistoryPanel({ panelData: { jobId } }) {
     );
   }, [searchTerm, history]);
 
+  const handleDoubleClickCustomer = async (customer) => {
+    if (!customer?._id) return;
+    const customerDetails = await getCustomerDetails(customer._id);
+    if (customerDetails) {
+      openPanel({
+        id: `details-${customer._id}`,
+        component: CustomerDetails,
+        title: `Chi tiết: ${customerDetails.name}`,
+        props: {
+          customerData: customerDetails,
+          // Lưu ý: Các props khác như onUpdateCustomer sẽ không có sẵn ở đây,
+          // panel sẽ ở chế độ chỉ xem hoặc cần logic cập nhật riêng.
+        },
+      });
+    } else {
+      alert("Không thể lấy thông tin chi tiết khách hàng.");
+    }
+  };
+
   const handleOpenDetail = (log) => {
     const panelId = `log-detail-${log._id}`;
     openPanel({
@@ -81,13 +102,17 @@ export default function ExecutionHistoryPanel({ panelData: { jobId } }) {
             key={log._id}
             className={styles.listItem}
             onClick={() => handleOpenDetail(log)}
+            onDoubleClick={() => handleDoubleClickCustomer(log.customer)} // Yêu cầu 9
+            title="Click để xem log, Double-click để xem chi tiết khách hàng"
           >
             <div className={styles.listItemInfo}>
               <span className={styles.itemName}>
                 {log.status.status === "SUCCESS" ? "✅" : "❌"}{" "}
                 {log.customer?.name}
               </span>
+              {/* Yêu cầu 8: Thêm SĐT */}
               <span className={styles.itemSubtext}>
+                {log.customer?.phone} -{" "}
                 {new Date(log.time).toLocaleString("vi-VN")}
               </span>
             </div>
