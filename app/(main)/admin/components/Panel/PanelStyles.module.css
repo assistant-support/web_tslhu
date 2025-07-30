@@ -138,3 +138,13 @@
   background-color: #fee2e2; /* red-100 */
   color: #b91c1c; /* red-700 */
 }
+/* -------------------- START: THÊM STYLE CHO STT -------------------- */
+.itemIndex {
+  flex-shrink: 0; /* Không co lại */
+  font-size: 14px;
+  color: #888;
+  margin-right: 12px; /* Khoảng cách với nội dung chính */
+  font-weight: 500;
+  width: 25px; /* Đảm bảo các số được căn thẳng hàng */
+  text-align: right;
+}

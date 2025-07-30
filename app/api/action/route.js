@@ -7,6 +7,7 @@ import ArchivedJob from "@/models/archivedJob";
 import Variant from "@/models/variant";
 import { revalidateTag } from "next/cache";
 import { logExecuteScheduleTask } from "@/app/actions/historyActions";
+import crypto from "crypto";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -71,53 +72,47 @@ const executeExternalScript = async (type, acc, person, cfg, variants) => {
   return { finalMessage, scriptResult: jsonResponse.data };
 };
 
-/**
- * Cập nhật Customer và ZaloAccount dựa trên kết quả.
- * @param {object} context - Dữ liệu cần thiết để cập nhật.
- */
 const updateDataAfterExecution = async ({
   actionType,
   apiResult,
   customerId,
-  zaloAccountId,
-  task,
 }) => {
-  const updatePayload = {};
+  const customer = await Customer.findById(customerId).select("uid").lean();
+  if (!customer) return;
 
-  // 1. Xử lý cập nhật UID
-  if (apiResult.uidStatus === "found_new" && apiResult.targetUid) {
-    updatePayload.uid = apiResult.targetUid;
-  } else if (apiResult.uidStatus === "not_found") {
-    // Chỉ cập nhật UID nếu không phải lỗi do rate limit
-    if (!apiResult.actionMessage.includes("quá nhiều lần")) {
-      updatePayload.uid = apiResult.actionMessage;
+  const updatePayload = {};
+  const { uidStatus, targetUid, actionMessage, actionStatus } = apiResult;
+
+  // Chỉ thực hiện logic cập nhật UID nếu hành động là 'findUid',
+  // hoặc là 'sendMessage' và script đã phải tự tìm UID.
+  if (actionType === "findUid" || (actionType === "sendMessage" && uidStatus)) {
+    // Kịch bản 1: Tìm thấy UID mới thành công
+    if (uidStatus === "found_new" && targetUid) {
+      updatePayload.uid = targetUid;
     }
-  } else if (
-    apiResult.uidStatus === "provided" &&
-    apiResult.actionStatus === "error"
-  ) {
-    // UID cũ không hợp lệ -> Xóa
-    updatePayload.uid = null;
+    // Kịch bản 2: UID cung cấp bị lỗi, không hợp lệ
+    else if (uidStatus === "provided" && actionStatus === "error") {
+      updatePayload.uid = null;
+    }
+    // Kịch bản 3: Không tìm thấy UID (do rate limit hoặc lỗi khác)
+    else if (uidStatus === "not_found") {
+      if (actionMessage && actionMessage.includes("quá nhiều lần")) {
+        if (!customer.uid || !/^\d+$/.test(customer.uid)) {
+          updatePayload.uid = null;
+        }
+      } else {
+        updatePayload.uid = actionMessage || "Lỗi không xác định";
+      }
+    }
+    // Kịch bản 4 (Catch-all): Bắt các lỗi không có uidStatus (vd: fetch failed)
+    // chỉ khi hành động là 'findUid'.
+    else if (actionType === "findUid" && actionStatus === "error") {
+      updatePayload.uid = actionMessage || "Lỗi thực thi script";
+    }
   }
 
   if (Object.keys(updatePayload).length > 0) {
     await Customer.updateOne({ _id: customerId }, { $set: updatePayload });
-  }
-
-  // 2. Cập nhật Rate Limit (chỉ cho findUid và addFriend)
-  if (actionType === "findUid" || actionType === "addFriend") {
-    let actionsToConsume = 1;
-    // Nếu gửi tin cho người chưa có UID, thực chất đã tốn 1 lượt findUid
-    if (actionType === "sendMessage" && !task.person.uid) {
-      actionsToConsume = 1;
-    }
-
-    await ZaloAccount.findByIdAndUpdate(zaloAccountId, {
-      $inc: {
-        actionsUsedThisHour: actionsToConsume,
-        actionsUsedThisDay: actionsToConsume,
-      },
-    });
   }
 };
 
@@ -155,93 +150,62 @@ export const GET = async () => {
   try {
     await connectDB();
     const now = new Date();
+    let processedCount = 0;
     const allVariants = await Variant.find().lean();
-    const dueJobs = await ScheduledJob.aggregate([
-      { $match: { status: { $in: ["scheduled", "processing"] } } },
-      { $unwind: "$tasks" },
-      {
-        $match: {
+    const cronProcessId = crypto.randomBytes(16).toString("hex"); // Tạo ID định danh cho lần chạy CRON này
+
+    while (true) {
+      // PHA 1: TÌM VÀ "KHÓA" MỘT TÁC VỤ DUY NHẤT
+      // Lệnh này sẽ tìm một job có task thỏa mãn điều kiện,
+      // và cập nhật nguyên tử status của task đó sang 'processing' và gán processingId.
+      const jobWithLockedTask = await ScheduledJob.findOneAndUpdate(
+        {
+          status: { $in: ["scheduled", "processing"] },
           "tasks.status": "pending",
           "tasks.scheduledFor": { $lte: now },
         },
-      },
-      {
-        $lookup: {
-          from: "zaloaccounts",
-          localField: "zaloAccount",
-          foreignField: "_id",
-          as: "bot",
+        {
+          $set: {
+            status: "processing",
+            "tasks.$.status": "processing",
+            "tasks.$.processingId": cronProcessId,
+          },
         },
-      },
-      { $unwind: "$bot" },
-      {
-        $project: {
-          jobId: "$_id",
-          jobName: 1,
-          status: 1,
-          actionType: 1,
-          config: 1,
-          createdBy: 1,
-          bot: 1, // Vẫn lấy cả object bot
-          task: "$tasks",
-          createdAt: 1,
-          estimatedCompletionTime: 1,
+        {
+          new: true, // Trả về document sau khi đã cập nhật
+          sort: { "tasks.scheduledFor": 1 }, // Ưu tiên task cũ nhất
         },
-      },
-    ]);
+      ).populate("zaloAccount");
 
-    if (!dueJobs.length) {
-      return NextResponse.json(
-        { message: "Không có tác vụ nào đến hạn." },
-        { headers: cors },
+      // Nếu không tìm thấy tác vụ nào nữa, thoát khỏi vòng lặp
+      if (!jobWithLockedTask) {
+        break;
+      }
+
+      // Lấy ra đúng tác vụ vừa được khóa bởi tiến trình CRON này
+      const taskToProcess = jobWithLockedTask.tasks.find(
+        (t) => t.processingId === cronProcessId,
       );
-    }
 
-    let processedCount = 0;
-
-    for (const item of dueJobs) {
-      const { bot, task, jobId, ...jobInfo } = item;
-
-      // 1. Kiểm tra và Reset Rate Limit
-      const nowMs = now.getTime();
-      const hourStartMs = bot.rateLimitHourStart?.getTime() || 0;
-      const dayStartMs = bot.rateLimitDayStart?.getTime() || 0;
-
-      const updates = {};
-      if (nowMs - hourStartMs >= 3_600_000) {
-        updates.actionsUsedThisHour = 0;
-        updates.rateLimitHourStart = now;
-      }
-      if (nowMs - dayStartMs >= 86_400_000) {
-        updates.actionsUsedThisDay = 0;
-        updates.rateLimitDayStart = now;
-      }
-      if (Object.keys(updates).length > 0) {
-        await ZaloAccount.findByIdAndUpdate(bot._id, { $set: updates });
-        // Tải lại thông tin bot sau khi reset
-        Object.assign(bot, updates);
+      // Nếu vì một lý do nào đó không tìm thấy task (rất hiếm), bỏ qua
+      if (!taskToProcess) {
+        continue;
       }
 
-      // 2. Kiểm tra trước khi thực thi
-      if (
-        (jobInfo.actionType !== "sendMessage" &&
-          bot.actionsUsedThisHour >= bot.rateLimitPerHour) ||
-        (jobInfo.actionType !== "sendMessage" &&
-          bot.actionsUsedThisDay >= bot.rateLimitPerDay)
-      ) {
-        continue; // Bỏ qua nếu đạt giới hạn (trừ gửi tin)
-      }
-      if (item.status === "scheduled") {
-        await ScheduledJob.findByIdAndUpdate(jobId, { status: "processing" });
-      }
+      const {
+        zaloAccount: bot,
+        _id: jobId,
+        ...jobInfo
+      } = JSON.parse(JSON.stringify(jobWithLockedTask));
 
+      // PHA 2: THỰC THI TÁC VỤ ĐÃ ĐƯỢC KHÓA AN TOÀN
       let executionResult, finalMessage, logStatus, executionStatus;
 
       try {
         const { scriptResult, finalMessage: msg } = await executeExternalScript(
           jobInfo.actionType,
           bot,
-          task.person,
+          taskToProcess.person,
           jobInfo.config,
           allVariants,
         );
@@ -255,58 +219,65 @@ export const GET = async () => {
       }
 
       logStatus = executionStatus === "completed" ? "SUCCESS" : "FAILED";
-      const customer = await Customer.findOne({ phone: task.person.phone })
+      const customer = await Customer.findById(taskToProcess.person._id)
         .select("_id")
         .lean();
-      if (!customer) continue; // Bỏ qua nếu không tìm thấy KH
+      if (!customer) continue;
 
-      // 4. Ghi log và Cập nhật dữ liệu
+      // PHA 3: GHI LOG VÀ CẬP NHẬT TRẠNG THÁI
       await Promise.all([
         logExecuteScheduleTask({
           jobInfo: { ...jobInfo, jobId, zaloAccountId: bot._id },
-          task,
+          task: taskToProcess,
           customerId: customer._id,
           statusName: logStatus,
           executionResult,
           finalMessage,
         }),
         updateDataAfterExecution({
+          // Truyền actionType vào
           actionType: jobInfo.actionType,
           apiResult: executionResult,
           customerId: customer._id,
-          zaloAccountId: bot._id,
-          task: task,
         }),
+        // Cập nhật trạng thái của task con và tăng chỉ số thống kê
         ScheduledJob.updateOne(
-          { _id: jobId },
+          { _id: jobId, "tasks._id": taskToProcess._id },
           {
+            $set: {
+              "tasks.$.status": executionStatus,
+              "tasks.$.processedAt": new Date(),
+              "tasks.$.resultMessage": executionResult.actionMessage,
+            },
             $inc: { [`statistics.${executionStatus}`]: 1 },
-            $pull: { tasks: { _id: task._id } },
           },
         ),
       ]);
 
       processedCount++;
 
-      // 5. Lưu trữ job nếu hoàn thành
-      const jobAfterUpdate = await ScheduledJob.findById(jobId)
-        .select("tasks")
-        .lean();
-      if (jobAfterUpdate && jobAfterUpdate.tasks.length === 0) {
-        await archiveAndRemoveJob(item);
+      // Kiểm tra và lưu trữ job nếu đã hoàn thành (tất cả các task đều không còn ở trạng thái pending)
+      const remainingTasks = await ScheduledJob.countDocuments({
+        _id: jobId,
+        "tasks.status": "pending",
+      });
+      if (remainingTasks === 0) {
+        await archiveAndRemoveJob(jobId);
       }
     }
 
-    if (processedCount > 0) revalidateTag("customer_data");
-    return NextResponse.json(
-      { message: `Cron job đã chạy. Xử lý ${processedCount} tác vụ.` },
-      { headers: cors },
-    );
+    if (processedCount > 0) {
+      revalidateTag("customer_data");
+    }
+
+    return NextResponse.json({
+      message: `Cron job đã chạy. Xử lý an toàn ${processedCount} tác vụ.`,
+    });
   } catch (err) {
     console.error("CRON JOB FAILED:", err);
     return NextResponse.json(
       { message: "Lỗi nghiêm trọng trong CRON job.", error: err.message },
-      { status: 500, headers: cors },
+      { status: 500 },
     );
   }
 };

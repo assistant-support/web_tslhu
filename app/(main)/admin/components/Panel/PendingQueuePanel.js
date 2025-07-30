@@ -1,4 +1,6 @@
-// File: PendingQueuePanel.js
+// web_tslhu/app/(main)/admin/components/Panel/PendingQueuePanel.js
+// -------------------- START: THAY ĐỔI TOÀN BỘ FILE --------------------
+// Chú thích: Thêm số thứ tự (STT) vào đầu mỗi mục trong danh sách.
 "use client";
 
 import React, { useState, useMemo, useTransition } from "react";
@@ -14,7 +16,6 @@ export default function PendingQueuePanel({
   const { openPanel } = usePanels();
   const [tasks, setTasks] = useState(job.tasks || []);
   const [searchTerm, setSearchTerm] = useState("");
-  // Yêu cầu 8: Sửa lỗi thiếu isPending
   const [isPending, startTransition] = useTransition();
 
   const handleDoubleClickCustomer = async (customer) => {
@@ -27,7 +28,6 @@ export default function PendingQueuePanel({
         title: `Chi tiết: ${customerDetails.name}`,
         props: {
           customerData: customerDetails,
-          // Yêu cầu 1: Truyền callback xuống để đồng bộ state
           onUpdateInList: (updatedCustomer) => {
             setTasks((currentTasks) =>
               currentTasks.map((task) =>
@@ -59,7 +59,6 @@ export default function PendingQueuePanel({
         const result = await removeTaskFromSchedule(job._id, taskId);
         if (result.success) {
           setTasks((prev) => prev.filter((t) => t._id !== taskId));
-          // Gọi callback lên để cập nhật lại component cha
           onScheduleUpdate({
             type: "TASK_REMOVED",
             jobId: job._id,
@@ -84,13 +83,16 @@ export default function PendingQueuePanel({
         />
       </div>
       <div className={styles.listContainer}>
-        {filteredTasks.map((task) => (
+        {/*<-----------------Thay đổi nhỏ: Thêm `index` vào hàm map----------------->*/}
+        {filteredTasks.map((task, index) => (
           <div
             key={task._id}
             className={styles.listItem}
             onDoubleClick={() => handleDoubleClickCustomer(task.person)}
             title="Double-click để xem chi tiết khách hàng"
           >
+            {/*<-----------------Thay đổi nhỏ: Thêm thẻ span cho STT----------------->*/}
+            <span className={styles.itemIndex}>{index + 1}.</span>
             <div className={styles.listItemInfo}>
               <span className={styles.itemName}>{task.person.name}</span>
               <span className={styles.itemSubtext}>{task.person.phone}</span>
@@ -98,7 +100,6 @@ export default function PendingQueuePanel({
             <div className={styles.listItemStatus}>
               🕒 {new Date(task.scheduledFor).toLocaleString("vi-VN")}
             </div>
-            {/* Yêu cầu 13: Nút xóa */}
             <button
               className={styles.deleteButton}
               onClick={(e) => {
@@ -116,3 +117,4 @@ export default function PendingQueuePanel({
     </div>
   );
 }
+// --------------------  END: THAY ĐỔI TOÀN BỘ FILE  --------------------

@@ -1,11 +1,10 @@
-// File: ExecutionHistoryPanel.js
 "use client";
 
 import React, { useState, useEffect, useMemo, useTransition } from "react";
 import styles from "./PanelStyles.module.css";
 import { getHistoryForSchedule } from "@/app/actions/historyActions";
-import HistoryDetailPanel from "./HistoryDetailPanel"; // Import panel cấp 3
-import { getCustomerDetails } from "@/app/actions/customerActions"; // Yêu cầu 9
+import HistoryDetailPanel from "./HistoryDetailPanel";
+import { getCustomerDetails } from "@/app/actions/customerActions";
 import CustomerDetails from "@/app/(main)/client/ui/details/CustomerDetails";
 import { usePanels } from "@/contexts/PanelContext";
 
@@ -20,23 +19,16 @@ export default function ExecutionHistoryPanel({ panelData: { jobId } }) {
   useEffect(() => {
     startTransition(async () => {
       setIsLoading(true);
-      setError(null); // Reset lỗi mỗi khi fetch
+      setError(null);
       try {
         const historyData = await getHistoryForSchedule(jobId);
-        console.log("Lịch sử trả về:", historyData); // Debug log
-
         if (Array.isArray(historyData)) {
           setHistory(historyData);
         } else {
-          console.error(
-            "Dữ liệu lịch sử trả về không phải là mảng:",
-            historyData,
-          );
           setError("Dữ liệu lịch sử trả về không hợp lệ.");
           setHistory([]);
         }
       } catch (e) {
-        console.error("Lỗi khi fetch lịch sử:", e);
         setError("Không thể tải dữ liệu lịch sử.");
       }
       setIsLoading(false);
@@ -60,11 +52,7 @@ export default function ExecutionHistoryPanel({ panelData: { jobId } }) {
         id: `details-${customer._id}`,
         component: CustomerDetails,
         title: `Chi tiết: ${customerDetails.name}`,
-        props: {
-          customerData: customerDetails,
-          // Lưu ý: Các props khác như onUpdateCustomer sẽ không có sẵn ở đây,
-          // panel sẽ ở chế độ chỉ xem hoặc cần logic cập nhật riêng.
-        },
+        props: { customerData: customerDetails },
       });
     } else {
       alert("Không thể lấy thông tin chi tiết khách hàng.");
@@ -97,30 +85,42 @@ export default function ExecutionHistoryPanel({ panelData: { jobId } }) {
         />
       </div>
       <div className={styles.listContainer}>
-        {filteredHistory.map((log) => (
-          <div
-            key={log._id}
-            className={styles.listItem}
-            onClick={() => handleOpenDetail(log)}
-            onDoubleClick={() => handleDoubleClickCustomer(log.customer)} // Yêu cầu 9
-            title="Click để xem log, Double-click để xem chi tiết khách hàng"
-          >
-            <div className={styles.listItemInfo}>
-              <span className={styles.itemName}>
-                {log.status.status === "SUCCESS" ? "✅" : "❌"}{" "}
-                {log.customer?.name}
-              </span>
-              {/* Yêu cầu 8: Thêm SĐT */}
-              <span className={styles.itemSubtext}>
-                {log.customer?.phone} -{" "}
-                {new Date(log.time).toLocaleString("vi-VN")}
-              </span>
+        {filteredHistory.map((log, index) => {
+          const getSafeActionMessage = (detail) => {
+            if (!detail || !detail.actionMessage) return "...";
+            if (typeof detail.actionMessage === "object") {
+              return (
+                detail.actionMessage.message ||
+                JSON.stringify(detail.actionMessage)
+              );
+            }
+            return detail.actionMessage;
+          };
+          return (
+            <div
+              key={log._id}
+              className={styles.listItem}
+              onClick={() => handleOpenDetail(log)}
+              onDoubleClick={() => handleDoubleClickCustomer(log.customer)}
+              title="Click để xem log, Double-click để xem chi tiết khách hàng"
+            >
+              <span className={styles.itemIndex}>{index + 1}.</span>
+              <div className={styles.listItemInfo}>
+                <span className={styles.itemName}>
+                  {log.status.status === "SUCCESS" ? "✅" : "❌"}{" "}
+                  {log.customer?.name || "Không rõ"}
+                </span>
+                <span className={styles.itemSubtext}>
+                  {log.customer?.phone || "Không có SĐT"} -{" "}
+                  {new Date(log.time).toLocaleString("vi-VN")}
+                </span>
+              </div>
+              <div className={styles.listItemStatus}>
+                {getSafeActionMessage(log.status?.detail)}
+              </div>
             </div>
-            <div className={styles.listItemStatus}>
-              {log.status?.detail?.actionMessage || "..."}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

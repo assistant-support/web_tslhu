@@ -1,30 +1,62 @@
-// File: HistoryDetailPanel.js
 "use client";
 
 import React from "react";
-import styles from "./PanelStyles.module.css"; // Sẽ tạo file CSS dùng chung
+import styles from "./PanelStyles.module.css";
 
-const DetailRow = ({ label, value, isObject = false }) => (
+const DetailRow = ({ label, value, isObject = false, isCode = false }) => (
   <div className={styles.detailRow}>
     <span className={styles.detailLabel}>{label}</span>
     {isObject ? (
       <pre className={styles.detailValueJson}>{value}</pre>
     ) : (
-      <span className={styles.detailValue}>{value}</span>
+      <span className={`${styles.detailValue} ${isCode ? styles.code : ""}`}>
+        {value}
+      </span>
     )}
   </div>
 );
 
+const getSafeCustomerName = (customer) => {
+  if (!customer) return "Không rõ";
+  if (typeof customer.name === "object" && customer.name !== null) {
+    return customer.name.name || "Dữ liệu tên lỗi";
+  }
+  return customer.name || "Không xác định";
+};
+
 export default function HistoryDetailPanel({ panelData: log }) {
   if (!log) return null;
 
-  const { status, actionDetail, time, customer } = log;
+  const { status, actionDetail, time, customer, action } = log;
   const executionResult = status.detail || {};
+
+  const renderUidDetails = () => {
+    let uidStatusMessage = "Không xác định";
+    if (executionResult.uidStatus === "found_new") {
+      uidStatusMessage = "✅ Tìm thấy UID mới";
+    } else if (executionResult.uidStatus === "already_exists") {
+      uidStatusMessage = "ℹ️ UID đã tồn tại, không cập nhật";
+    } else if (executionResult.uidStatus === "not_found") {
+      uidStatusMessage = "❌ Không tìm thấy UID cho SĐT này";
+    }
+    return (
+      <>
+        <DetailRow label="Trạng thái UID" value={uidStatusMessage} />
+        {executionResult.targetUid && (
+          <DetailRow
+            label="UID"
+            value={executionResult.targetUid}
+            isCode={true}
+          />
+        )}
+      </>
+    );
+  };
 
   return (
     <div className={styles.panelContent}>
       <h4 className={styles.contentTitle}>
-        Chi tiết thực thi cho: {customer?.name || "Không rõ"}
+        Chi tiết thực thi cho: {getSafeCustomerName(customer)}
       </h4>
       <div className={styles.detailGroup}>
         <DetailRow
@@ -39,13 +71,21 @@ export default function HistoryDetailPanel({ panelData: log }) {
           label="Thông điệp trả về"
           value={executionResult.actionMessage || "Không có"}
         />
-        {log.action === "DO_SCHEDULE_SEND_MESSAGE" && (
+
+        {/*<-----------------Thay đổi: Hiển thị chi tiết cho từng loại hành động----------------->*/}
+        {action === "DO_SCHEDULE_SEND_MESSAGE" && (
           <DetailRow
             label="Nội dung đã gửi"
-            value={actionDetail.messageTemplate || "Không có"}
-            isObject
+            value={
+              actionDetail.finalMessage ||
+              actionDetail.messageTemplate ||
+              "Không có"
+            }
+            isObject={true}
           />
         )}
+
+        {action === "DO_SCHEDULE_FIND_UID" && renderUidDetails()}
       </div>
 
       <h4 className={styles.contentTitle}>Dữ liệu gốc từ Script</h4>

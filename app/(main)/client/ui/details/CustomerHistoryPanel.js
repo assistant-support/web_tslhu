@@ -1,10 +1,12 @@
+// web_tslhu/app/(main)/client/ui/details/CustomerHistoryPanel.js
+// -------------------- START: THAY THẾ TOÀN BỘ FILE --------------------
+// Chú thích: Nâng cấp để hiển thị finalMessage.
 "use client";
 
 import React, { useState, useEffect, useTransition } from "react";
 import styles from "./CustomerHistoryPanel.module.css";
 import { getHistoryForCustomer } from "@/app/actions/historyActions";
 
-// Cập nhật thêm các "bản dịch"
 const formatActionName = (action) => {
   const map = {
     DO_SCHEDULE_SEND_MESSAGE: "Gửi tin nhắn tự động",
@@ -22,10 +24,8 @@ const formatActionName = (action) => {
   return map[action] || action.replace(/_/g, " ").toLowerCase();
 };
 
-// ================= START: NÂNG CẤP LOGIC HIỂN THỊ =================
-// Component con để render chi tiết, đã được viết lại hoàn toàn
 const ActionDetails = ({ log }) => {
-  const { action, status, actionDetail, zalo } = log;
+  const { action, status, actionDetail } = log;
   const result = status.detail || {};
 
   const DetailRow = ({ label, value, isCode = false }) => (
@@ -73,12 +73,16 @@ const ActionDetails = ({ log }) => {
     case "ADD_COMMENT_CUSTOMER":
       return <p>Đã thêm một bình luận mới vào hồ sơ.</p>;
 
+    //<-----------------Thay đổi: Hiển thị finalMessage----------------->
     case "DO_SCHEDULE_SEND_MESSAGE":
       return (
         <>
           {renderScheduleDetails()}
-          {result.message && (
-            <DetailRow label="Nội dung gửi" value={result.message} />
+          {(actionDetail.finalMessage || actionDetail.messageTemplate) && (
+            <DetailRow
+              label="Nội dung gửi"
+              value={actionDetail.finalMessage || actionDetail.messageTemplate}
+            />
           )}
         </>
       );
@@ -157,7 +161,6 @@ const HistoryItem = ({ log }) => {
     </div>
   );
 };
-// =================  END: NÂNG CẤP LOGIC HIỂN THỊ  =================
 
 export default function CustomerHistoryPanel({ panelData: { customerId } }) {
   const [history, setHistory] = useState([]);
@@ -189,3 +192,4 @@ export default function CustomerHistoryPanel({ panelData: { customerId } }) {
     </div>
   );
 }
+// --------------------  END: THAY THẾ TOÀN BỘ FILE  --------------------

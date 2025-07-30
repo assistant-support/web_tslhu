@@ -93,6 +93,30 @@ const Row = React.memo(function Row({
     if (tinhTrang) return "found";
     return "not-found";
   };
+  const renderUidBadge = (uid) => {
+    // Trường hợp 1: Có UID hợp lệ
+    if (uid && /^\d+$/.test(uid)) {
+      return (
+        <p className={styles.uidBadge} data-found="true" title={uid}>
+          ✅ Đã có
+        </p>
+      );
+    }
+    // Trường hợp 2: Chưa tìm hoặc bị rate limit
+    if (uid === null || uid === "") {
+      return (
+        <p className={styles.uidBadge} data-found="false">
+          - Chưa tìm
+        </p>
+      );
+    }
+    // Trường hợp 3: Có lỗi tìm kiếm
+    return (
+      <p className={styles.uidBadge} data-found="error" title={uid}>
+        ❌ Lỗi
+      </p>
+    );
+  };
 
   return (
     <div
@@ -121,16 +145,7 @@ const Row = React.memo(function Row({
       <div className={styles.cell}>
         {row.action && row.action.length > 0 ? row.action[0].actionType : "-"}
       </div>
-      <div className={styles.cell}>
-        <p
-          className={styles.uidBadge}
-          data-found={
-            row.uid ? (row.uid === "Lỗi tìm kiếm" ? "error" : "true") : "false"
-          }
-        >
-          {row.uid === "Lỗi tìm kiếm" ? "Lỗi" : row.uid ? "Đã có" : "Chưa tìm"}
-        </p>
-      </div>
+      <div className={styles.cell}>{renderUidBadge(row.uid)}</div>
       <div className={styles.cell}>
         <span
           className={styles.lookupStatus}
@@ -612,8 +627,9 @@ export default function ClientPage({
               onChange={(e) => handleNavigation("uidStatus", e.target.value)}
             >
               <option value="">-- Tất cả --</option>
-              <option value="exists">Có UID</option>
-              <option value="missing">Thiếu UID</option>
+              <option value="found">Đã có UID</option>
+              <option value="pending">Chưa tìm / Bị giới hạn</option>
+              <option value="error">Tìm bị lỗi</option>
             </select>
           </div>
           <div className={styles.filterGroup} style={{ flex: "0 1 auto" }}>
@@ -664,7 +680,7 @@ export default function ClientPage({
           )}
         </div>
         {isOverallLoading && <Loading content={"Đang tải..."} />}
-        {serverTotalPages > 1 && viewMode === "all" && (
+        {viewMode === "all" && (
           <div className={styles.pagination}>
             <div className={styles.paginationInfo}>
               <div className={styles.limitControl}>

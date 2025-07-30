@@ -1,4 +1,6 @@
-// components/(features)/panel/PanelManager.js
+// web_tslhu/components/(features)/panel/PanelManager.js
+// -------------------- START: THAY ĐỔI TOÀN BỘ FILE --------------------
+// Chú thích: Thêm hàm getSafeTitle để đảm bảo panel không bao giờ crash do title là object.
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
@@ -9,9 +11,24 @@ import styles from "./PanelManager.module.css";
 const PANEL_WIDTH = 450;
 const MAX_VISIBLE_PANELS = 3;
 
+//<-----------------Thay đổi nhỏ: Thêm hàm tiện ích để lấy title một cách an toàn----------------->
+const getSafeTitle = (title) => {
+  // Nếu đã là string, trả về ngay
+  if (typeof title === "string") {
+    return title;
+  }
+  // Nếu là object và có vẻ hợp lệ, thử chuyển sang string
+  if (title && typeof title.toString === "function") {
+    const str = title.toString();
+    // Tránh hiển thị "[object Object]" vô nghĩa
+    return str === "[object Object]" ? "Đang tải tiêu đề..." : str;
+  }
+  // Trường hợp tệ nhất, trả về một chuỗi rỗng
+  return "";
+};
+
 // --- Component Nút Điều Khiển ---
 const PanelControls = ({ autoCollapsed, manualCollapsed }) => {
-  // Lấy đúng hàm closeAllPanels từ context
   const { restorePanel, bringToFront, closeAllPanels } = usePanels();
   const [isListVisible, setListVisible] = useState(false);
   const containerRef = useRef(null);
@@ -31,7 +48,7 @@ const PanelControls = ({ autoCollapsed, manualCollapsed }) => {
   }, [isListVisible]);
 
   const allCollapsed = [...autoCollapsed, ...manualCollapsed];
-  const hasAnyPanels = autoCollapsed.length > 0 || manualCollapsed.length > 0;
+  const hasAnyPanels = allCollapsed.length > 0;
 
   if (!hasAnyPanels) return null;
 
@@ -46,7 +63,6 @@ const PanelControls = ({ autoCollapsed, manualCollapsed }) => {
             ? `${allCollapsed.length} panel đang ẩn`
             : "Danh sách ẩn"}
         </div>
-        {/* Nút "X" sẽ gọi thẳng hàm closeAllPanels */}
         <div
           className={styles.closeAllIcon}
           onClick={closeAllPanels}
@@ -64,7 +80,8 @@ const PanelControls = ({ autoCollapsed, manualCollapsed }) => {
               className={styles.collapsedItem}
               onClick={() => bringToFront(panel.id)}
             >
-              {panel.title} (tự động)
+              {/* <-----------------Thay đổi nhỏ: Sử dụng hàm an toàn-----------------> */}
+              {getSafeTitle(panel.title)} (tự động)
             </div>
           ))}
           {manualCollapsed.map((panel) => (
@@ -73,7 +90,8 @@ const PanelControls = ({ autoCollapsed, manualCollapsed }) => {
               className={styles.collapsedItem}
               onClick={() => restorePanel(panel.id)}
             >
-              {panel.title}
+              {/* <-----------------Thay đổi nhỏ: Sử dụng hàm an toàn-----------------> */}
+              {getSafeTitle(panel.title)}
             </div>
           ))}
         </div>
@@ -103,7 +121,8 @@ const PanelManager = () => {
             key={id}
             onClose={() => closePanel(id)}
             onCollapse={() => collapsePanel(id)}
-            title={title}
+            // <-----------------Thay đổi nhỏ: Sử dụng hàm an toàn----------------->
+            title={getSafeTitle(title)}
             rightOffset={rightOffset}
           >
             <PanelComponent {...props} />
@@ -115,3 +134,4 @@ const PanelManager = () => {
 };
 
 export default PanelManager;
+// --------------------  END: THAY ĐỔI TOÀN BỘ FILE  --------------------

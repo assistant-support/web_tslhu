@@ -47,7 +47,7 @@ export async function GET(request) {
     const filters = Object.fromEntries(searchParams.entries());
 
     // Lấy limit và skip từ params, cung cấp giá trị mặc định
-    const limit = parseInt(searchParams.get("limit")) || 10;
+    const limit = parseInt(searchParams.get("limit")) || 100;
     const skip = parseInt(searchParams.get("skip")) || 0;
 
     const clientResponse = await Data_Client({ limit, skip, filters });
