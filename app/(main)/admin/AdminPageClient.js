@@ -10,6 +10,7 @@ import CampaignLabels from "./components/CampaignLabels"; // Component mới cho
 import CampaignTable from "./components/CampaignTable"; // Component mới cho Bảng
 import AccountManagement from "./components/Account/AccountManagement";
 import AssignFromSheet from "./components/AssignFromSheet";
+import VariantManagement from "./components/VariantManagement";
 
 export default function AdminPageClient({
   initialRunningJobs,
@@ -26,6 +27,7 @@ export default function AdminPageClient({
 
   const menuItems = [
     { key: "labels", label: "🏷️ Nhãn & Mẫu tin" },
+    { key: "variants", label: "🎨 Quản lý Biến thể" },
     { key: "running", label: "🚀 Đang chạy" },
     { key: "archived", label: "🗂️ Lịch sử" },
     { key: "accounts", label: "👤 Quản lý Tài khoản" },
@@ -68,6 +70,8 @@ export default function AdminPageClient({
 
   const renderActiveComponent = () => {
     switch (activeComponentKey) {
+      case "variants":
+        return <VariantManagement />;
       case "labels":
         return (
           <CampaignLabels
