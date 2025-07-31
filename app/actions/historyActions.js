@@ -268,15 +268,15 @@ export async function getHistoryForSchedule(scheduleId) {
   try {
     await connectDB();
 
-    if (!mongoose.Types.ObjectId.isValid(scheduleId)) {
-      console.error("ID lịch trình không hợp lệ:", scheduleId);
+    if (!scheduleId) {
+      console.error("ID lịch trình không được cung cấp.");
       return [];
     }
 
-    const scheduleObjectId = new mongoose.Types.ObjectId(scheduleId);
-
+    //<-----------------THAY ĐỔI: Tìm kiếm trực tiếp bằng String----------------->
+    // Bỏ hoàn toàn việc chuyển đổi sang ObjectId
     const historyRecords = await ActionHistory.find({
-      "actionDetail.scheduleId": scheduleObjectId,
+      "actionDetail.scheduleId": scheduleId, // Tìm kiếm bằng chuỗi
       action: {
         $in: [
           "DO_SCHEDULE_SEND_MESSAGE",
@@ -287,12 +287,11 @@ export async function getHistoryForSchedule(scheduleId) {
     })
       .populate({
         path: "customer",
-        select: "name phone", // Đảm bảo lấy cả name và phone
+        select: "name phone",
       })
       .sort({ time: -1 })
       .lean();
 
-    // "Làm phẳng" dữ liệu để đảm bảo an toàn tuyệt đối
     const safeHistory = historyRecords.map((log) => ({
       ...log,
       _id: log._id.toString(),

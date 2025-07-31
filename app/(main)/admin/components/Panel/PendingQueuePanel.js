@@ -44,14 +44,19 @@ export default function PendingQueuePanel({
     }
   };
 
+  const pendingTasks = useMemo(() => {
+    // Lọc ra những task có status là 'pending' từ state hiện tại
+    return tasks.filter((task) => task.status === "pending");
+  }, [tasks]);
+
   const filteredTasks = useMemo(() => {
-    if (!searchTerm) return tasks;
-    return tasks.filter(
+    if (!searchTerm) return pendingTasks; // Lọc trên danh sách pendingTasks
+    return pendingTasks.filter(
       (task) =>
         task.person.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.person.phone.includes(searchTerm),
     );
-  }, [searchTerm, tasks]);
+  }, [searchTerm, pendingTasks]);
 
   const handleRemoveTask = (taskId) => {
     if (confirm("Bạn có chắc muốn xóa người này khỏi hàng đợi không?")) {

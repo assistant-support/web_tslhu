@@ -8,6 +8,7 @@ import ScheduledJob from "@/models/schedule";
 import { getCurrentUser } from "@/lib/session";
 import { logDeleteScheduleTask } from "./historyActions";
 import ArchivedJob from "@/models/archivedJob";
+import Customer from "@/models/customer";
 
 /**
  * Lấy tất cả các chiến dịch (labels) từ database.
@@ -144,22 +145,36 @@ export async function stopSchedule(scheduleId) {
 
     await connectDB();
 
-    // Bước 1: Tìm lịch trình để lấy thông tin trước khi xóa
     const jobToStop = await ScheduledJob.findById(scheduleId).lean();
     if (!jobToStop) {
       return { error: "Không tìm thấy lịch trình để dừng." };
     }
 
-    // Bước 2: Xóa lịch trình khỏi DB
+    const customerIdsInJob = jobToStop.tasks.map((task) => task.person._id);
+
+    // -------------------- START: BỔ SUNG LOGIC DỌN DẸP --------------------
+    // Chú thích: Xóa các action ref trỏ đến lịch trình này khỏi tất cả các khách hàng liên quan.
+    if (customerIdsInJob.length > 0) {
+      await Customer.updateMany(
+        { _id: { $in: customerIdsInJob } },
+        { $pull: { action: { job: jobToStop._id } } },
+      );
+    }
+    // --------------------  END: BỔ SUNG LOGIC DỌN DẸP  --------------------
+
+    // Xóa lịch trình khỏi DB
     await ScheduledJob.findByIdAndDelete(scheduleId);
 
-    // Bước 3: Lặp qua danh sách khách hàng đã bị ảnh hưởng để ghi log
+    // Lặp qua danh sách khách hàng đã bị ảnh hưởng để ghi log
     for (const task of jobToStop.tasks) {
       await logDeleteScheduleTask(user, jobToStop, task);
     }
 
     revalidatePath("/admin");
-    return { success: true, message: "Lịch trình đã được dừng thành công." };
+    return {
+      success: true,
+      message: "Lịch trình đã được dừng và dọn dẹp thành công.",
+    };
   } catch (error) {
     return { error: error.message };
   }

@@ -116,34 +116,35 @@ const updateDataAfterExecution = async ({
   }
 };
 
-/**
- * Hàm lưu trữ giờ đây nhận vào object job đầy đủ từ vòng lặp CRON.
- * @param {object} jobData - Object job từ pipeline aggregate.
- */
-const archiveAndRemoveJob = async (jobData) => {
-  // Chỉ cần một truy vấn cuối cùng để lấy statistics mới nhất.
-  const finalJobState = await ScheduledJob.findById(jobData.jobId)
-    .select("statistics")
-    .lean();
+const archiveAndRemoveJob = async (jobId) => {
+  try {
+    // Tự truy vấn tất cả thông tin cần thiết của job đã hoàn thành
+    const jobToArchive = await ScheduledJob.findById(jobId).lean();
 
-  // Nếu job đã bị xóa bởi một tiến trình khác, dừng lại.
-  if (!finalJobState) return;
+    if (!jobToArchive) {
+      console.log(`[ARCHIVE] Job ${jobId} không còn tồn tại để lưu trữ.`);
+      return;
+    }
 
-  await ArchivedJob.create({
-    _id: jobData.jobId,
-    jobName: jobData.jobName,
-    status: "completed",
-    actionType: jobData.actionType,
-    zaloAccount: jobData.bot._id, // Lấy ID từ object bot đã được populate
-    config: jobData.config,
-    statistics: finalJobState.statistics, // Sử dụng statistics mới nhất
-    createdAt: jobData.createdAt,
-    completedAt: new Date(),
-    estimatedCompletionTime: jobData.estimatedCompletionTime,
-    createdBy: jobData.createdBy,
-  });
+    await ArchivedJob.create({
+      _id: jobToArchive._id,
+      jobName: jobToArchive.jobName,
+      status: "completed",
+      actionType: jobToArchive.actionType,
+      zaloAccount: jobToArchive.zaloAccount,
+      config: jobToArchive.config,
+      statistics: jobToArchive.statistics,
+      createdAt: jobToArchive.createdAt,
+      completedAt: new Date(),
+      estimatedCompletionTime: jobToArchive.estimatedCompletionTime,
+      createdBy: jobToArchive.createdBy,
+    });
 
-  await ScheduledJob.findByIdAndDelete(jobData.jobId);
+    await ScheduledJob.findByIdAndDelete(jobId);
+    // console.log(`[ARCHIVE] Đã lưu trữ và xóa thành công Job ${jobId}.`);
+  } catch (error) {
+    console.error(`[ARCHIVE FAILED] Lỗi khi lưu trữ Job ${jobId}:`, error);
+  }
 };
 
 export const GET = async () => {
@@ -152,17 +153,20 @@ export const GET = async () => {
     const now = new Date();
     let processedCount = 0;
     const allVariants = await Variant.find().lean();
-    const cronProcessId = crypto.randomBytes(16).toString("hex"); // Tạo ID định danh cho lần chạy CRON này
+    const cronProcessId = crypto.randomBytes(16).toString("hex");
 
     while (true) {
-      // PHA 1: TÌM VÀ "KHÓA" MỘT TÁC VỤ DUY NHẤT
-      // Lệnh này sẽ tìm một job có task thỏa mãn điều kiện,
-      // và cập nhật nguyên tử status của task đó sang 'processing' và gán processingId.
+      //<-----------------THAY ĐỔI: Sử dụng $elemMatch để truy vấn chính xác----------------->
       const jobWithLockedTask = await ScheduledJob.findOneAndUpdate(
         {
           status: { $in: ["scheduled", "processing"] },
-          "tasks.status": "pending",
-          "tasks.scheduledFor": { $lte: now },
+          // Điều kiện này đảm bảo chỉ tìm job có một task ĐỒNG THỜI pending VÀ đã đến hạn
+          tasks: {
+            $elemMatch: {
+              status: "pending",
+              scheduledFor: { $lte: now },
+            },
+          },
         },
         {
           $set: {
@@ -172,35 +176,27 @@ export const GET = async () => {
           },
         },
         {
-          new: true, // Trả về document sau khi đã cập nhật
-          sort: { "tasks.scheduledFor": 1 }, // Ưu tiên task cũ nhất
+          new: true,
+          sort: { "tasks.scheduledFor": 1 },
         },
       ).populate("zaloAccount");
 
-      // Nếu không tìm thấy tác vụ nào nữa, thoát khỏi vòng lặp
       if (!jobWithLockedTask) {
         break;
       }
 
-      // Lấy ra đúng tác vụ vừa được khóa bởi tiến trình CRON này
       const taskToProcess = jobWithLockedTask.tasks.find(
         (t) => t.processingId === cronProcessId,
       );
-
-      // Nếu vì một lý do nào đó không tìm thấy task (rất hiếm), bỏ qua
       if (!taskToProcess) {
         continue;
       }
 
-      const {
-        zaloAccount: bot,
-        _id: jobId,
-        ...jobInfo
-      } = JSON.parse(JSON.stringify(jobWithLockedTask));
+      const jobIdString = jobWithLockedTask._id.toString();
+      const bot = jobWithLockedTask.zaloAccount;
+      const jobInfo = jobWithLockedTask.toObject();
 
-      // PHA 2: THỰC THI TÁC VỤ ĐÃ ĐƯỢC KHÓA AN TOÀN
       let executionResult, finalMessage, logStatus, executionStatus;
-
       try {
         const { scriptResult, finalMessage: msg } = await executeExternalScript(
           jobInfo.actionType,
@@ -224,10 +220,9 @@ export const GET = async () => {
         .lean();
       if (!customer) continue;
 
-      // PHA 3: GHI LOG VÀ CẬP NHẬT TRẠNG THÁI
       await Promise.all([
         logExecuteScheduleTask({
-          jobInfo: { ...jobInfo, jobId, zaloAccountId: bot._id },
+          jobInfo: { ...jobInfo, jobId: jobIdString, zaloAccountId: bot._id },
           task: taskToProcess,
           customerId: customer._id,
           statusName: logStatus,
@@ -235,14 +230,12 @@ export const GET = async () => {
           finalMessage,
         }),
         updateDataAfterExecution({
-          // Truyền actionType vào
           actionType: jobInfo.actionType,
           apiResult: executionResult,
           customerId: customer._id,
         }),
-        // Cập nhật trạng thái của task con và tăng chỉ số thống kê
         ScheduledJob.updateOne(
-          { _id: jobId, "tasks._id": taskToProcess._id },
+          { "tasks._id": taskToProcess._id }, // Cập nhật chính xác task con
           {
             $set: {
               "tasks.$.status": executionStatus,
@@ -256,13 +249,12 @@ export const GET = async () => {
 
       processedCount++;
 
-      // Kiểm tra và lưu trữ job nếu đã hoàn thành (tất cả các task đều không còn ở trạng thái pending)
-      const remainingTasks = await ScheduledJob.countDocuments({
-        _id: jobId,
+      const remainingPendingTasks = await ScheduledJob.countDocuments({
+        _id: jobWithLockedTask._id,
         "tasks.status": "pending",
       });
-      if (remainingTasks === 0) {
-        await archiveAndRemoveJob(jobId);
+      if (remainingPendingTasks === 0) {
+        await archiveAndRemoveJob(jobWithLockedTask._id);
       }
     }
 
