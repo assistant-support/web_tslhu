@@ -10,6 +10,7 @@ import Status from "@/models/status";
 import User from "@/models/users";
 import jwt from "jsonwebtoken";
 import { Data_Client } from "@/data/customer";
+import { revalidateAndBroadcast } from "@/lib/revalidation";
 
 import {
   logUpdateName,
@@ -228,7 +229,7 @@ export async function POST(request) {
     }
 
     // --- BƯỚC 7: HOÀN TẤT ---
-    revalidateTag(TAG);
+    revalidateAndBroadcast("customer_data");
     return NextResponse.json(
       {
         status: true,
@@ -303,7 +304,7 @@ export async function PUT(request) {
       );
     }
 
-    revalidateTag(TAG);
+    revalidateAndBroadcast("customer_data");
     return NextResponse.json({ status: true, data: updatedCustomer });
   } catch (error) {
     if (error.name === "CastError") {
@@ -444,7 +445,7 @@ export async function PATCH(request) {
       if (addedComment)
         await logAddComment(currentUser, customerId, addedComment);
     }
-
+    revalidateAndBroadcast("customer_data");
     return NextResponse.json({ status: true, data: updatedCustomer });
   } catch (error) {
     console.error("PATCH Error:", error);

@@ -6,6 +6,7 @@
 import connectDB from "@/config/connectDB";
 import Variant from "@/models/variant";
 import { revalidatePath } from "next/cache";
+import { revalidateAndBroadcast } from "@/lib/revalidation";
 
 /**
  * Lấy tất cả các biến thể từ database.
@@ -59,7 +60,7 @@ export async function createOrUpdateVariant(data) {
       savedVariant = await Variant.create(variantData);
     }
 
-    revalidatePath("/admin");
+    revalidateAndBroadcast("variants");
     return { success: true, data: JSON.parse(JSON.stringify(savedVariant)) };
   } catch (error) {
     return { success: false, error: error.message };
@@ -74,10 +75,9 @@ export async function deleteVariant(id) {
   try {
     await connectDB();
     await Variant.findByIdAndDelete(id);
-    revalidatePath("/admin");
+    revalidateAndBroadcast("variants");
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }
 }
-// --------------------  END: THAY THẾ TOÀN BỘ FILE  --------------------

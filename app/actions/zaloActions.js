@@ -7,6 +7,7 @@ import connectDB from "@/config/connectDB";
 import User from "@/models/users";
 import ZaloAccount from "@/models/zalo";
 import { revalidatePath } from "next/cache";
+import { revalidateAndBroadcast } from "@/lib/revalidation";
 import { jwtVerify } from "jose"; // Chỉ dùng để lấy userId
 
 const COOKIE_NAME = "token";
@@ -67,7 +68,7 @@ export async function setActiveZalo(zaloAccountId) {
     await User.findByIdAndUpdate(userId, { $set: { zaloActive: activeId } });
 
     // Yêu cầu Next.js làm mới dữ liệu ở các trang liên quan
-    revalidatePath("/", "layout");
+    revalidateAndBroadcast("user_session");
 
     return { success: true, message: "Đã cập nhật tài khoản Zalo." };
   } catch (error) {

@@ -10,6 +10,7 @@ import ScheduledJob from "@/models/schedule";
 import authenticate from "@/utils/authenticate";
 import { revalidateTag } from "next/cache";
 import { logCreateScheduleTask } from "@/app/actions/historyActions";
+import { revalidateAndBroadcast } from "@/lib/revalidation";
 import mongoose from "mongoose";
 
 // --- BỘ NÃO LẬP LỊCH THÔNG MINH ---
@@ -155,8 +156,8 @@ export async function POST(request) {
     await session.commitTransaction();
     session.endSession();
 
-    revalidateTag("customer_data");
-    revalidateTag("running_jobs");
+    revalidateAndBroadcast("customer_data");
+    revalidateAndBroadcast("running_jobs");
 
     return NextResponse.json({ mes: "Đặt lịch thành công!", data: newJob });
   } catch (err) {

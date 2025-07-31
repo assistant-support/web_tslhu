@@ -5,6 +5,7 @@ import connectDB from "@/config/connectDB";
 import ZaloAccount from "@/models/zalo";
 import User from "@/models/users";
 import { revalidatePath } from "next/cache";
+import { revalidateAndBroadcast } from "@/lib/revalidation";
 
 /**
  * Lấy tất cả tài khoản Zalo và thông tin user được gán.
@@ -62,7 +63,7 @@ export async function toggleUserAccess(accountId, userId) {
     }
 
     await account.save();
-    revalidatePath("/admin");
+    revalidateAndBroadcast("zalo_accounts");
     return { success: true };
   } catch (error) {
     return { error: error.message };

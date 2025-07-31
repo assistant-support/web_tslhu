@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/session";
 import { logDeleteScheduleTask } from "./historyActions";
 import ArchivedJob from "@/models/archivedJob";
 import Customer from "@/models/customer";
+import { revalidateAndBroadcast } from "@/lib/revalidation";
 
 /**
  * Lấy tất cả các chiến dịch (labels) từ database.
@@ -52,7 +53,7 @@ export async function createOrUpdateLabel(data) {
       savedLabel = savedLabel.toObject(); // Chuyển sang object thuần
     }
 
-    revalidatePath("/admin");
+    revalidateAndBroadcast("labels");
     // Trả về dữ liệu đã được lưu dưới dạng object JSON
     return { success: true, data: JSON.parse(JSON.stringify(savedLabel)) };
   } catch (error) {
@@ -69,7 +70,7 @@ export async function deleteLabel(id) {
   try {
     await connectDB();
     await Label.findByIdAndDelete(id);
-    revalidatePath("/admin");
+    revalidateAndBroadcast("labels");
     return { success: true };
   } catch (error) {
     return { error: error.message };
@@ -170,7 +171,8 @@ export async function stopSchedule(scheduleId) {
       await logDeleteScheduleTask(user, jobToStop, task);
     }
 
-    revalidatePath("/admin");
+    revalidateAndBroadcast("running_jobs");
+    revalidateAndBroadcast("customer_data");
     return {
       success: true,
       message: "Lịch trình đã được dừng và dọn dẹp thành công.",
@@ -214,7 +216,7 @@ export async function removeTaskFromSchedule(scheduleId, taskId) {
       { new: true },
     ); // Lấy về job đã cập nhật
 
-    revalidatePath("/admin");
+    revalidateAndBroadcast("running_jobs");
     return { success: true, updatedJob: JSON.parse(JSON.stringify(result)) };
   } catch (error) {
     return { error: error.message };
