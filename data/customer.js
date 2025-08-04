@@ -13,7 +13,7 @@ export async function Data_Client(searchParams = {}) {
     await connectDB();
 
     const page = parseInt(searchParams.page) || 1;
-    const limit = parseInt(searchParams.limit) || 100;
+    const limit = parseInt(searchParams.limit) || 50;
     const skip = (page - 1) * limit;
 
     const query = {};
@@ -108,14 +108,31 @@ export async function Data_Label() {
 export async function Data_Status() {
   try {
     await connectDB();
-    const statuses = await Status.find({}).sort({ order: 1 }).lean();
-    return { data: JSON.parse(JSON.stringify(statuses)) };
+    // ** MODIFIED: Bỏ logic sort cũ, chỉ lấy dữ liệu thô
+    const statuses = await Status.find({}).lean();
+
+    // ** MODIFIED: Thêm logic sắp xếp bằng JavaScript dựa trên tiền tố QTxx
+    const sortedStatuses = statuses.sort((a, b) => {
+      const matchA = a.name.match(/^QT(\d+)\|/);
+      const matchB = b.name.match(/^QT(\d+)\|/);
+      // Gán một số lớn cho những trạng thái không có định dạng để chúng xuống cuối
+      const orderA = matchA ? parseInt(matchA[1], 10) : Infinity;
+      const orderB = matchB ? parseInt(matchB[1], 10) : Infinity;
+
+      // Sắp xếp theo số thứ tự trước
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      // Nếu số thứ tự bằng nhau, sắp xếp theo tên alphabet
+      return a.name.localeCompare(b.name);
+    });
+
+    return { data: JSON.parse(JSON.stringify(sortedStatuses)) };
   } catch (error) {
     console.error("Lỗi trong Data_Status:", error);
     return { data: [] };
   }
 }
-
 /**
  * Làm mới cache cho dữ liệu khách hàng.
  */

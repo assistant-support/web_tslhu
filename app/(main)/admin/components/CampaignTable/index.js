@@ -1,10 +1,13 @@
 // app/(main)/admin/components/CampaignTable/index.js
 "use client";
-import React, { useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CampaignTable.module.css";
 import { usePanels } from "@/contexts/PanelContext";
 import ScheduleDetailPanel from "../Panel/ScheduleDetailPanel";
 import StackedProgressBar from "../shared/StackedProgressBar";
+import { getRunningJobs, getArchivedJobs } from "@/app/actions/campaignActions";
+import LoadingSpinner from "../shared/LoadingSpinner";
+import PaginationControls from "../shared/PaginationControls";
 
 // --- Components con để hiển thị thông tin ---
 const UserInfo = ({ user }) => (
@@ -121,8 +124,36 @@ const Header = () => (
 );
 
 // --- Component Chính ---
-export default function CampaignTable({ jobs, mode, onScheduleUpdate }) {
+export default function CampaignTable({ mode }) {
   const { openPanel, closePanel } = usePanels();
+  const [jobs, setJobs] = useState([]);
+  const [pagination, setPagination] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  // ++ ADDED: Hàm lấy dữ liệu dựa trên 'mode'
+  const fetchData = useCallback(
+    async (page = 1, limit = 10) => {
+      setIsLoading(true);
+      const fetcher = mode === "running" ? getRunningJobs : getArchivedJobs;
+      const result = await fetcher({ page, limit });
+
+      if (result.success) {
+        setJobs(result.data);
+        setPagination(result.pagination);
+      } else {
+        alert(`Lỗi tải dữ liệu: ${result.error}`);
+      }
+      setIsLoading(false);
+    },
+    [mode],
+  );
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+  const handleDataRefresh = useCallback(() => {
+    fetchData(pagination.page, pagination.limit);
+  }, [fetchData, pagination]);
 
   const handleOpenDetail = useCallback(
     (job) => {
@@ -133,26 +164,33 @@ export default function CampaignTable({ jobs, mode, onScheduleUpdate }) {
         props: {
           panelData: job,
           isArchived: mode === "archived",
-          onScheduleUpdate,
+          onScheduleUpdate: handleDataRefresh,
           closePanel: () => closePanel(`schedule-detail-${job._id}`),
         },
       });
     },
-    [openPanel, closePanel, mode, onScheduleUpdate],
+    [openPanel, closePanel, mode, handleDataRefresh],
   );
 
   return (
-    // Toàn bộ bảng bây giờ là một grid duy nhất
-    <div className={styles.tableContainer}>
-      <Header />
-      {(jobs || []).map((job) => (
-        <CampaignRow
-          key={job._id}
-          job={job}
-          mode={mode}
-          onOpenDetail={handleOpenDetail}
-        />
-      ))}
+    // ** MODIFIED: Cấu trúc layout mới
+    <div className={styles.fullHeightContainer}>
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : (
+        <div className={styles.tableContainer}>
+          <Header />
+          {(jobs || []).map((job) => (
+            <CampaignRow
+              key={job._id}
+              job={job}
+              mode={mode}
+              onOpenDetail={handleOpenDetail}
+            />
+          ))}
+        </div>
+      )}
+      <PaginationControls pagination={pagination} onPageChange={fetchData} />
     </div>
   );
 }

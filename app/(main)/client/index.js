@@ -166,7 +166,8 @@ export default function ClientPage({
   user,
 }) {
   // --- STATES & REFS ---
-  const { openPanel, panels, updatePanelProps } = usePanels();
+  // ** MODIFIED: Lấy thêm `allActivePanels` từ context
+  const { openPanel, allActivePanels, updatePanelProps } = usePanels();
   const [customers, setCustomers] = useState(initialData);
   const [updatedIds, setUpdatedIds] = useState(new Set());
   const prevCustomersRef = useRef(new Map());
@@ -230,13 +231,15 @@ export default function ClientPage({
   );
   const activeRowIds = useMemo(() => {
     const ids = new Set();
-    panels.forEach((panel) => {
+    // Dùng `allActivePanels` thay vì `panels` để có cái nhìn toàn cảnh
+    (allActivePanels || []).forEach((panel) => {
       if (panel.id.startsWith("details-")) {
         ids.add(panel.id.replace("details-", ""));
       }
     });
+
     return ids;
-  }, [panels]);
+  }, [allActivePanels]);
 
   // --- HANDLERS & CALLBACKS ---
   const handleNavigation = useCallback(
@@ -665,18 +668,23 @@ export default function ClientPage({
             viewMode={viewMode}
           />
           {(viewMode === "selected" ? scheduleData : customers).map(
-            (r, idx) => (
-              <Row
-                key={r._id}
-                row={r}
-                rowIndex={startIndex + idx}
-                onToggle={toggleRowAndStoreData}
-                checked={selectedIds.has(r._id)}
-                onRowClick={handleRowClick}
-                isUpdated={updatedIds.has(r._id)}
-                isActive={activeRowIds.has(r._id)}
-              />
-            ),
+            (r, idx) => {
+              const isActive = activeRowIds.has(r._id);
+
+              return (
+                // Thêm return tường minh
+                <Row
+                  key={r._id}
+                  row={r}
+                  rowIndex={startIndex + idx}
+                  onToggle={toggleRowAndStoreData}
+                  checked={selectedIds.has(r._id)}
+                  onRowClick={handleRowClick}
+                  isUpdated={updatedIds.has(r._id)}
+                  isActive={isActive}
+                />
+              );
+            },
           )}
         </div>
         {isOverallLoading && <Loading content={"Đang tải..."} />}

@@ -6,39 +6,36 @@ import styles from "./VariantManagement.module.css";
 import { getVariants, deleteVariant } from "@/app/actions/variantActions";
 import { usePanels } from "@/contexts/PanelContext";
 import VariantEditorPanel from "../Panel/VariantEditorPanel";
+// ++ ADDED: Import các component tái sử dụng
+import LoadingSpinner from "../shared/LoadingSpinner";
+import PaginationControls from "../shared/PaginationControls";
 
 export default function VariantManagement() {
   const [variants, setVariants] = useState([]);
+  const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const { openPanel, closePanel } = usePanels();
 
-  useEffect(() => {
-    const fetchVariants = async () => {
-      setIsLoading(true);
-      const data = await getVariants();
-      setVariants(data);
-      setIsLoading(false);
-    };
-    fetchVariants();
+  const fetchData = useCallback(async (page = 1, limit = 10) => {
+    setIsLoading(true);
+    const result = await getVariants({ page, limit });
+    if (result.success) {
+      setVariants(result.data);
+      setPagination(result.pagination);
+    } else {
+      alert(`Lỗi: ${result.error}`);
+    }
+    setIsLoading(false);
   }, []);
 
-  const handleVariantUpdate = useCallback((updatedVariant) => {
-    setVariants((prev) => {
-      const index = prev.findIndex((v) => v._id === updatedVariant._id);
-      if (index > -1) {
-        // Cập nhật
-        const newVariants = [...prev];
-        newVariants[index] = updatedVariant;
-        return newVariants;
-      } else {
-        // Thêm mới
-        return [...prev, updatedVariant].sort((a, b) =>
-          a.name.localeCompare(b.name),
-        );
-      }
-    });
-  }, []);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleVariantUpdate = useCallback(() => {
+    fetchData(pagination.page, pagination.limit);
+  }, [fetchData, pagination]);
 
   const handleOpenPanel = (variant = null) => {
     const panelId = `variant-editor-${variant?._id || "new"}`;
@@ -63,7 +60,7 @@ export default function VariantManagement() {
       startTransition(async () => {
         const result = await deleteVariant(variant._id);
         if (result.success) {
-          setVariants((prev) => prev.filter((v) => v._id !== variant._id));
+          fetchData(pagination.page, pagination.limit);
         } else {
           alert(`Lỗi: ${result.error}`);
         }
@@ -71,47 +68,59 @@ export default function VariantManagement() {
     }
   };
 
-  if (isLoading) return <p>Đang tải danh sách biến thể...</p>;
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h2>Danh sách Biến thể</h2>
-        <button className={styles.addButton} onClick={() => handleOpenPanel()}>
+        <div />
+        <button className={styles.btnAdd} onClick={() => handleOpenPanel()}>
           + Tạo mới
         </button>
       </div>
-      <div className={styles.grid}>
-        <div className={styles.gridHeader}>Tên (Placeholder)</div>
-        <div className={styles.gridHeader}>Mô tả</div>
-        <div className={styles.gridHeader}>Số lượng từ</div>
-        <div className={styles.gridHeader}>Hành động</div>
 
-        {variants.map((variant) => (
-          <React.Fragment key={variant._id}>
-            <div className={styles.gridCell}>
-              <strong>{`{${variant.name}}`}</strong>
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : (
+        <>
+          <div className={styles.listContainer}>
+            {/* Header của bảng */}
+            <div className={`${styles.row} ${styles.gridHeader}`}>
+              <div>Tên (Placeholder)</div>
+              <div>Mô tả</div>
+              <div>Số lượng từ</div>
+              <div>Hành động</div>
             </div>
-            <div className={styles.gridCell}>{variant.description}</div>
-            <div className={styles.gridCell}>{variant.words.length}</div>
-            <div className={styles.gridCellActions}>
-              <button
-                className={styles.actionButton}
-                onClick={() => handleOpenPanel(variant)}
-              >
-                Sửa
-              </button>
-              <button
-                className={`${styles.actionButton} ${styles.deleteButton}`}
-                onClick={() => handleDelete(variant)}
-                disabled={isPending}
-              >
-                Xóa
-              </button>
-            </div>
-          </React.Fragment>
-        ))}
-      </div>
+
+            {(variants || []).map((variant) => (
+              <div key={variant._id} className={styles.row}>
+                <div>
+                  <strong>{`{${variant.name}}`}</strong>
+                </div>
+                <div>{variant.description}</div>
+                <div>{variant.words.length}</div>
+                <div className={styles.actions}>
+                  <button
+                    className={`${styles.btn} ${styles.btnEdit}`}
+                    onClick={() => handleOpenPanel(variant)}
+                  >
+                    Sửa
+                  </button>
+                  <button
+                    className={`${styles.btn} ${styles.btnDelete}`}
+                    onClick={() => handleDelete(variant)}
+                    disabled={isPending}
+                  >
+                    Xóa
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <PaginationControls
+            pagination={pagination}
+            onPageChange={fetchData}
+          />
+        </>
+      )}
     </div>
   );
 }

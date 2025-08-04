@@ -1,7 +1,13 @@
 // contexts/PanelContext.js
 "use client";
 
-import React, { createContext, useState, useContext, useCallback } from "react";
+import React, {
+  createContext,
+  useState,
+  useContext,
+  useCallback,
+  useMemo, // ++ ADDED
+} from "react";
 
 const PanelContext = createContext(null);
 
@@ -87,9 +93,16 @@ export const PanelProvider = ({ children }) => {
     setCollapsed([]);
   }, []);
 
+  // ++ ADDED: Tạo một mảng mới chứa tất cả các panel đang được quản lý
+  const allActivePanels = useMemo(
+    () => [...panels, ...collapsed],
+    [panels, collapsed],
+  );
+
   const value = {
     panels,
     collapsed,
+    allActivePanels, // ++ ADDED: Cung cấp mảng này ra context
     openPanel,
     closePanel,
     collapsePanel,

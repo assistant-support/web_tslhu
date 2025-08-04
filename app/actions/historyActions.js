@@ -262,21 +262,56 @@ export async function logExecuteScheduleTask({
 }
 
 /**
+ * Ghi log cho một task bị hủy tự động do đạt giới hạn.
+ * @param {object} job - Toàn bộ object lịch trình (ScheduledJob).
+ * @param {object} task - Task (khách hàng) cụ thể bị hủy.
+ * @param {'hour' | 'day'} reason - Lý do bị hủy (giờ hoặc ngày).
+ */
+export async function logAutoCancelTask(job, task, reason) {
+  try {
+    const reasonMessage =
+      reason === "hour"
+        ? "Tự động hủy do đạt giới hạn giờ"
+        : "Tự động hủy do đạt giới hạn ngày";
+
+    await ActionHistory.create({
+      action: "AUTO_CANCEL_RATE_LIMIT",
+      user: job.createdBy,
+      customer: task.person._id,
+      zalo: job.zaloAccount,
+      status: {
+        status: "FAILED", // Luôn là FAILED
+        detail: { reason: reasonMessage }, // Lưu lý do chi tiết vào detail
+      },
+      actionDetail: {
+        scheduleId: job._id.toString(),
+        scheduleName: job.jobName,
+        cancelledAt: new Date(),
+        reasonMessage: reasonMessage, // Lưu thông báo ngắn gọn vào actionDetail
+      },
+    });
+  } catch (error) {
+    console.error("❌ LỖI KHI GHI LOG HỦY TỰ ĐỘNG:", error);
+  }
+}
+
+/**
  * Lấy tất cả lịch sử THỰC THI (DO_...) của một chiến dịch.
  */
 export async function getHistoryForSchedule(scheduleId) {
   try {
     await connectDB();
 
-    if (!scheduleId) {
-      console.error("ID lịch trình không được cung cấp.");
+    if (!scheduleId || !mongoose.Types.ObjectId.isValid(scheduleId)) {
+      // ** MODIFIED: Kiểm tra ObjectId hợp lệ
+      console.error("ID lịch trình không hợp lệ hoặc không được cung cấp.");
       return [];
     }
 
     //<-----------------THAY ĐỔI: Tìm kiếm trực tiếp bằng String----------------->
     // Bỏ hoàn toàn việc chuyển đổi sang ObjectId
     const historyRecords = await ActionHistory.find({
-      "actionDetail.scheduleId": scheduleId, // Tìm kiếm bằng chuỗi
+      "actionDetail.scheduleId": new mongoose.Types.ObjectId(scheduleId),
       action: {
         $in: [
           "DO_SCHEDULE_SEND_MESSAGE",

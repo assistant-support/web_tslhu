@@ -15,14 +15,21 @@ import { revalidateAndBroadcast } from "@/lib/revalidation";
  * Lấy tất cả các chiến dịch (labels) từ database.
  * @returns {Promise<Array>} Mảng các chiến dịch.
  */
-export async function getLabel() {
+export async function getLabel({ page = 1, limit = 10 } = {}) {
   try {
     await connectDB();
-    const campaigns = await Label.find({}).sort({ createdAt: -1 }).lean();
-    return JSON.parse(JSON.stringify(campaigns));
+    const skip = (page - 1) * limit;
+    const [labels, total] = await Promise.all([
+      Label.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Label.countDocuments({}),
+    ]);
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(labels)),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   } catch (error) {
-    console.error("Lỗi khi lấy danh sách chiến dịch:", error);
-    return [];
+    return { success: false, error: error.message, data: [], pagination: {} };
   }
 }
 
@@ -82,24 +89,29 @@ export async function deleteLabel(id) {
  * Hàm này dành cho trang Admin.
  * @returns {Promise<Array>} - Mảng các object job đang chạy.
  */
-export async function getRunningJobs() {
+export async function getRunningJobs(page = 1, limit = 10) {
   try {
     await connectDB();
-    const jobsFromDB = await ScheduledJob.find({
-      status: { $in: ["scheduled", "processing"] },
-    })
-      .populate([
-        {
-          path: "createdBy",
-          select: "name email", // Lấy thêm email
-        },
-        {
-          path: "zaloAccount",
-          select: "name phone avt", // Lấy thêm phone và avatar
-        },
-      ])
-      .sort({ createdAt: -1 })
-      .lean();
+    const skip = (page - 1) * limit;
+    const query = { status: { $in: ["scheduled", "processing"] } };
+    const [jobsFromDB, total] = await Promise.all([
+      ScheduledJob.find(query)
+        .populate([
+          {
+            path: "createdBy",
+            select: "name email", // Lấy thêm email
+          },
+          {
+            path: "zaloAccount",
+            select: "name phone avt", // Lấy thêm phone và avatar
+          },
+        ])
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      ScheduledJob.countDocuments(query),
+    ]);
 
     // "Làm phẳng" dữ liệu một cách thủ công để đảm bảo an toàn tuyệt đối
     const safeJobs = jobsFromDB.map((job) => ({
@@ -127,7 +139,11 @@ export async function getRunningJobs() {
       })),
     }));
 
-    return safeJobs;
+    return {
+      success: true,
+      data: safeJobs,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   } catch (error) {
     console.error("Lỗi khi lấy danh sách chiến dịch đang chạy:", error);
     return [];
@@ -204,42 +220,60 @@ export async function removeTaskFromSchedule(scheduleId, taskId) {
     if (!taskToRemove)
       return { error: "Không tìm thấy người nhận trong lịch trình." };
 
-    // Ghi log cho hành động xóa (nếu cần)
+    // Ghi log cho hành động xóa
     await logDeleteScheduleTask(user, schedule, taskToRemove);
 
-    const result = await ScheduledJob.findByIdAndUpdate(
-      scheduleId,
-      {
-        $pull: { tasks: { _id: taskId } },
-        $inc: { "statistics.total": -1 },
-      },
-      { new: true },
-    ); // Lấy về job đã cập nhật
+    // ** MODIFIED: Thực hiện 2 hành động cập nhật song song
+    const [updatedJobResult] = await Promise.all([
+      ScheduledJob.findByIdAndUpdate(
+        scheduleId,
+        {
+          $pull: { tasks: { _id: taskId } },
+          $inc: { "statistics.total": -1 },
+        },
+        { new: true },
+      ),
+      // ++ ADDED: Dọn dẹp tham chiếu trong Customer ngay lập tức
+      Customer.updateOne(
+        { _id: taskToRemove.person._id },
+        { $pull: { action: { job: scheduleId } } },
+      ),
+    ]);
 
     revalidateAndBroadcast("running_jobs");
-    return { success: true, updatedJob: JSON.parse(JSON.stringify(result)) };
+    revalidateAndBroadcast("customer_data");
+
+    return {
+      success: true,
+      updatedJob: JSON.parse(JSON.stringify(updatedJobResult)),
+    };
   } catch (error) {
     return { error: error.message };
   }
 }
 
-export async function getArchivedJobs() {
+export async function getArchivedJobs({ page = 1, limit = 10 } = {}) {
   try {
     await connectDB();
-    const jobsFromDB = await ArchivedJob.find({})
-      .populate([
-        {
-          path: "createdBy",
-          select: "name email", // Lấy thêm email
-        },
-        {
-          path: "zaloAccount",
-          select: "name phone avt", // Lấy thêm phone và avatar
-        },
-      ])
-      .sort({ completedAt: -1 })
-      .limit(50)
-      .lean();
+    const skip = (page - 1) * limit;
+    const [jobsFromDB, total] = await Promise.all([
+      ArchivedJob.find({})
+        .populate([
+          {
+            path: "createdBy",
+            select: "name email", // Lấy thêm email
+          },
+          {
+            path: "zaloAccount",
+            select: "name phone avt", // Lấy thêm phone và avatar
+          },
+        ])
+        .sort({ completedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      ArchivedJob.countDocuments({}),
+    ]);
 
     const safeJobs = jobsFromDB.map((job) => ({
       ...job,
@@ -258,7 +292,11 @@ export async function getArchivedJobs() {
         : null,
     }));
 
-    return safeJobs;
+    return {
+      success: true,
+      data: safeJobs,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   } catch (error) {
     console.error("Lỗi khi lấy lịch sử chiến dịch:", error);
     return [];

@@ -11,14 +11,21 @@ import { revalidateAndBroadcast } from "@/lib/revalidation";
 /**
  * Lấy tất cả các biến thể từ database.
  */
-export async function getVariants() {
+export async function getVariants({ page = 1, limit = 10 } = {}) {
   try {
     await connectDB();
-    const variants = await Variant.find({}).sort({ name: 1 }).lean();
-    return JSON.parse(JSON.stringify(variants));
+    const skip = (page - 1) * limit;
+    const [variants, total] = await Promise.all([
+      Variant.find({}).sort({ name: 1 }).skip(skip).limit(limit).lean(),
+      Variant.countDocuments({}),
+    ]);
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(variants)),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   } catch (error) {
-    console.error("Lỗi khi lấy danh sách biến thể:", error);
-    return [];
+    return { success: false, error: error.message, data: [], pagination: {} };
   }
 }
 

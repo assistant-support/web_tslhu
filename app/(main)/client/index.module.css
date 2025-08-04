@@ -331,8 +331,23 @@
 }
 .activeRow {
   background-color: #eef2ff !important;
+}
+
+/* Thay vì tô màu cho chính .activeRow, tô màu cho các .cell bên trong nó */
+.activeRow > .cell {
+  background-color: #eef2ff; /* Màu nền highlight */
+}
+
+/* Áp dụng box-shadow cho ô đầu tiên của dòng active */
+.activeRow > .cell:first-child {
   box-shadow: inset 4px 0 0 0 #4f46e5;
 }
+
+/* Đảm bảo hiệu ứng hover không làm mất màu highlight */
+.activeRow:hover > .cell {
+  background-color: #e0e7ff; /* Một màu đậm hơn một chút khi hover */
+}
+
 .lookupStatus {
   padding: 4px 12px;
   border-radius: 12px;

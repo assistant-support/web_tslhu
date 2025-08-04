@@ -1,110 +1,55 @@
-// web_tslhu/app/(main)/admin/AdminPageClient.js
-
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import styles from "./admin.module.css";
-import { usePanels } from "@/contexts/PanelContext";
-import { getRunningJobs, getArchivedJobs } from "@/app/actions/campaignActions";
-import CampaignLabels from "./components/CampaignLabels"; // Component mới cho Nhãn
-import CampaignTable from "./components/CampaignTable"; // Component mới cho Bảng
+import CampaignLabels from "./components/CampaignLabels";
+import CampaignTable from "./components/CampaignTable";
 import AccountManagement from "./components/Account/AccountManagement";
 import AssignFromSheet from "./components/AssignFromSheet";
 import VariantManagement from "./components/VariantManagement";
+import StatusManagement from "./components/StatusManagement";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
-export default function AdminPageClient({
-  initialRunningJobs,
-  initialCampaigns,
-  initialArchivedJobs,
-}) {
-  const { openPanel, closePanel } = usePanels();
+export default function AdminPageClient() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get("tab") || "running";
 
-  // START: THAY ĐỔI CẤU TRÚC STATE VÀ TABS
-  const [activeComponentKey, setActiveComponentKey] = useState("running"); // Mặc định là tab đang chạy
-  const [runningJobs, setRunningJobs] = useState(initialRunningJobs || []);
-  const [archivedJobs, setArchivedJobs] = useState(initialArchivedJobs || []);
-  const [campaigns, setCampaigns] = useState(initialCampaigns || []);
+  const handleTabChange = (tabKey) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", tabKey);
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   const menuItems = [
     { key: "labels", label: "🏷️ Nhãn & Mẫu tin" },
     { key: "variants", label: "🎨 Quản lý Biến thể" },
+    { key: "statuses", label: "📊 Quản lý Trạng thái" },
     { key: "running", label: "🚀 Đang chạy" },
     { key: "archived", label: "🗂️ Lịch sử" },
     { key: "accounts", label: "👤 Quản lý Tài khoản" },
     { key: "assign", label: "📝 Gán từ Sheet" },
   ];
-  // END: THAY ĐỔI CẤU TRÚC STATE VÀ TABS
-
-  // Yêu cầu 12: Tự động refresh dữ liệu
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      if (document.visibilityState === "visible") {
-        // Chỉ fetch khi tab đang active
-        const [running, archived] = await Promise.all([
-          getRunningJobs(),
-          getArchivedJobs(),
-        ]);
-        setRunningJobs(running);
-        setArchivedJobs(archived);
-      }
-    }, 30000); // 30 giây
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Callback để cập nhật state từ các panel con
-  const handleScheduleUpdate = useCallback((updateInfo) => {
-    if (updateInfo.type === "STOP_SCHEDULE") {
-      setRunningJobs((prev) =>
-        prev.filter((job) => job._id !== updateInfo.jobId),
-      );
-    }
-    if (updateInfo.type === "TASK_REMOVED") {
-      setRunningJobs((prev) =>
-        prev.map((job) =>
-          job._id === updateInfo.jobId ? updateInfo.updatedJob : job,
-        ),
-      );
-    }
-  }, []);
 
   const renderActiveComponent = () => {
-    switch (activeComponentKey) {
+    switch (activeTab) {
+      case "labels":
+        return <CampaignLabels />;
       case "variants":
         return <VariantManagement />;
-      case "labels":
-        return (
-          <CampaignLabels
-            campaigns={campaigns}
-            setCampaigns={setCampaigns}
-            openPanel={openPanel}
-            closePanel={closePanel}
-          />
-        );
+      case "statuses":
+        return <StatusManagement />;
       case "running":
-        return (
-          <CampaignTable
-            key="running-table"
-            jobs={runningJobs}
-            mode="running"
-            onScheduleUpdate={handleScheduleUpdate}
-          />
-        );
+        return <CampaignTable mode="running" />;
       case "archived":
-        return (
-          <CampaignTable
-            key="archived-table"
-            jobs={archivedJobs}
-            mode="archived"
-            onScheduleUpdate={handleScheduleUpdate} // Vẫn truyền để đồng bộ
-          />
-        );
+        return <CampaignTable mode="archived" />;
       case "accounts":
-        return <AccountManagement openPanel={openPanel} />;
+        return <AccountManagement />;
       case "assign":
         return <AssignFromSheet />;
       default:
-        return null;
+        return <CampaignTable mode="running" />;
     }
   };
 
@@ -115,15 +60,14 @@ export default function AdminPageClient({
           <button
             key={item.key}
             className={`${styles.tabMenuItem} ${
-              activeComponentKey === item.key ? styles.active : ""
+              activeTab === item.key ? styles.active : ""
             }`}
-            onClick={() => setActiveComponentKey(item.key)}
+            onClick={() => handleTabChange(item.key)}
           >
             {item.label}
           </button>
         ))}
       </nav>
-      {/* Yêu cầu 5: Xóa bỏ thanh cuộn riêng của bảng */}
       <main className={styles.adminContent}>{renderActiveComponent()}</main>
     </div>
   );

@@ -13,23 +13,28 @@ import { logCreateScheduleTask } from "@/app/actions/historyActions";
 import { revalidateAndBroadcast } from "@/lib/revalidation";
 import mongoose from "mongoose";
 
-// --- BỘ NÃO LẬP LỊCH THÔNG MINH ---
+/**
+ * Tính toán lịch trình và trả về cả các task đã xếp lịch và trạng thái "đặt cọc" của tài khoản.
+ * @returns {object} { scheduledTasks, estimatedCompletion, finalCounters }
+ */
 function schedulePersonsSmart(persons, account, actionsPerHour) {
   const scheduledTasks = [];
   const baseIntervalMs = 3_600_000 / actionsPerHour;
   const now = new Date();
 
+  // Khởi tạo các biến đếm từ trạng thái hiện tại của account
   let currentTime = new Date(
     Math.max(now.getTime(), account.rateLimitHourStart?.getTime() || 0),
   );
-  let currentHourUsage = account.actionsUsedThisHour || 0;
-  let currentDayUsage = account.actionsUsedThisDay || 0;
+  let rateLimitHourStart = new Date(account.rateLimitHourStart || now);
+  let rateLimitDayStart = new Date(account.rateLimitDayStart || now);
+  let actionsUsedThisHour = account.actionsUsedThisHour || 0;
+  let actionsUsedThisDay = account.actionsUsedThisDay || 0;
 
-  //<-----------------THAY ĐỔI: Reset giới hạn ngày vào 0h đêm----------------->
   const getNextDayStart = (date) => {
     const nextDay = new Date(date);
     nextDay.setDate(nextDay.getDate() + 1);
-    nextDay.setHours(0, 0, 0, 0); // Đặt lại vào 00:00:00
+    nextDay.setHours(0, 0, 0, 0);
     return nextDay;
   };
 
@@ -38,28 +43,33 @@ function schedulePersonsSmart(persons, account, actionsPerHour) {
   for (const person of persons) {
     let safeTimeFound = false;
     while (!safeTimeFound) {
-      const currentHourStart = new Date(currentTime);
-      currentHourStart.setMinutes(0, 0, 0);
+      const currentHourStartRef = new Date(currentTime);
+      currentHourStartRef.setMinutes(0, 0, 0);
 
-      const currentDayStart = new Date(account.rateLimitDayStart || 0);
-      currentDayStart.setHours(0, 0, 0, 0);
-      const nextDayStart = getNextDayStart(currentDayStart);
-
-      if (currentHourUsage >= account.rateLimitPerHour) {
-        currentTime = new Date(currentHourStart.getTime() + 3_600_000);
-        currentHourUsage = 0;
-        continue;
+      // Logic reset giới hạn giờ
+      if (currentTime.getTime() >= rateLimitHourStart.getTime() + 3_600_000) {
+        rateLimitHourStart = new Date(currentHourStartRef);
+        actionsUsedThisHour = 0;
       }
 
+      // Logic reset giới hạn ngày
       if (
-        currentDayUsage >= account.rateLimitPerDay ||
-        currentTime >= nextDayStart
+        currentTime.getTime() >= getNextDayStart(rateLimitDayStart).getTime()
       ) {
-        currentTime = getNextDayStart(currentDayStart); // Sử dụng hàm mới
-        currentDayUsage = 0;
-        currentHourUsage = 0;
-        account.rateLimitDayStart = new Date(currentTime);
-        continue;
+        rateLimitDayStart = new Date(currentTime);
+        rateLimitDayStart.setHours(0, 0, 0, 0);
+        actionsUsedThisDay = 0;
+        actionsUsedThisHour = 0; // Reset cả bộ đếm giờ khi sang ngày mới
+      }
+
+      // Kiểm tra giới hạn
+      if (actionsUsedThisHour >= account.rateLimitPerHour) {
+        currentTime = new Date(rateLimitHourStart.getTime() + 3_600_000);
+        continue; // Lặp lại vòng lặp để logic reset giờ được áp dụng
+      }
+      if (actionsUsedThisDay >= account.rateLimitPerDay) {
+        currentTime = getNextDayStart(rateLimitDayStart);
+        continue; // Lặp lại vòng lặp để logic reset ngày được áp dụng
       }
 
       safeTimeFound = true;
@@ -74,18 +84,24 @@ function schedulePersonsSmart(persons, account, actionsPerHour) {
       status: "pending",
     });
 
-    currentHourUsage++;
-    currentDayUsage++;
+    // Cập nhật bộ đếm
+    actionsUsedThisHour++;
+    actionsUsedThisDay++;
     currentTime.setTime(currentTime.getTime() + baseIntervalMs);
   }
 
   return {
     scheduledTasks,
     estimatedCompletion: new Date(currentTime.getTime()),
-    smartStartDate,
+    // ++ ADDED: Trả về "phiếu đặt cọc"
+    finalCounters: {
+      actionsUsedThisHour,
+      rateLimitHourStart,
+      actionsUsedThisDay,
+      rateLimitDayStart,
+    },
   };
 }
-
 export async function POST(request) {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -93,6 +109,10 @@ export async function POST(request) {
     await connectToDatabase();
     const { user, body } = await authenticate(request);
     const { jobName, actionType, config = {}, tasks } = body;
+
+    if (!tasks || tasks.length === 0) {
+      throw new Error("Không có khách hàng nào được chọn để lên lịch.");
+    }
 
     const dbUser = await User.findById(user.id).populate("zaloActive").lean();
     if (!dbUser?.zaloActive?._id) {
@@ -104,15 +124,20 @@ export async function POST(request) {
       throw new Error("Không tìm thấy tài khoản Zalo.");
     }
 
-    // ... (logic reset giới hạn không đổi)
+    // ** MODIFIED: Gọi hàm lập lịch đã nâng cấp
+    const { scheduledTasks, estimatedCompletion, finalCounters } =
+      schedulePersonsSmart(
+        tasks.map((t) => t.person),
+        account,
+        config.actionsPerHour || account.rateLimitPerHour,
+      );
 
-    const { scheduledTasks, estimatedCompletion } = schedulePersonsSmart(
-      tasks.map((t) => t.person),
-      account,
-      config.actionsPerHour || account.rateLimitPerHour,
+    // ** MODIFIED: "Đặt cọc" giới hạn bằng cách cập nhật ZaloAccount
+    await ZaloAccount.updateOne(
+      { _id: zaloAccountId },
+      { $set: finalCounters },
+      { session },
     );
-
-    const personIds = tasks.map((t) => t.person._id);
 
     const [newJob] = await ScheduledJob.create(
       [
@@ -133,7 +158,7 @@ export async function POST(request) {
       { session },
     );
 
-    //<-----------------THAY ĐỔI: Bổ sung lại logic "đánh dấu" khách hàng----------------->
+    const personIds = tasks.map((t) => t.person._id);
     await Customer.updateMany(
       { _id: { $in: personIds } },
       {
@@ -163,7 +188,7 @@ export async function POST(request) {
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
-    console.error("LỖI KHI TẠO LỊCH:", err);
+    console.error("❌ LỖI KHI TẠO LỊCH:", err);
     return NextResponse.json(
       { mes: "Lỗi máy chủ khi tạo lịch.", error: err.message },
       { status: 500 },

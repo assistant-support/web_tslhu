@@ -5,8 +5,10 @@ import ScheduledJob from "@/models/schedule";
 import ArchivedJob from "@/models/archivedJob";
 import Variant from "@/models/variant";
 import { revalidateTag } from "next/cache";
-import { logExecuteScheduleTask } from "@/app/actions/historyActions";
-import crypto from "crypto";
+import {
+  logExecuteScheduleTask,
+  logAutoCancelTask, // ++ ADDED
+} from "@/app/actions/historyActions";
 import mongoose from "mongoose";
 
 const cors = {
@@ -106,30 +108,48 @@ const updateDataAfterExecution = async ({
 };
 
 /**
- * Lưu trữ và xóa một Job đã hoàn thành.
+ * Lưu trữ, dọn dẹp và xóa một Job đã hoàn thành.
+ * @param {object} jobToFinish - Document của job sắp hoàn thành.
  */
-const archiveAndRemoveJob = async (jobId) => {
+// ** MODIFIED: Hàm này giờ nhận vào cả document của job để lấy danh sách khách hàng
+const archiveAndCleanupJob = async (jobToFinish) => {
+  if (!jobToFinish) return;
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    const jobToArchive = await ScheduledJob.findById(jobId).lean();
-    if (!jobToArchive) return;
+    // ++ ADDED: Bước 1 - Dọn dẹp Customer.action
+    const customerIds = jobToFinish.tasks.map((task) => task.person._id);
+    if (customerIds.length > 0) {
+      await Customer.updateMany(
+        { _id: { $in: customerIds } },
+        { $pull: { action: { job: jobToFinish._id } } },
+        { session },
+      );
+    }
 
-    await ArchivedJob.create({
-      _id: jobToArchive._id,
-      jobName: jobToArchive.jobName,
+    // Bước 2: Lưu trữ job
+    const archiveData = {
+      ...jobToFinish.toObject(),
+      _id: jobToFinish._id,
       status: "completed",
-      actionType: jobToArchive.actionType,
-      zaloAccount: jobToArchive.zaloAccount,
-      config: jobToArchive.config,
-      statistics: jobToArchive.statistics,
-      createdAt: jobToArchive.createdAt,
       completedAt: new Date(),
-      estimatedCompletionTime: jobToArchive.estimatedCompletionTime,
-      createdBy: jobToArchive.createdBy,
-    });
+    };
+    delete archiveData.tasks;
+    await ArchivedJob.create([archiveData], { session });
 
-    await ScheduledJob.findByIdAndDelete(jobId);
+    // Bước 3: Xóa job khỏi collection đang chạy
+    await ScheduledJob.findByIdAndDelete(jobToFinish._id, { session });
+
+    await session.commitTransaction();
   } catch (error) {
-    console.error(`[ARCHIVE FAILED] Lỗi khi lưu trữ Job ${jobId}:`, error);
+    await session.abortTransaction();
+    console.error(
+      `[ARCHIVE FAILED] Lỗi khi lưu trữ Job ${jobToFinish._id}:`,
+      error,
+    );
+  } finally {
+    session.endSession();
   }
 };
 
@@ -137,11 +157,37 @@ export const GET = async () => {
   try {
     await connectDB();
     const now = new Date();
+
+    // ++ ADDED: BƯỚC 1 - CƠ CHẾ TỰ CHỮA LỖI (SELF-HEALING)
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    await ScheduledJob.updateMany(
+      {
+        "tasks.status": "processing",
+        "tasks.processedAt": { $lt: fiveMinutesAgo },
+      },
+      {
+        $set: {
+          "tasks.$[elem].status": "failed",
+          "tasks.$[elem].resultMessage":
+            "Task timed out and was automatically failed.",
+        },
+        $inc: { "statistics.failed": 1 },
+      },
+      {
+        arrayFilters: [
+          {
+            "elem.status": "processing",
+            "elem.processedAt": { $lt: fiveMinutesAgo },
+          },
+        ],
+      },
+    );
+
     let processedCount = 0;
     const allVariants = await Variant.find().lean();
-    const cronProcessId = new mongoose.Types.ObjectId().toString();
 
     while (true) {
+      const cronProcessId = new mongoose.Types.ObjectId().toString(); // Tạo ID mới cho mỗi lần tìm
       const jobWithLockedTask = await ScheduledJob.findOneAndUpdate(
         {
           status: { $in: ["scheduled", "processing"] },
@@ -177,27 +223,45 @@ export const GET = async () => {
       if (!taskToProcess) {
         continue; // Lỗi logic hiếm gặp, bỏ qua để vòng lặp tiếp tục
       }
-
+      const originalJobStateBeforeUpdate = await ScheduledJob.findById(
+        jobWithLockedTask._id,
+      ).lean();
       const jobInfo = jobWithLockedTask; // Đã populate sẵn
       const bot = jobInfo.zaloAccount;
 
-      let executionResult, finalMessage, logStatus, executionStatus;
+      let executionResult;
 
       try {
-        const { scriptResult, finalMessage: msg } = await executeExternalScript(
-          jobInfo.actionType,
-          bot,
+        const scriptResponse = await executeExternalScript(
+          jobWithLockedTask.actionType,
+          jobWithLockedTask.zaloAccount,
           taskToProcess.person,
-          jobInfo.config,
+          jobWithLockedTask.config,
           allVariants,
         );
-        executionResult = scriptResult;
-        finalMessage = msg;
-        executionStatus =
-          executionResult.actionStatus === "success" ? "completed" : "failed";
+        executionResult = {
+          ...scriptResponse.scriptResult,
+          finalMessage: scriptResponse.finalMessage,
+        };
       } catch (e) {
         executionResult = { actionStatus: "error", actionMessage: e.message };
-        executionStatus = "failed";
+      }
+
+      const statusName =
+        executionResult.actionStatus === "success" ? "SUCCESS" : "FAILED";
+      const customerUpdatePayload = {};
+
+      // ** MODIFIED: Tái cấu trúc logic xử lý kết quả
+      const { uidStatus, targetUid, actionMessage } = executionResult;
+      if (uidStatus === "found_new" && targetUid) {
+        customerUpdatePayload.uid = targetUid;
+      } else if (uidStatus === "provided" && statusName === "FAILED") {
+        customerUpdatePayload.uid = null;
+      } else if (
+        uidStatus === "not_found" ||
+        (jobWithLockedTask.actionType === "findUid" && statusName === "FAILED")
+      ) {
+        customerUpdatePayload.uid = actionMessage || "Lỗi không xác định";
       }
 
       logStatus = executionStatus === "completed" ? "SUCCESS" : "FAILED";
@@ -205,35 +269,100 @@ export const GET = async () => {
       // Thực hiện ghi log và cập nhật UID song song
       await Promise.all([
         logExecuteScheduleTask({
-          jobInfo: {
-            jobId: jobInfo._id.toString(),
-            jobName: jobInfo.jobName,
-            actionType: jobInfo.actionType,
-            createdBy: jobInfo.createdBy._id,
-            zaloAccountId: bot._id,
-            config: jobInfo.config,
-          },
+          jobInfo: jobWithLockedTask,
           task: taskToProcess,
           customerId: taskToProcess.person._id,
-          statusName: logStatus,
+          statusName,
           executionResult,
-          finalMessage,
+          finalMessage: executionResult.finalMessage,
         }),
-        updateDataAfterExecution({
-          actionType: jobInfo.actionType,
-          apiResult: executionResult,
-          customerId: taskToProcess.person._id,
-        }),
+        Object.keys(customerUpdatePayload).length > 0
+          ? Customer.updateOne(
+              { _id: taskToProcess.person._id },
+              { $set: customerUpdatePayload },
+            )
+          : Promise.resolve(),
+        Customer.updateOne(
+          // Dọn dẹp tham chiếu action
+          { _id: taskToProcess.person._id },
+          { $pull: { action: { job: jobWithLockedTask._id } } },
+        ),
       ]);
 
-      // ** MODIFIED: Thay thế logic update & check bằng một lệnh duy nhất
-      // Kéo task đã xử lý ra khỏi mảng và cập nhật thống kê cùng lúc
+      // ++ ADDED: XỬ LÝ LỖI GIỚI HẠN SAU KHI ĐÃ LOG TASK GỐC
+      if (statusName === "FAILED") {
+        const errorMessage = executionResult.actionMessage || "";
+        let cancelScope = null;
+        if (errorMessage.includes("trong 1 giờ")) cancelScope = "hour";
+        else if (errorMessage.includes("trong 1 ngày")) cancelScope = "day";
+
+        if (cancelScope) {
+          const startTime = new Date(now);
+          const endTime = new Date(now);
+          if (cancelScope === "hour") {
+            startTime.setMinutes(0, 0, 0);
+            endTime.setMinutes(59, 59, 999);
+          } else {
+            // day
+            startTime.setHours(0, 0, 0, 0);
+            endTime.setHours(23, 59, 59, 999);
+          }
+
+          // Tìm các task pending trong phạm vi thời gian
+          const tasksToCancel = (
+            originalJobStateBeforeUpdate.tasks || []
+          ).filter(
+            (t) =>
+              t.status === "pending" && new Date(t.scheduledFor) <= endTime,
+          );
+
+          if (tasksToCancel.length > 0) {
+            console.log(
+              `⚠️  Phát hiện lỗi giới hạn ${cancelScope}, đang hủy ${tasksToCancel.length} task...`,
+            );
+
+            for (const task of tasksToCancel) {
+              await logAutoCancelTask(
+                originalJobStateBeforeUpdate,
+                task,
+                cancelScope,
+              );
+            }
+
+            const taskIdsToCancel = tasksToCancel.map((t) => t._id);
+            const customerIdsToClean = tasksToCancel.map((t) => t.person._id);
+
+            // Hủy hàng loạt và dọn dẹp Customer
+            await Promise.all([
+              ScheduledJob.updateOne(
+                { _id: jobWithLockedTask._id },
+                {
+                  $set: {
+                    "tasks.$[elem].status": "failed",
+                    "tasks.$[elem].resultMessage": `Tự động hủy do đạt giới hạn ${cancelScope}`,
+                  },
+                  $inc: { "statistics.failed": taskIdsToCancel.length },
+                },
+                { arrayFilters: [{ "elem._id": { $in: taskIdsToCancel } }] },
+              ),
+              Customer.updateMany(
+                { _id: { $in: customerIdsToClean } },
+                { $pull: { action: { job: jobWithLockedTask._id } } },
+              ),
+            ]);
+            console.log(
+              `✅  Đã hủy và dọn dẹp thành công ${tasksToCancel.length} task.`,
+            );
+          }
+        }
+      }
+
       const updatedJob = await ScheduledJob.findByIdAndUpdate(
-        jobInfo._id,
+        jobWithLockedTask._id,
         {
           $pull: { tasks: { _id: taskToProcess._id } },
           $inc: {
-            [executionStatus === "completed"
+            [statusName === "SUCCESS"
               ? "statistics.completed"
               : "statistics.failed"]: 1,
           },
@@ -243,15 +372,14 @@ export const GET = async () => {
 
       processedCount++;
 
-      // ** MODIFIED: Kiểm tra job hoàn thành dựa trên kết quả trả về
-      // Nếu mảng tasks rỗng, job đã xong
       if (updatedJob && updatedJob.tasks.length === 0) {
-        await archiveAndRemoveJob(updatedJob._id);
+        await archiveAndCleanupJob(originalJobStateBeforeUpdate);
       }
     }
 
     if (processedCount > 0) {
       revalidateTag("customer_data");
+      revalidateTag("running_jobs");
     }
 
     return NextResponse.json({
@@ -262,7 +390,7 @@ export const GET = async () => {
     console.error("CRON JOB FAILED:", err);
     return NextResponse.json(
       { message: "Lỗi nghiêm trọng trong CRON job.", error: err.message },
-      { status: 500, headers: cors },
+      { status: 500 },
     );
   }
 };

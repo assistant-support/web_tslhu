@@ -55,9 +55,6 @@ export default function HistoryDetailPanel({ panelData: log }) {
 
   return (
     <div className={styles.panelContent}>
-      <h4 className={styles.contentTitle}>
-        Chi tiết thực thi cho: {getSafeCustomerName(customer)}
-      </h4>
       <div className={styles.detailGroup}>
         <DetailRow
           label="Trạng thái"

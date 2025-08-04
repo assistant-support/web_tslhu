@@ -44,6 +44,7 @@ const ActionHistorySchema = new Schema(
         "UPDATE_ADMISSION_INFORMATION_CUSTOMER",
         "ADD_COMMENT_CUSTOMER",
         "CHOSE_ZALO_ACCOUNT",
+        "AUTO_CANCEL_RATE_LIMIT",
       ],
       required: true,
     },
