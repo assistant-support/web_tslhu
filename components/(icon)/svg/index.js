@@ -631,3 +631,37 @@ export const Svg_Admin = ({ w, h, c }) => (
     <path d="M256 0c4.6 0 9.2 1 13.4 2.9L457.7 82.8c22 9.3 38.4 31 38.3 57.2c-.5 99.2-41.3 280.7-213.6 363.2c-16.7 8-36.1 8-52.8 0C61.3 420.7 20.5 239.2 20 140c-.1-26.2 16.3-47.9 38.3-57.2L242.7 2.9C246.8 1 251.4 0 256 0zm0 64C253.1 64 250.2 65 247.4 66.1l-192 80c-5.8 2.4-9.4 8.2-9.4 14.5c-.5 84.2 33.1 243.1 186.3 318.7c14.9 7.4 32.1 7.4 47.1 0C456.1 403.7 489.6 244.8 489.1 160.6c0-6.3-3.6-12.1-9.4-14.5l-192-80C261.8 65 258.9 64 256 64z" />
   </svg>
 );
+export const Svg_Trash = ({ w, h, c }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={w || 18}
+    height={h || 18}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={c || "currentColor"}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polyline points="3 6 5 6 21 6"></polyline>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+  </svg>
+);
+
+// ++ ADDED: Svg_Plus (thay cho Svg_Add hình vuông)
+export const Svg_Plus = ({ w, h, c }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={w || 20}
+    height={h || 20}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={c || "currentColor"}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line x1="12" y1="5" x2="12" y2="19"></line>
+    <line x1="5" y1="12" x2="19" y2="12"></line>
+  </svg>
+);

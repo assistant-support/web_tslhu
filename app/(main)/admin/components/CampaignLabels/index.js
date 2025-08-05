@@ -1,53 +1,24 @@
-// app/(main)/admin/components/CampaignLabels/index.js
+// ** MODIFIED: Refactor để sử dụng DataTable và CSS Modules
 "use client";
 
-import React, { useState, useEffect, useCallback, useTransition } from "react";
-import styles from "./CampaignLabels.module.css";
+import React, { useState, useEffect, useCallback } from "react";
 import { usePanels } from "@/contexts/PanelContext";
 import {
-  getLabel, // ++ ADDED: Import hàm lấy dữ liệu mới
+  getLabel,
   createOrUpdateLabel,
   deleteLabel,
 } from "@/app/actions/campaignActions";
 import LabelEditorPanel from "../Panel/LabelEditorPanel";
 import LoadingSpinner from "../shared/LoadingSpinner";
 import PaginationControls from "../shared/PaginationControls";
+import DataTable from "../datatable/DataTable"; // ++ ADDED: Import DataTable mới
 
-// --- Component Row cho mỗi Nhãn ---
-const LabelRow = ({ label, onEdit, onDelete }) => (
-  <div className={styles.row}>
-    <div className={styles.info}>
-      <span className={styles.title}>{label.title}</span>
-      <span className={styles.desc}>{label.desc || "Không có mô tả"}</span>
-    </div>
-    <div className={styles.actions}>
-      <button
-        className={`${styles.btn} ${styles.btnEdit}`}
-        onClick={() => onEdit(label)}
-      >
-        ✏️ Sửa
-      </button>
-      <button
-        className={`${styles.btn} ${styles.btnDelete}`}
-        onClick={() => onDelete(label._id)}
-      >
-        🗑️ Xóa
-      </button>
-    </div>
-  </div>
-);
-
-// --- Component Chính ---
-export default function CampaignLabels({}) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export default function CampaignLabels() {
   const { openPanel, closePanel } = usePanels();
-  // ++ ADDED: State mới để quản lý dữ liệu, phân trang và loading
   const [labels, setLabels] = useState([]);
   const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
 
-  // ++ ADDED: Hàm lấy dữ liệu từ server, có thể tái sử dụng
   const fetchData = useCallback(async (page = 1, limit = 10) => {
     setIsLoading(true);
     const result = await getLabel({ page, limit });
@@ -60,38 +31,18 @@ export default function CampaignLabels({}) {
     setIsLoading(false);
   }, []);
 
-  // ++ ADDED: Tự động gọi fetchData khi component được mount
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const handleSave = async (data) => {
-    let savedData = null;
-    setIsSubmitting(true);
-    const result = await createOrUpdateLabel(data);
-    setIsSubmitting(false);
-
-    if (result.error) {
-      alert(`Lỗi: ${result.error}`);
+  const handleSuccess = (savedLabel) => {
+    const exists = labels.some((l) => l._id === savedLabel._id);
+    if (exists) {
+      setLabels((prev) =>
+        prev.map((l) => (l._id === savedLabel._id ? savedLabel : l)),
+      );
     } else {
-      savedData = result.data;
-      // ** MODIFIED: Gọi lại fetchData để làm mới danh sách
-      fetchData(pagination.page, pagination.limit);
-    }
-    return savedData;
-  };
-
-  const handleDelete = async (id) => {
-    if (confirm("Bạn có chắc muốn xóa nhãn này không?")) {
-      startTransition(async () => {
-        const result = await deleteLabel(id);
-        if (result.success) {
-          // ** MODIFIED: Gọi lại fetchData để làm mới danh sách
-          fetchData(pagination.page, pagination.limit);
-        } else {
-          alert(`Lỗi: ${result.error}`);
-        }
-      });
+      fetchData(1, pagination.limit || 10);
     }
   };
 
@@ -103,40 +54,69 @@ export default function CampaignLabels({}) {
       component: LabelEditorPanel,
       props: {
         initialData: label,
-        onSave: handleSave,
-        isSubmitting: isSubmitting,
+        onSave: async (data) => {
+          // Logic lưu được xử lý ngay tại đây
+          const result = await createOrUpdateLabel(data);
+          if (result.success) {
+            handleSuccess(result.data);
+            closePanel(panelId);
+          } else {
+            alert(`Lỗi: ${result.error}`);
+          }
+        },
         closePanel: () => closePanel(panelId),
       },
     });
   };
 
+  const handleDelete = async (id) => {
+    if (confirm("Bạn có chắc muốn xóa nhãn này không?")) {
+      const result = await deleteLabel(id);
+      if (result.success) {
+        fetchData(pagination.page, pagination.limit);
+      } else {
+        alert(`Lỗi: ${result.error}`);
+      }
+    }
+  };
+
+  // ++ ADDED: Định nghĩa các cột cho DataTable
+  const columns = [
+    {
+      header: "Tên nhãn",
+      accessor: "title",
+      width: "1fr", // <-- Thay '30%' bằng '1fr'
+    },
+    {
+      header: "Mô tả ngắn",
+      accessor: "desc",
+      width: "2fr", // <-- Thay '70%' bằng '2fr' (gấp đôi cột tên)
+      cell: (item) =>
+        item.desc || <span style={{ color: "#9ca3af" }}>Không có mô tả</span>,
+    },
+  ];
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div />
-        <button className={styles.btnAdd} onClick={() => handleOpenEditor()}>
-          + Tạo mới
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Container cho DataTable để nó có thể cuộn */}
+      <div style={{ flexGrow: 1, minHeight: 0 }}>
+        <DataTable
+          columns={columns}
+          data={labels}
+          onRowDoubleClick={handleOpenEditor}
+          onAddItem={() => handleOpenEditor(null)}
+          onDeleteItem={handleDelete}
+          showActions={true}
+        />
       </div>
-
-      {/* ** MODIFIED: Thêm logic hiển thị loading */}
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : (
-        <div className={styles.listContainer}>
-          {(labels || []).map((label) => (
-            <LabelRow
-              key={label._id}
-              label={label}
-              onEdit={handleOpenEditor}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* ++ ADDED: Thêm thanh phân trang */}
-      <PaginationControls pagination={pagination} onPageChange={fetchData} />
+      {/* Pagination Controls */}
+      <div style={{ flexShrink: 0 }}>
+        <PaginationControls pagination={pagination} onPageChange={fetchData} />
+      </div>
     </div>
   );
 }

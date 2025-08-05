@@ -1,50 +1,49 @@
 // web_tslhu/app/(main)/admin/components/Panel/VariantEditorPanel.js
 "use client";
 
-import React, { useState, useTransition } from "react";
-import styles from "./LabelEditorPanel.module.css"; // Tái sử dụng style của Label Editor
+import React, { useState } from "react";
+// ** MODIFIED: Đổi tên prop và thêm logic xử lý mới cho nhất quán
+import styles from "./LabelEditorPanel.module.css"; // Tái sử dụng style
 import { createOrUpdateVariant } from "@/app/actions/variantActions";
 
 export default function VariantEditorPanel({
-  panelData,
-  onVariantUpdate,
+  initialData,
+  onSave, // <-- Đổi tên prop onVariantUpdate thành onSave
   closePanel,
 }) {
-  const [name, setName] = useState(panelData?.name || "");
-  const [description, setDescription] = useState(panelData?.description || "");
-  // Chuyển mảng words thành một chuỗi, mỗi từ một dòng để hiển thị trong textarea
-  const [wordsString, setWordsString] = useState(
-    panelData?.words?.join("\n") || "",
+  const [name, setName] = useState(initialData?.name || "");
+  const [description, setDescription] = useState(
+    initialData?.description || "",
   );
-
-  const [isPending, startTransition] = useTransition();
+  const [wordsString, setWordsString] = useState(
+    initialData?.words?.join("\n") || "",
+  );
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
     if (!name) {
-      setError("Tên biến thể (placeholder) là bắt buộc.");
+      setError("Tên biến thể là bắt buộc.");
       return;
     }
 
-    startTransition(async () => {
-      const result = await createOrUpdateVariant({
-        id: panelData?._id,
-        name,
-        description,
-        wordsString,
-      });
-
-      if (result.success) {
-        onVariantUpdate(result.data); // Callback để cập nhật lại danh sách
-        closePanel();
-      } else {
-        setError(result.error);
-      }
+    setIsSubmitting(true);
+    const result = await onSave({
+      id: initialData?._id,
+      name,
+      description,
+      wordsString,
     });
+    setIsSubmitting(false);
+
+    // Panel sẽ tự đóng từ component cha sau khi onSave thành công
   };
 
   return (
-    <div className={styles.container}>
+    // ** MODIFIED: Cập nhật lại cấu trúc JSX và className cho nhất quán
+    <form onSubmit={handleSubmit} className={styles.panelBody}>
       {error && <p className={styles.error}>{error}</p>}
       <div className={styles.formGroup}>
         <label htmlFor="variantName">
@@ -55,8 +54,9 @@ export default function VariantEditorPanel({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Không dấu, không khoảng trắng, không ký tự đặc biệt..."
+          placeholder="Không dấu, không khoảng trắng..."
           className={styles.input}
+          required
         />
       </div>
       <div className={styles.formGroup}>
@@ -81,13 +81,23 @@ export default function VariantEditorPanel({
           className={styles.textarea}
         />
       </div>
-      <button
-        onClick={handleSubmit}
-        disabled={isPending}
-        className={styles.saveButton}
-      >
-        {isPending ? "Đang lưu..." : "Lưu biến thể"}
-      </button>
-    </div>
+      <div className={styles.panelFooter}>
+        <button
+          type="button"
+          onClick={closePanel}
+          className={styles.cancelButton}
+          disabled={isSubmitting}
+        >
+          Hủy
+        </button>
+        <button
+          type="submit"
+          className={styles.saveButton}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Đang lưu..." : "Lưu Biến thể"}
+        </button>
+      </div>
+    </form>
   );
 }

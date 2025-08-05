@@ -1,20 +1,22 @@
-// web_tslhu/app/(main)/admin/components/VariantManagement/index.js
+// ** MODIFIED: Refactor để sử dụng DataTable, áp dụng fix lỗi cuộn
 "use client";
 
-import React, { useState, useEffect, useCallback, useTransition } from "react";
-import styles from "./VariantManagement.module.css";
-import { getVariants, deleteVariant } from "@/app/actions/variantActions";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  getVariants,
+  deleteVariant,
+  createOrUpdateVariant,
+} from "@/app/actions/variantActions";
 import { usePanels } from "@/contexts/PanelContext";
 import VariantEditorPanel from "../Panel/VariantEditorPanel";
-// ++ ADDED: Import các component tái sử dụng
 import LoadingSpinner from "../shared/LoadingSpinner";
 import PaginationControls from "../shared/PaginationControls";
+import DataTable from "../datatable/DataTable";
 
 export default function VariantManagement() {
   const [variants, setVariants] = useState([]);
   const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
   const { openPanel, closePanel } = usePanels();
 
   const fetchData = useCallback(async (page = 1, limit = 10) => {
@@ -33,9 +35,16 @@ export default function VariantManagement() {
     fetchData();
   }, [fetchData]);
 
-  const handleVariantUpdate = useCallback(() => {
-    fetchData(pagination.page, pagination.limit);
-  }, [fetchData, pagination]);
+  const handleSuccess = (savedVariant) => {
+    const exists = variants.some((v) => v._id === savedVariant._id);
+    if (exists) {
+      setVariants((prev) =>
+        prev.map((v) => (v._id === savedVariant._id ? savedVariant : v)),
+      );
+    } else {
+      fetchData(1, pagination.limit || 10);
+    }
+  };
 
   const handleOpenPanel = (variant = null) => {
     const panelId = `variant-editor-${variant?._id || "new"}`;
@@ -44,83 +53,80 @@ export default function VariantManagement() {
       title: variant ? `Chỉnh sửa: {${variant.name}}` : "Tạo Biến thể mới",
       component: VariantEditorPanel,
       props: {
-        panelData: variant,
-        onVariantUpdate: handleVariantUpdate,
+        initialData: variant,
+        onSave: async (data) => {
+          const result = await createOrUpdateVariant(data);
+          if (result.success) {
+            handleSuccess(result.data);
+            closePanel(panelId);
+          } else {
+            alert(`Lỗi: ${result.error}`);
+          }
+        },
         closePanel: () => closePanel(panelId),
       },
     });
   };
 
-  const handleDelete = (variant) => {
-    if (
-      confirm(
-        `Bạn có chắc muốn xóa vĩnh viễn biến thể {${variant.name}} không?`,
-      )
-    ) {
-      startTransition(async () => {
-        const result = await deleteVariant(variant._id);
-        if (result.success) {
-          fetchData(pagination.page, pagination.limit);
-        } else {
-          alert(`Lỗi: ${result.error}`);
-        }
-      });
+  const handleDelete = async (id) => {
+    if (confirm("Bạn có chắc muốn xóa vĩnh viễn biến thể này không?")) {
+      const result = await deleteVariant(id);
+      if (result.success) {
+        fetchData(pagination.page, pagination.limit);
+      } else {
+        alert(`Lỗi: ${result.error}`);
+      }
     }
   };
 
+  const columns = [
+    {
+      header: "Tên (Placeholder)",
+      accessor: "name",
+      width: "1fr",
+      cell: (item) => (
+        <span
+          style={{ fontFamily: "monospace", color: "#2563eb" }}
+        >{`{${item.name}}`}</span>
+      ),
+    },
+    {
+      header: "Mô tả",
+      accessor: "description",
+      width: "2fr",
+      cell: (item) =>
+        item.description || (
+          <span style={{ color: "#9ca3af" }}>Không có mô tả</span>
+        ),
+    },
+    {
+      header: "Số lượng từ",
+      accessor: "words",
+      width: "100px",
+      cell: (item) => item.words.length,
+    },
+  ];
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div />
-        <button className={styles.btnAdd} onClick={() => handleOpenPanel()}>
-          + Tạo mới
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* ++ ADDED: Áp dụng cấu trúc layout chống lỗi cuộn */}
+      <div style={{ flexGrow: 1, minHeight: 0 }}>
+        <DataTable
+          columns={columns}
+          data={variants}
+          onRowDoubleClick={handleOpenPanel}
+          onAddItem={() => handleOpenPanel(null)}
+          onDeleteItem={handleDelete}
+          showActions={true}
+        />
       </div>
-
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : (
-        <>
-          <div className={styles.listContainer}>
-            {/* Header của bảng */}
-            <div className={`${styles.row} ${styles.gridHeader}`}>
-              <div>Tên (Placeholder)</div>
-              <div>Mô tả</div>
-              <div>Số lượng từ</div>
-              <div>Hành động</div>
-            </div>
-
-            {(variants || []).map((variant) => (
-              <div key={variant._id} className={styles.row}>
-                <div>
-                  <strong>{`{${variant.name}}`}</strong>
-                </div>
-                <div>{variant.description}</div>
-                <div>{variant.words.length}</div>
-                <div className={styles.actions}>
-                  <button
-                    className={`${styles.btn} ${styles.btnEdit}`}
-                    onClick={() => handleOpenPanel(variant)}
-                  >
-                    Sửa
-                  </button>
-                  <button
-                    className={`${styles.btn} ${styles.btnDelete}`}
-                    onClick={() => handleDelete(variant)}
-                    disabled={isPending}
-                  >
-                    Xóa
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <PaginationControls
-            pagination={pagination}
-            onPageChange={fetchData}
-          />
-        </>
-      )}
+      <div style={{ flexShrink: 0 }}>
+        <PaginationControls pagination={pagination} onPageChange={fetchData} />
+      </div>
     </div>
   );
 }

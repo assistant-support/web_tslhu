@@ -7,6 +7,8 @@ import Label from "@/models/label";
 import Status from "@/models/status";
 import User from "@/models/users";
 import { revalidateTag } from "next/cache";
+import ActionHistory from "@/models/history";
+import { Types } from "mongoose";
 
 export async function Data_Client(searchParams = {}) {
   try {
@@ -17,6 +19,55 @@ export async function Data_Client(searchParams = {}) {
     const skip = (page - 1) * limit;
 
     const query = {};
+
+    // ++ ADDED: LOGIC LỌC MỚI THEO UID FINDER
+    if (
+      searchParams.uidFinder &&
+      Types.ObjectId.isValid(searchParams.uidFinder)
+    ) {
+      // 1. Tìm các hành động tìm UID thành công gần nhất cho mỗi khách hàng
+      const latestFinds = await ActionHistory.aggregate([
+        {
+          $match: {
+            action: "DO_SCHEDULE_FIND_UID",
+            "status.status": "SUCCESS",
+          },
+        },
+        { $sort: { time: -1 } },
+        {
+          $group: {
+            _id: "$customer", // Nhóm theo ID khách hàng
+            lastFinder: { $first: "$zalo" }, // Lấy Zalo account của hành động gần nhất
+          },
+        },
+        {
+          $match: {
+            // 2. Lọc ra những nhóm mà Zalo account gần nhất trùng với bộ lọc
+            lastFinder: new Types.ObjectId(searchParams.uidFinder),
+          },
+        },
+        {
+          $project: {
+            _id: 1, // Chỉ lấy ra ID khách hàng
+          },
+        },
+      ]);
+
+      // 3. Lấy ra mảng các ID khách hàng hợp lệ
+      const customerIds = latestFinds.map((item) => item._id);
+
+      // Nếu không tìm thấy khách hàng nào, trả về mảng rỗng để không hiển thị gì
+      if (customerIds.length === 0) {
+        return {
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 1 },
+        };
+      }
+
+      // 4. Thêm điều kiện này vào query chính
+      query._id = { $in: customerIds };
+    }
+    // -- KẾT THÚC LOGIC LỌC MỚI --
 
     if (searchParams.status) {
       if (searchParams.status === "none") {

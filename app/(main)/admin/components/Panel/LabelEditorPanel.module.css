@@ -88,3 +88,25 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box; /* Đảm bảo padding không làm vỡ layout */
+  margin-top: 4px; /* Thêm khoảng cách nhỏ với label */
+}
+
+.textarea {
+  resize: vertical; /* Cho phép người dùng thay đổi chiều cao */
+  min-height: 120px;
+}
+
+.error {
+  color: #dc2626; /* red-600 */
+  font-size: 14px;
+  margin-top: 8px;
+}

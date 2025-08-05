@@ -1,6 +1,6 @@
 // app/(main)/admin/components/CampaignTable/index.js
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import styles from "./CampaignTable.module.css";
 import { usePanels } from "@/contexts/PanelContext";
 import ScheduleDetailPanel from "../Panel/ScheduleDetailPanel";
@@ -87,9 +87,13 @@ const TimeCell = ({ job, mode }) => {
 };
 
 // --- Component Row (1 dòng trong bảng) ---
-const CampaignRow = ({ job, mode, onOpenDetail }) => (
+const CampaignRow = ({ job, mode, onOpenDetail, isActive }) => (
+  // ** MODIFIED: Thêm class 'activeRow' nếu isActiv }) => (
   // Row cũng dùng display: contents
-  <div className={styles.gridRow} onClick={() => onOpenDetail(job)}>
+  <div
+    className={`${styles.gridRow} ${isActive ? styles.activeRow : ""}`}
+    onDoubleClick={() => onOpenDetail(job)}
+  >
     <div className={`${styles.cell} ${styles.jobNameCell}`}>{job.jobName}</div>
     <div className={styles.cell}>
       <StackedProgressBar
@@ -125,10 +129,17 @@ const Header = () => (
 
 // --- Component Chính ---
 export default function CampaignTable({ mode }) {
-  const { openPanel, closePanel } = usePanels();
+  const { openPanel, closePanel, allActivePanels } = usePanels();
   const [jobs, setJobs] = useState([]);
   const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
+
+  const activeJobId = useMemo(() => {
+    const activePanel = (allActivePanels || []).find((panel) =>
+      panel.id.startsWith("schedule-detail-"),
+    );
+    return activePanel ? activePanel.id.replace("schedule-detail-", "") : null;
+  }, [allActivePanels]);
 
   // ++ ADDED: Hàm lấy dữ liệu dựa trên 'mode'
   const fetchData = useCallback(
@@ -186,6 +197,7 @@ export default function CampaignTable({ mode }) {
               job={job}
               mode={mode}
               onOpenDetail={handleOpenDetail}
+              isActive={job._id === activeJobId}
             />
           ))}
         </div>

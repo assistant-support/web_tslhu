@@ -1,7 +1,7 @@
-// ++ ADDED: Toàn bộ file này là mới
+// ** MODIFIED: Refactor để sử dụng DataTable và áp dụng các bản sửa lỗi
 "use client";
-import React, { useState, useEffect, useTransition, useCallback } from "react";
-import styles from "./StatusManagement.module.css";
+
+import React, { useState, useEffect, useCallback } from "react";
 import { usePanels } from "@/contexts/PanelContext";
 import {
   getStatuses,
@@ -11,40 +11,14 @@ import {
 import StatusEditorPanel from "../Panel/StatusEditorPanel";
 import LoadingSpinner from "../shared/LoadingSpinner";
 import PaginationControls from "../shared/PaginationControls";
+import DataTable from "../datatable/DataTable"; // ++ ADDED
 
-// Component con để hiển thị một dòng trạng thái
-const StatusRow = ({ status, onEdit, onDelete }) => (
-  <div className={styles.row}>
-    <div className={styles.info}>
-      <span className={styles.title}>{status.name}</span>
-      <span className={styles.desc}>
-        {status.description || "Không có mô tả"}
-      </span>
-    </div>
-    <div className={styles.actions}>
-      <button
-        className={`${styles.btn} ${styles.btnEdit}`}
-        onClick={() => onEdit(status)}
-      >
-        ✏️ Sửa
-      </button>
-      <button
-        className={`${styles.btn} ${styles.btnDelete}`}
-        onClick={() => onDelete(status._id)}
-      >
-        🗑️ Xóa
-      </button>
-    </div>
-  </div>
-);
-
-// Component chính
 export default function StatusManagement() {
   const { openPanel, closePanel } = usePanels();
+  const [statuses, setStatuses] = useState([]);
   const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
-  const [statuses, setStatuses] = useState([]);
-  const [isPending, startTransition] = useTransition();
+
   const fetchData = useCallback(async (page = 1, limit = 10) => {
     setIsLoading(true);
     const result = await getStatuses({ page, limit });
@@ -61,43 +35,14 @@ export default function StatusManagement() {
     fetchData();
   }, [fetchData]);
 
-  const handleSave = async (data) => {
-    let savedData = null; // Biến để trả về cho panel
-
-    // Bọc trong startTransition để quản lý trạng thái loading
-    startTransition(async () => {
-      const result = await createOrUpdateStatus(data);
-
-      if (result.error) {
-        alert(`Lỗi: ${result.error}`);
-      } else {
-        savedData = result.data;
-        console.log("Lưu thành công, đang làm mới dữ liệu...");
-        // Gọi lại fetchData để cập nhật lại danh sách với trang hiện tại
-        fetchData(pagination.page, pagination.limit);
-      }
-    });
-
-    // Trả về kết quả để panel biết và tự đóng
-    return savedData;
-  };
-
-  const handleDelete = (id) => {
-    if (
-      confirm(
-        "Bạn có chắc muốn xóa trạng thái này? Hành động này sẽ gỡ trạng thái khỏi tất cả các khách hàng liên quan.",
-      )
-    ) {
-      startTransition(async () => {
-        const result = await deleteStatus(id);
-        if (result.error) {
-          alert(`Lỗi: ${result.error}`);
-        } else {
-          console.log("Xóa thành công, đang làm mới dữ liệu...");
-          // Gọi lại fetchData để cập nhật lại danh sách
-          fetchData(pagination.page, pagination.limit);
-        }
-      });
+  const handleSuccess = (savedStatus) => {
+    const exists = statuses.some((s) => s._id === savedStatus._id);
+    if (exists) {
+      setStatuses((prev) =>
+        prev.map((s) => (s._id === savedStatus._id ? savedStatus : s)),
+      );
+    } else {
+      fetchData(1, pagination.limit || 10);
     }
   };
 
@@ -109,38 +54,71 @@ export default function StatusManagement() {
       component: StatusEditorPanel,
       props: {
         initialData: status,
-        onSave: handleSave,
-        isSubmitting: isPending,
+        onSave: async (data) => {
+          const result = await createOrUpdateStatus(data);
+          if (result.success) {
+            handleSuccess(result.data);
+            closePanel(panelId);
+          } else {
+            alert(`Lỗi: ${result.error}`);
+          }
+        },
         closePanel: () => closePanel(panelId),
       },
     });
   };
 
+  const handleDelete = async (id) => {
+    if (
+      confirm(
+        "Bạn có chắc muốn xóa trạng thái này? Hành động này sẽ gỡ trạng thái khỏi tất cả các khách hàng liên quan.",
+      )
+    ) {
+      const result = await deleteStatus(id);
+      if (result.success) {
+        fetchData(pagination.page, pagination.limit);
+      } else {
+        alert(`Lỗi: ${result.error}`);
+      }
+    }
+  };
+
+  const columns = [
+    {
+      header: "Tên trạng thái",
+      accessor: "name",
+      width: "1fr",
+    },
+    {
+      header: "Mô tả",
+      accessor: "description",
+      width: "2fr",
+      cell: (item) =>
+        item.description || (
+          <span style={{ color: "#9ca3af" }}>Không có mô tả</span>
+        ),
+    },
+  ];
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div />
-        <button className={styles.btnAdd} onClick={() => handleOpenEditor()}>
-          + Tạo mới
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ flexGrow: 1, minHeight: 0 }}>
+        <DataTable
+          columns={columns}
+          data={statuses}
+          onRowDoubleClick={handleOpenEditor}
+          onAddItem={() => handleOpenEditor(null)}
+          onDeleteItem={handleDelete}
+          showActions={true}
+        />
       </div>
-
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : (
-        <div className={styles.listContainer}>
-          {(statuses || []).map((status) => (
-            <StatusRow
-              key={status._id}
-              status={status}
-              onEdit={handleOpenEditor}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
-      )}
-
-      <PaginationControls pagination={pagination} onPageChange={fetchData} />
+      <div style={{ flexShrink: 0 }}>
+        <PaginationControls pagination={pagination} onPageChange={fetchData} />
+      </div>
     </div>
   );
 }

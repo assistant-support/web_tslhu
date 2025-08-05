@@ -1,33 +1,27 @@
-// ++ ADDED: Toàn bộ file này là mới
+// ** MODIFIED: Refactor để dùng CSS Modules và logic props nhất quán
 "use client";
 
 import React, { useState } from "react";
 import styles from "./LabelEditorPanel.module.css"; // Tái sử dụng style của Label Editor
 
-export default function StatusEditorPanel({
-  initialData,
-  onSave,
-  closePanel,
-  isSubmitting,
-}) {
+export default function StatusEditorPanel({ initialData, onSave, closePanel }) {
   const isEditing = initialData && initialData._id;
-
   const [name, setName] = useState(initialData?.name || "");
   const [description, setDescription] = useState(
     initialData?.description || "",
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (typeof onSave === "function") {
-      const result = await onSave({
+      setIsSubmitting(true);
+      await onSave({
         id: isEditing ? initialData._id : undefined,
         name,
         description,
       });
-      if (result) {
-        closePanel();
-      }
+      setIsSubmitting(false);
     }
   };
 
@@ -43,6 +37,7 @@ export default function StatusEditorPanel({
           onChange={(e) => setName(e.target.value)}
           placeholder="Ví dụ: QT01| Đã liên hệ"
           required
+          className={styles.input}
         />
       </div>
       <div className={styles.formGroup}>
@@ -53,6 +48,7 @@ export default function StatusEditorPanel({
           name="description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          className={styles.input}
         />
       </div>
       <div className={styles.panelFooter}>

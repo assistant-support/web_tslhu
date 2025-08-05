@@ -1,36 +1,29 @@
-// web_tslhu/app/(main)/admin/components/Panel/LabelEditorPanel.js
-
+// ** MODIFIED: Hoàn trả về sử dụng CSS Modules và logic props nhất quán
 "use client";
 
 import React, { useState } from "react";
-import styles from "./LabelEditorPanel.module.css"; // Sẽ tạo file CSS này
+import styles from "./LabelEditorPanel.module.css"; // Sử dụng lại CSS module đã có
 
-export default function LabelEditorPanel({
-  initialData, // Đổi tên từ panelData
-  onSave,
-  closePanel,
-  isSubmitting, // Nhận prop này từ cha
-}) {
+export default function LabelEditorPanel({ initialData, onSave, closePanel }) {
   const isEditing = initialData && initialData._id;
 
   const [title, setTitle] = useState(initialData?.title || "");
   const [desc, setDesc] = useState(initialData?.desc || "");
   const [content, setContent] = useState(initialData?.content || "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  //<-----------------THAY ĐỔI: Xử lý submit bất đồng bộ----------------->
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (typeof onSave === "function") {
-      const result = await onSave({
+      setIsSubmitting(true);
+      await onSave({
         id: isEditing ? initialData._id : undefined,
         title,
         desc,
         content,
       });
-      // Chỉ đóng panel nếu lưu thành công (result không phải là null)
-      if (result) {
-        closePanel();
-      }
+      setIsSubmitting(false);
+      // Panel sẽ được đóng từ component cha sau khi onSave thành công
     }
   };
 
@@ -45,6 +38,7 @@ export default function LabelEditorPanel({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
+          className={styles.input} // ++ ADDED
         />
       </div>
       <div className={styles.formGroup}>
@@ -55,6 +49,7 @@ export default function LabelEditorPanel({
           name="desc"
           value={desc}
           onChange={(e) => setDesc(e.target.value)}
+          className={styles.input} // ++ ADDED
         />
       </div>
       <div className={styles.formGroup}>
@@ -65,6 +60,7 @@ export default function LabelEditorPanel({
           rows="10"
           value={content}
           onChange={(e) => setContent(e.target.value)}
+          className={styles.textarea} // ++ ADDED
         ></textarea>
       </div>
       <div className={styles.panelFooter}>

@@ -1,6 +1,3 @@
-// web_tslhu/components/(features)/panel/PanelManager.js
-// -------------------- START: THAY ĐỔI TOÀN BỘ FILE --------------------
-// Chú thích: Thêm hàm getSafeTitle để đảm bảo panel không bao giờ crash do title là object.
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
@@ -121,7 +118,6 @@ const PanelManager = () => {
             key={id}
             onClose={() => closePanel(id)}
             onCollapse={() => collapsePanel(id)}
-            // <-----------------Thay đổi nhỏ: Sử dụng hàm an toàn----------------->
             title={getSafeTitle(title)}
             rightOffset={rightOffset}
           >
@@ -134,4 +130,3 @@ const PanelManager = () => {
 };
 
 export default PanelManager;
-// --------------------  END: THAY ĐỔI TOÀN BỘ FILE  --------------------

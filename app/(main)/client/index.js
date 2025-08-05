@@ -123,7 +123,7 @@ const Row = React.memo(function Row({
       className={`${styles.gridRow} ${isUpdated ? styles.rowUpdated : ""} ${
         isActive ? styles.activeRow : ""
       }`}
-      onClick={() => onRowClick(row)}
+      onDoubleClick={() => onRowClick(row)}
     >
       <div className={styles.cell} onClick={(e) => e.stopPropagation()}>
         <input
@@ -164,6 +164,7 @@ export default function ClientPage({
   initialLabels,
   initialStatuses,
   user,
+  initialZaloAccounts,
 }) {
   // --- STATES & REFS ---
   // ** MODIFIED: Lấy thêm `allActivePanels` từ context
@@ -555,6 +556,28 @@ export default function ClientPage({
             <Setting user={user} onUserUpdate={handleRefresh} />
           </div>
         </div>
+
+        {/* ++ ADDED: BỘ LỌC MỚI THEO ZALO UID FINDER */}
+        <div className={styles.accountSelector}>
+          <label className="text_6">Lọc theo TK tìm UID:</label>
+          <select
+            className="input"
+            style={{ width: 250, padding: "6px 10px" }} // Tăng chiều rộng một chút
+            value={searchParams.get("uidFinder") || ""}
+            onChange={(e) => handleNavigation("uidFinder", e.target.value)}
+          >
+            <option value="">-- Tất cả tài khoản --</option>
+            {/* Render danh sách Zalo accounts */}
+            {(initialZaloAccounts || []).map((acc) => (
+              <option key={acc._id} value={acc._id}>
+                {/* ** MODIFIED: Thêm SĐT vào sau tên */}
+                {acc.name} ({acc.phone})
+              </option>
+            ))}
+          </select>
+        </div>
+        {/* -- KẾT THÚC BỘ LỌC MỚI -- */}
+
         {selectedCount > 0 && (
           <button
             className={styles.btnCampaign}
