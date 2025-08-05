@@ -17,7 +17,7 @@ import mongoose from "mongoose";
  * Tính toán lịch trình và trả về cả các task đã xếp lịch và trạng thái "đặt cọc" của tài khoản.
  * @returns {object} { scheduledTasks, estimatedCompletion, finalCounters }
  */
-function schedulePersonsSmart(persons, account, actionsPerHour) {
+function schedulePersonsSmart(persons, account, actionsPerHour, actionType) {
   const scheduledTasks = [];
   const baseIntervalMs = 3_600_000 / actionsPerHour;
   const now = new Date();
@@ -41,38 +41,41 @@ function schedulePersonsSmart(persons, account, actionsPerHour) {
   const smartStartDate = new Date(currentTime);
 
   for (const person of persons) {
-    let safeTimeFound = false;
-    while (!safeTimeFound) {
-      const currentHourStartRef = new Date(currentTime);
-      currentHourStartRef.setMinutes(0, 0, 0);
+    // ** MODIFIED: Logic kiểm tra giới hạn an toàn chỉ áp dụng khi KHÔNG PHẢI sendMessage
+    if (actionType !== "sendMessage") {
+      let safeTimeFound = false;
+      while (!safeTimeFound) {
+        const currentHourStartRef = new Date(currentTime);
+        currentHourStartRef.setMinutes(0, 0, 0);
 
-      // Logic reset giới hạn giờ
-      if (currentTime.getTime() >= rateLimitHourStart.getTime() + 3_600_000) {
-        rateLimitHourStart = new Date(currentHourStartRef);
-        actionsUsedThisHour = 0;
-      }
+        // Logic reset giới hạn giờ
+        if (currentTime.getTime() >= rateLimitHourStart.getTime() + 3_600_000) {
+          rateLimitHourStart = new Date(currentHourStartRef);
+          actionsUsedThisHour = 0;
+        }
 
-      // Logic reset giới hạn ngày
-      if (
-        currentTime.getTime() >= getNextDayStart(rateLimitDayStart).getTime()
-      ) {
-        rateLimitDayStart = new Date(currentTime);
-        rateLimitDayStart.setHours(0, 0, 0, 0);
-        actionsUsedThisDay = 0;
-        actionsUsedThisHour = 0; // Reset cả bộ đếm giờ khi sang ngày mới
-      }
+        // Logic reset giới hạn ngày
+        if (
+          currentTime.getTime() >= getNextDayStart(rateLimitDayStart).getTime()
+        ) {
+          rateLimitDayStart = new Date(currentTime);
+          rateLimitDayStart.setHours(0, 0, 0, 0);
+          actionsUsedThisDay = 0;
+          actionsUsedThisHour = 0; // Reset cả bộ đếm giờ khi sang ngày mới
+        }
 
-      // Kiểm tra giới hạn
-      if (actionsUsedThisHour >= account.rateLimitPerHour) {
-        currentTime = new Date(rateLimitHourStart.getTime() + 3_600_000);
-        continue; // Lặp lại vòng lặp để logic reset giờ được áp dụng
-      }
-      if (actionsUsedThisDay >= account.rateLimitPerDay) {
-        currentTime = getNextDayStart(rateLimitDayStart);
-        continue; // Lặp lại vòng lặp để logic reset ngày được áp dụng
-      }
+        // Kiểm tra giới hạn
+        if (actionsUsedThisHour >= account.rateLimitPerHour) {
+          currentTime = new Date(rateLimitHourStart.getTime() + 3_600_000);
+          continue; // Lặp lại vòng lặp để logic reset giờ được áp dụng
+        }
+        if (actionsUsedThisDay >= account.rateLimitPerDay) {
+          currentTime = getNextDayStart(rateLimitDayStart);
+          continue; // Lặp lại vòng lặp để logic reset ngày được áp dụng
+        }
 
-      safeTimeFound = true;
+        safeTimeFound = true;
+      }
     }
 
     const jitterMs = (Math.random() - 0.5) * baseIntervalMs * 0.3;
@@ -123,13 +126,18 @@ export async function POST(request) {
     if (!account) {
       throw new Error("Không tìm thấy tài khoản Zalo.");
     }
+    let finalActionsPerHour = config.actionsPerHour || account.rateLimitPerHour;
+    if (actionType === "findUid") {
+      finalActionsPerHour = 30;
+    }
 
     // ** MODIFIED: Gọi hàm lập lịch đã nâng cấp
     const { scheduledTasks, estimatedCompletion, finalCounters } =
       schedulePersonsSmart(
         tasks.map((t) => t.person),
         account,
-        config.actionsPerHour || account.rateLimitPerHour,
+        finalActionsPerHour, // <-- Sử dụng tốc độ cuối cùng
+        actionType,
       );
 
     // ** MODIFIED: "Đặt cọc" giới hạn bằng cách cập nhật ZaloAccount

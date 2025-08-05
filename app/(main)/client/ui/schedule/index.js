@@ -291,7 +291,14 @@ export default function Schedule({
   const [jobName, setJobName] = useState("");
   const [actionType, setActionType] = useState("sendMessage");
   const [message, setMessage] = useState("");
-  const [actionsPerHour, setActionsPerHour] = useState(50);
+  const [actionsPerHour, setActionsPerHour] = useState(100);
+  const maxLimit = useMemo(() => {
+    if (actionType === "findUid") {
+      return 30; // Giới hạn cứng cho hành động tìm UID
+    }
+    // Đối với các hành động khác, lấy giới hạn từ tài khoản Zalo
+    return 9999;
+  }, [actionType]);
   const [selectedLabelId, setSelectedLabelId] = useState("");
   const [isEstimating, startEstimation] = useTransition(); // State cho việc ước tính
   const [estimationResult, setEstimationResult] = useState(null);
@@ -324,6 +331,16 @@ export default function Schedule({
       setRemovedIds(new Set());
     }
   }, [initialData]);
+  useEffect(() => {
+    // Khi chuyển sang Tìm UID, nếu tốc độ đang cao hơn 30 thì tự động giảm xuống 30
+    if (actionType === "findUid" && actionsPerHour > 30) {
+      setActionsPerHour(30);
+    }
+    // Khi chuyển sang Gửi tin nhắn, nếu tốc độ đang thấp, đặt lại về mặc định là 100
+    else if (actionType === "sendMessage" && actionsPerHour < 100) {
+      setActionsPerHour(100);
+    }
+  }, [actionType]);
 
   const activeRecipients = useMemo(
     () => currentRecipients.filter((c) => !removedIds.has(c._id)),
@@ -448,7 +465,7 @@ export default function Schedule({
         onEditRecipients={() => setIsRecipientPopupOpen(true)}
         user={user}
         estimatedTime={estimatedTime}
-        maxLimit={user?.zalo?.rateLimitPerHour || 50}
+        maxLimit={maxLimit}
         onOpenEditor={() => setIsEditorOpen(true)}
         onEstimate={handleEstimate} // Truyền hàm mới
         estimationResult={estimationResult} // Truyền kết quả
