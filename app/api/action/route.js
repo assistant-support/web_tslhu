@@ -264,8 +264,6 @@ export const GET = async () => {
         customerUpdatePayload.uid = actionMessage || "Lỗi không xác định";
       }
 
-      logStatus = executionStatus === "completed" ? "SUCCESS" : "FAILED";
-
       // Thực hiện ghi log và cập nhật UID song song
       await Promise.all([
         logExecuteScheduleTask({
