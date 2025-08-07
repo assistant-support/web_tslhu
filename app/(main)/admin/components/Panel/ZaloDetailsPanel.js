@@ -359,7 +359,7 @@ export default function ZaloDetailsPanel({ accountId, onUpdate, closePanel }) {
             </button>
             <button
               className={styles.primaryButton}
-              onClick={() => alert("Chức năng gán user sẽ được bổ sung sau")}
+              onClick={handleOpenAssignPanel}
             >
               Gán / Thu hồi User
             </button>

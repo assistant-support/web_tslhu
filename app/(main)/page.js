@@ -13,13 +13,13 @@ export default async function Page({ searchParams }) {
     clientResponse,
     labelResponse,
     statusResponse,
-    zaloAccounts,
+    zaloAccountsResponse, // ** MODIFIED: Đổi tên biến để rõ ràng hơn
   ] = await Promise.all([
     getCurrentUser(),
     Data_Client(await searchParams),
     Data_Label(),
     Data_Status(),
-    getZaloAccounts(), // ++ ADDED: Gọi action để lấy danh sách Zalo
+    getZaloAccounts(),
   ]);
 
   // BƯỚC 2: Truyền dữ liệu ban đầu xuống Client Component
@@ -30,7 +30,8 @@ export default async function Page({ searchParams }) {
       initialLabels={labelResponse.data}
       initialStatuses={statusResponse.data}
       user={userData}
-      initialZaloAccounts={zaloAccounts} // ++ ADDED: Truyền danh sách Zalo xuống client
+      // ** MODIFIED: Chỉ truyền thuộc tính .data chứa mảng các tài khoản
+      initialZaloAccounts={zaloAccountsResponse.data}
     />
   );
 }

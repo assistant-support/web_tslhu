@@ -4,10 +4,14 @@ import styles from "./PaginationControls.module.css";
 
 export default function PaginationControls({ pagination, onPageChange }) {
   const [pageInput, setPageInput] = useState(pagination?.page || 1);
+  // ++ ADDED: State cục bộ cho input limit
+  const [limitInput, setLimitInput] = useState(pagination?.limit || 10);
 
   useEffect(() => {
     setPageInput(pagination?.page || 1);
-  }, [pagination?.page]);
+    // ++ ADDED: Cập nhật state cục bộ khi prop pagination thay đổi
+    setLimitInput(pagination?.limit || 10);
+  }, [pagination?.page, pagination?.limit]);
 
   const handleGoToPage = (e) => {
     if (e.key === "Enter") {
@@ -26,14 +30,14 @@ export default function PaginationControls({ pagination, onPageChange }) {
       if (newLimit > 0) {
         onPageChange(1, newLimit); // Reset về trang 1 khi đổi limit
       } else {
-        e.target.value = pagination.limit;
+        // ** MODIFIED: Cập nhật lại state cục bộ nếu giá trị không hợp lệ
+        setLimitInput(pagination.limit);
       }
     }
   };
 
   const currentPage = pagination?.page || 1;
   const totalPages = pagination?.totalPages || 1;
-  const limit = pagination?.limit || 10;
   const totalItems = pagination?.total || 0;
 
   return (
@@ -44,7 +48,9 @@ export default function PaginationControls({ pagination, onPageChange }) {
           <input
             id="limitInput"
             type="number"
-            defaultValue={limit}
+            // ** MODIFIED: Chuyển sang `value` và `onChange`
+            value={limitInput}
+            onChange={(e) => setLimitInput(e.target.value)}
             onKeyDown={handleLimitChange}
             className={styles.pageInput}
           />
@@ -52,7 +58,7 @@ export default function PaginationControls({ pagination, onPageChange }) {
       </div>
       <div className={styles.pageNavGroup}>
         <button
-          onClick={() => onPageChange(currentPage - 1, limit)}
+          onClick={() => onPageChange(currentPage - 1, pagination.limit)}
           className={styles.pageBtn}
           disabled={currentPage <= 1}
         >
@@ -71,7 +77,7 @@ export default function PaginationControls({ pagination, onPageChange }) {
           / {totalPages}
         </span>
         <button
-          onClick={() => onPageChange(currentPage + 1, limit)}
+          onClick={() => onPageChange(currentPage + 1, pagination.limit)}
           className={styles.pageBtn}
           disabled={currentPage >= totalPages}
         >

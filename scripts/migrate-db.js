@@ -514,7 +514,6 @@ async function runMigration() {
     await mongoose.connect(mongoURI);
     console.log("✅ Kết nối thành công!");
 
-    await migrateStatuses();
     await migrateZaloAccounts();
     await migrateZaloPhoneNumbers();
     await standardizeZaloLimits();

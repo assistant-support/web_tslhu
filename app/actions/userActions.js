@@ -7,6 +7,8 @@ import User from "@/models/users.js"; // Sửa lại thành 'users.js' cho đún
 import Customer from "@/models/customer.js";
 import { unstable_noStore as noStore } from "next/cache";
 import bcrypt from "bcryptjs";
+import ZaloAccount from "@/models/zalo.js"; // ++ ADDED: Thêm import ZaloAccount
+import { Types } from "mongoose";
 
 const getLatestActionAggregation = (matchConditions = {}) => [
   { $match: matchConditions },
@@ -87,14 +89,87 @@ export async function getUserDetails(userId) {
   noStore();
   try {
     await connectDB();
-    // Populate zaloActive thay vì zaloAccounts
-    const user = await User.findById(userId).populate("zaloActive").lean();
+    if (!userId || !Types.ObjectId.isValid(userId)) return null;
+
+    // --- Bắt đầu Aggregation Pipeline ---
+    const aggregationPipeline = [
+      // Bước 1: Tìm user theo ID
+      {
+        $match: {
+          _id: new Types.ObjectId(userId),
+        },
+      },
+      // Bước 2: Lấy thông tin tài khoản Zalo đang active
+      {
+        $lookup: {
+          from: "zaloaccounts",
+          localField: "zaloActive",
+          foreignField: "_id",
+          as: "zaloActiveInfo",
+        },
+      },
+      // Bước 3: Lấy danh sách tất cả tài khoản Zalo được gán
+      {
+        $lookup: {
+          from: "zaloaccounts",
+          localField: "_id",
+          foreignField: "users",
+          as: "zaloAccounts",
+        },
+      },
+      // Bước 4: Tìm hành động cuối cùng của user này
+      {
+        $lookup: {
+          from: "actionhistories",
+          localField: "_id",
+          foreignField: "user",
+          pipeline: [{ $sort: { time: -1 } }, { $limit: 1 }],
+          as: "latestAction",
+        },
+      },
+      // Bước 5: "Mở" các mảng kết quả
+      {
+        $unwind: {
+          path: "$zaloActiveInfo",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $unwind: { path: "$latestAction", preserveNullAndEmptyArrays: true },
+      },
+      // Bước 6: Lấy thông tin chi tiết của khách hàng từ hành động cuối cùng
+      {
+        $lookup: {
+          from: "customers",
+          localField: "latestAction.customer",
+          foreignField: "_id",
+          as: "latestAction.customer",
+        },
+      },
+      {
+        $unwind: {
+          path: "$latestAction.customer",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      // Bước 7: Chọn lọc các trường cần thiết
+      {
+        $project: {
+          password: 0, // Loại bỏ mật khẩu
+          "zaloAccounts.users": 0, // Loại bỏ các trường không cần thiết để tiết kiệm
+          "zaloAccounts.activeSession": 0,
+        },
+      },
+    ];
+
+    const results = await User.aggregate(aggregationPipeline);
+    const user = results[0];
+
     if (!user) return null;
 
-    // Tìm tất cả các ZaloAccount có user này được gán
-    const ZaloAccount = require("@/models/zalo").default;
-    const assignedZalos = await ZaloAccount.find({ users: userId }).lean();
-    user.zaloAccounts = assignedZalos;
+    // Thay thế zaloActive bằng object đã populate
+    user.zaloActive = user.zaloActiveInfo;
+    delete user.zaloActiveInfo;
 
     return JSON.parse(JSON.stringify(user));
   } catch (error) {

@@ -53,55 +53,68 @@ const TimeDisplay = ({ time }) => {
 export default function UserManagement() {
   const { openPanel, closePanel, allActivePanels } = usePanels();
   const [users, setUsers] = useState([]);
-  const [pagination, setPagination] = useState({});
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [highlightedId, setHighlightedId] = useState(null);
-  const prevUsersRef = useRef([]); // Lưu lại danh sách user cũ để so sánh
+  const prevUsersRef = useRef([]);
 
-  const fetchData = useCallback(
-    async (page = 1, limit = 10, isInitialLoad = false) => {
-      if (isInitialLoad) setIsLoading(true);
+  // ++ ADDED: Dùng useRef để lưu trữ state phân trang cho setInterval
+  const paginationRef = useRef(pagination);
+  useEffect(() => {
+    paginationRef.current = pagination;
+  }, [pagination]);
 
-      const result = await getUsersWithDetails({ page, limit });
-      if (result.success) {
-        // So sánh để tìm user mới xuất hiện ở đầu
-        if (
-          !isInitialLoad &&
-          result.data.length > 0 &&
-          prevUsersRef.current.length > 0
-        ) {
-          const newTopUser = result.data[0];
-          const oldTopUser = prevUsersRef.current[0];
-          if (newTopUser._id !== oldTopUser._id) {
-            setHighlightedId(newTopUser._id);
-            setTimeout(() => setHighlightedId(null), 2500);
-          }
+  // ** MODIFIED: Tách hàm fetchData ra khỏi useCallback để dễ quản lý
+  const fetchData = async (page, limit, isInitialLoad = false) => {
+    if (isInitialLoad) setIsLoading(true);
+
+    const result = await getUsersWithDetails({ page, limit });
+    if (result.success) {
+      // So sánh để tìm user mới xuất hiện ở đầu
+      if (
+        !isInitialLoad &&
+        result.data.length > 0 &&
+        prevUsersRef.current.length > 0
+      ) {
+        const newTopUser = result.data[0];
+        const oldTopUser = prevUsersRef.current[0];
+        if (newTopUser._id !== oldTopUser._id) {
+          setHighlightedId(newTopUser._id);
+          setTimeout(() => setHighlightedId(null), 2500);
         }
-        setUsers(result.data);
-        setPagination({
-          page,
-          limit,
-          total: result.totalUsers,
-          totalPages: result.totalPages,
-        });
-        prevUsersRef.current = result.data; // Cập nhật danh sách cũ
       }
-      if (isInitialLoad) setIsLoading(false);
-    },
-    [],
-  );
+      setUsers(result.data);
+      setPagination({
+        page,
+        limit,
+        total: result.totalUsers,
+        totalPages: result.totalPages,
+      });
+      prevUsersRef.current = result.data; // Cập nhật danh sách cũ
+    }
+    if (isInitialLoad) setIsLoading(false);
+  };
 
   useEffect(() => {
-    fetchData(1, 10, true); // Tải dữ liệu lần đầu
+    fetchData(1, 10, true);
+  }, []);
 
-    // ++ ADDED: Logic tự động làm mới mỗi 15 giây
+  // ** MODIFIED: useEffect này chỉ chạy MỘT LẦN để thiết lập interval
+  useEffect(() => {
     const intervalId = setInterval(() => {
-      fetchData(pagination.page || 1, pagination.limit || 10, false);
+      // Luôn đọc giá trị mới nhất từ ref, tránh lỗi stale state
+      const { page, limit } = paginationRef.current;
+      fetchData(page, limit, false);
     }, 15000);
 
     // Dọn dẹp interval khi component bị unmount
     return () => clearInterval(intervalId);
-  }, [fetchData, pagination.page, pagination.limit]);
+  }, []);
 
   const activeUserIds = useMemo(() => {
     return (allActivePanels || [])
@@ -183,7 +196,8 @@ export default function UserManagement() {
       <div style={{ flexShrink: 0 }}>
         <PaginationControls
           pagination={pagination}
-          onPageChange={(page, limit) => fetchData(page, limit, true)}
+          // ** MODIFIED: Sửa tham số cuối cùng thành `false`
+          onPageChange={(page, limit) => fetchData(page, limit, false)}
         />
       </div>
     </div>
