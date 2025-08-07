@@ -1,43 +1,17 @@
 // app/(main)/admin/components/CampaignTable/index.js
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import styles from "./CampaignTable.module.css";
 import { usePanels } from "@/contexts/PanelContext";
 import ScheduleDetailPanel from "../Panel/ScheduleDetailPanel";
 import StackedProgressBar from "../shared/StackedProgressBar";
 import { getRunningJobs, getArchivedJobs } from "@/app/actions/campaignActions";
 import LoadingSpinner from "../shared/LoadingSpinner";
 import PaginationControls from "../shared/PaginationControls";
+import DataTable from "../datatable/DataTable"; // ++ ADDED: Import DataTable
+import ZaloDisplay from "../shared/ZaloDisplay";
+import UserTag from "../shared/UserTag"; // ++ ADDED: Import ZaloDisplay
 
-// --- Components con để hiển thị thông tin ---
-const UserInfo = ({ user }) => (
-  <div className={styles.userInfo}>
-    <span className={styles.mainInfo} title={user?.name}>
-      {user?.name || "Không rõ"}
-    </span>
-    <span className={styles.subInfo} title={user?.email}>
-      {user?.email || "..."}
-    </span>
-  </div>
-);
-
-const ZaloInfo = ({ account }) => (
-  <div className={styles.zaloInfo}>
-    <img
-      src={account?.avt || "/default-avatar.png"}
-      alt="avt"
-      className={styles.avatar}
-    />
-    <div className={styles.textInfo}>
-      <span className={styles.mainInfo} title={account?.name}>
-        {account?.name || "Không rõ"}
-      </span>
-      <span className={styles.subInfo}>{account?.phone || "..."}</span>
-    </div>
-  </div>
-);
-
-// Yêu cầu 7: Component hiển thị thời gian phức tạp
+// Component TimeCell vẫn được giữ lại để xử lý logic thời gian phức tạp
 const TimeCell = ({ job, mode }) => {
   const formatDateTime = (date) =>
     new Date(date).toLocaleString("vi-VN", {
@@ -76,56 +50,16 @@ const TimeCell = ({ job, mode }) => {
       : getDuration(job.createdAt, job.completedAt);
 
   return (
-    <div className={styles.timeInfo}>
-      <span>{startTime}</span>
-      <span>{endTime}</span>
-      <span className={styles.durationInfo}>
+    <div>
+      <p>
+        {startTime} - {endTime}
+      </p>
+      <p style={{ fontSize: "11px", color: "#059669", fontWeight: 500 }}>
         {mode === "running" ? `Còn lại: ${duration}` : `Tổng: ${duration}`}
-      </span>
+      </p>
     </div>
   );
 };
-
-// --- Component Row (1 dòng trong bảng) ---
-const CampaignRow = ({ job, mode, onOpenDetail, isActive }) => (
-  // ** MODIFIED: Thêm class 'activeRow' nếu isActiv }) => (
-  // Row cũng dùng display: contents
-  <div
-    className={`${styles.gridRow} ${isActive ? styles.activeRow : ""}`}
-    onDoubleClick={() => onOpenDetail(job)}
-  >
-    <div className={`${styles.cell} ${styles.jobNameCell}`}>{job.jobName}</div>
-    <div className={styles.cell}>
-      <StackedProgressBar
-        success={job.statistics.completed}
-        failed={job.statistics.failed}
-        total={job.statistics.total}
-      />
-    </div>
-    <div className={styles.cell}>
-      <ZaloInfo account={job.zaloAccount} />
-    </div>
-    <div className={styles.cell}>
-      <UserInfo user={job.createdBy} />
-    </div>
-    <div className={styles.cell}>{job.actionType}</div>
-    <div className={styles.cell}>
-      <TimeCell job={job} mode={mode} />
-    </div>
-  </div>
-);
-const Header = () => (
-  // Header bây giờ dùng display: contents để các cell con của nó
-  // trở thành một phần của grid cha (tableContainer)
-  <div className={styles.header}>
-    <div className={styles.headerCell}>Tên chiến dịch</div>
-    <div className={styles.headerCell}>Kết quả</div>
-    <div className={styles.headerCell}>Tài khoản</div>
-    <div className={styles.headerCell}>Người tạo</div>
-    <div className={styles.headerCell}>Hành động</div>
-    <div className={styles.headerCell}>Thời gian</div>
-  </div>
-);
 
 // --- Component Chính ---
 export default function CampaignTable({ mode }) {
@@ -134,11 +68,10 @@ export default function CampaignTable({ mode }) {
   const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
 
-  const activeJobId = useMemo(() => {
-    const activePanel = (allActivePanels || []).find((panel) =>
-      panel.id.startsWith("schedule-detail-"),
-    );
-    return activePanel ? activePanel.id.replace("schedule-detail-", "") : null;
+  const activeJobIds = useMemo(() => {
+    return (allActivePanels || [])
+      .filter((panel) => panel.id.startsWith("schedule-detail-"))
+      .map((panel) => panel.id.replace("schedule-detail-", ""));
   }, [allActivePanels]);
 
   // ++ ADDED: Hàm lấy dữ liệu dựa trên 'mode'
@@ -183,26 +116,66 @@ export default function CampaignTable({ mode }) {
     [openPanel, closePanel, mode, handleDataRefresh],
   );
 
+  // ++ ADDED: Định nghĩa cấu trúc cột cho DataTable
+  const columns = [
+    { header: "Tên chiến dịch", accessor: "jobName", width: "1.5fr" },
+    {
+      header: "Kết quả",
+      accessor: "statistics",
+      width: "1.5fr",
+      cell: (item) => (
+        <StackedProgressBar
+          success={item.statistics.completed}
+          failed={item.statistics.failed}
+          total={item.statistics.total}
+        />
+      ),
+    },
+    {
+      header: "Tài khoản",
+      accessor: "zaloAccount",
+      width: "1fr",
+      cell: (item) => (
+        <ZaloDisplay
+          name={item.zaloAccount?.name}
+          phone={item.zaloAccount?.phone}
+          avatar={item.zaloAccount?.avt}
+        />
+      ),
+    },
+    {
+      header: "Người tạo",
+      accessor: "createdBy",
+      width: "1fr",
+      cell: (item) => <UserTag user={item.createdBy} />,
+    },
+    { header: "Hành động", accessor: "actionType", width: "0.7fr" },
+    {
+      header: "Thời gian",
+      accessor: "createdAt",
+      width: "1.2fr",
+      cell: (item) => <TimeCell job={item} mode={mode} />,
+    },
+  ];
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
   return (
-    // ** MODIFIED: Cấu trúc layout mới
-    <div className={styles.fullHeightContainer}>
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : (
-        <div className={styles.tableContainer}>
-          <Header />
-          {(jobs || []).map((job) => (
-            <CampaignRow
-              key={job._id}
-              job={job}
-              mode={mode}
-              onOpenDetail={handleOpenDetail}
-              isActive={job._id === activeJobId}
-            />
-          ))}
-        </div>
-      )}
-      <PaginationControls pagination={pagination} onPageChange={fetchData} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ flexGrow: 1, minHeight: 0 }}>
+        <DataTable
+          columns={columns}
+          data={jobs}
+          onRowDoubleClick={handleOpenDetail}
+          activeRowId={activeJobIds}
+          // Không có Add/Delete nên không truyền prop
+        />
+      </div>
+      <div style={{ flexShrink: 0 }}>
+        <PaginationControls pagination={pagination} onPageChange={fetchData} />
+      </div>
     </div>
   );
 }

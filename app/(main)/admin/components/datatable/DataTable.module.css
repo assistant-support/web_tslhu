@@ -53,7 +53,7 @@
   background-color: #f8fafc;
 }
 .activeRow,
-.activeRow:hover {
+.tableRow.activeRow:hover {
   background-color: #eef2ff; /* blue-100 */
   /* Thêm một đường viền trái để nhấn mạnh */
   box-shadow: inset 3px 0 0 0 #4f46e5; /* indigo-600 */
@@ -148,4 +148,10 @@
 .navButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.limitText {
+  font-size: 12px;
+  color: #475569;
+  margin: 0;
+  line-height: 1.4;
 }

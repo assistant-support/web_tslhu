@@ -1,7 +1,7 @@
 // ** MODIFIED: Refactor để sử dụng DataTable, áp dụng fix lỗi cuộn
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react"; // ++ ADDED: useMemo
 import {
   getVariants,
   deleteVariant,
@@ -17,7 +17,14 @@ export default function VariantManagement() {
   const [variants, setVariants] = useState([]);
   const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
-  const { openPanel, closePanel } = usePanels();
+  const { openPanel, closePanel, allActivePanels } = usePanels(); // ++ ADDED: allActivePanels
+
+  // ++ ADDED: Logic tính toán TẤT CẢ các ID đang active
+  const activeVariantIds = useMemo(() => {
+    return (allActivePanels || [])
+      .filter((panel) => panel.id.startsWith("variant-editor-"))
+      .map((panel) => panel.id.replace("variant-editor-", ""));
+  }, [allActivePanels]);
 
   const fetchData = useCallback(async (page = 1, limit = 10) => {
     setIsLoading(true);
@@ -122,6 +129,7 @@ export default function VariantManagement() {
           onAddItem={() => handleOpenPanel(null)}
           onDeleteItem={handleDelete}
           showActions={true}
+          activeRowId={activeVariantIds} // ** MODIFIED: Truyền danh sách ID vào prop
         />
       </div>
       <div style={{ flexShrink: 0 }}>

@@ -1,7 +1,7 @@
 // ** MODIFIED: Refactor để sử dụng DataTable và áp dụng các bản sửa lỗi
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react"; // ++ ADDED: useMemo
 import { usePanels } from "@/contexts/PanelContext";
 import {
   getStatuses,
@@ -14,10 +14,17 @@ import PaginationControls from "../shared/PaginationControls";
 import DataTable from "../datatable/DataTable"; // ++ ADDED
 
 export default function StatusManagement() {
-  const { openPanel, closePanel } = usePanels();
+  const { openPanel, closePanel, allActivePanels } = usePanels(); // ++ ADDED: allActivePanels
   const [statuses, setStatuses] = useState([]);
   const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
+
+  // ++ ADDED: Logic tính toán TẤT CẢ các ID đang active
+  const activeStatusIds = useMemo(() => {
+    return (allActivePanels || [])
+      .filter((panel) => panel.id.startsWith("edit-status-"))
+      .map((panel) => panel.id.replace("edit-status-", ""));
+  }, [allActivePanels]);
 
   const fetchData = useCallback(async (page = 1, limit = 10) => {
     setIsLoading(true);
@@ -114,6 +121,7 @@ export default function StatusManagement() {
           onAddItem={() => handleOpenEditor(null)}
           onDeleteItem={handleDelete}
           showActions={true}
+          activeRowId={activeStatusIds} // ** MODIFIED: Truyền danh sách ID vào prop
         />
       </div>
       <div style={{ flexShrink: 0 }}>

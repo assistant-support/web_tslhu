@@ -14,7 +14,6 @@ export default function PendingQueuePanel({
   panelData: { job, onScheduleUpdate },
 }) {
   const { openPanel } = usePanels();
-  const [tasks, setTasks] = useState(job.tasks || []);
   const [searchTerm, setSearchTerm] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -45,9 +44,9 @@ export default function PendingQueuePanel({
   };
 
   const pendingTasks = useMemo(() => {
-    // Lọc ra những task có status là 'pending' từ state hiện tại
-    return tasks.filter((task) => task.status === "pending");
-  }, [tasks]);
+    // ** MODIFIED: Lọc ra những task có status là 'pending'
+    return (job.tasks || []).filter((task) => task.status === "pending");
+  }, [job.tasks]);
 
   const filteredTasks = useMemo(() => {
     if (!searchTerm) return pendingTasks; // Lọc trên danh sách pendingTasks

@@ -2,7 +2,6 @@
 import React from "react";
 import styles from "./DataTable.module.css";
 import { Svg_Plus, Svg_Trash } from "@/components/(icon)/svg";
-import TableFooter from "./TableFooter";
 
 const DataTable = ({
   columns,
@@ -11,8 +10,6 @@ const DataTable = ({
   onDeleteItem,
   onAddItem,
   showActions = false,
-  pagination, // ++ ADDED: Nhận prop pagination
-  onPageChange,
   activeRowId,
 }) => {
   // Xác định các cột cho grid layout dựa trên cấu hình
@@ -30,11 +27,16 @@ const DataTable = ({
         className={styles.tableHeader}
         style={{ gridTemplateColumns: finalGridTemplate }}
       >
-        {columns.map((col) => (
-          <div key={col.accessor} className={styles.headerCell}>
-            {col.header}
-          </div>
-        ))}
+        {columns.map(
+          (
+            col,
+            idx, // ++ ADDED: Lấy thêm index (idx)
+          ) => (
+            <div key={col.accessor || idx} className={styles.headerCell}>
+              {col.header}
+            </div>
+          ),
+        )}
         {showActions && (
           <div className={`${styles.headerCell} ${styles.actionCell}`}>
             <button
@@ -52,7 +54,12 @@ const DataTable = ({
       <div className={styles.tableBody}>
         {data && data.length > 0 ? (
           data.map((item) => {
-            const isActive = activeRowId === item._id;
+            const activeRowIds = activeRowId
+              ? new Set(
+                  Array.isArray(activeRowId) ? activeRowId : [activeRowId],
+                )
+              : new Set();
+            const isActive = activeRowIds.has(item._id);
             return (
               <div
                 key={item._id}
@@ -62,16 +69,29 @@ const DataTable = ({
                 style={{ gridTemplateColumns: finalGridTemplate }}
                 onDoubleClick={() => onRowDoubleClick(item)}
               >
-                {columns.map((col) => (
-                  <div key={col.accessor} className={styles.cell}>
-                    {col.cell ? col.cell(item) : item[col.accessor]}
-                  </div>
-                ))}
+                {columns.map(
+                  (
+                    col,
+                    idx, // ++ ADDED: Lấy thêm index (idx)
+                  ) => (
+                    <div
+                      // ** MODIFIED: Thêm `|| idx` làm fallback
+                      key={`${item._id}-${col.accessor || idx}`}
+                      className={styles.cell}
+                    >
+                      {col.cell ? col.cell(item) : item[col.accessor]}
+                    </div>
+                  ),
+                )}
                 {showActions && (
-                  <div className={`${styles.cell} ${styles.actionCell}`}>
+                  // ** ADDED: Thêm key duy nhất cho action cell
+                  <div
+                    key={`${item._id}-actions`}
+                    className={`${styles.cell} ${styles.actionCell}`}
+                  >
                     <button
                       onClick={(e) => {
-                        e.stopPropagation(); // Ngăn double click
+                        e.stopPropagation();
                         onDeleteItem(item._id);
                       }}
                       className={styles.deleteButton}
@@ -89,9 +109,6 @@ const DataTable = ({
             <p>Không có dữ liệu để hiển thị.</p>
           </div>
         )}
-      </div>
-      <div className={styles.tableFooterContainer}>
-        <TableFooter pagination={pagination} onPageChange={onPageChange} />
       </div>
     </div>
   );

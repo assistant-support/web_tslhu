@@ -1,7 +1,7 @@
 // ** MODIFIED: Refactor để sử dụng DataTable và CSS Modules
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { usePanels } from "@/contexts/PanelContext";
 import {
   getLabel,
@@ -14,10 +14,16 @@ import PaginationControls from "../shared/PaginationControls";
 import DataTable from "../datatable/DataTable"; // ++ ADDED: Import DataTable mới
 
 export default function CampaignLabels() {
-  const { openPanel, closePanel } = usePanels();
+  const { openPanel, closePanel, allActivePanels } = usePanels();
   const [labels, setLabels] = useState([]);
   const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
+
+  const activeLabelIds = useMemo(() => {
+    return (allActivePanels || [])
+      .filter((panel) => panel.id.startsWith("edit-label-"))
+      .map((panel) => panel.id.replace("edit-label-", ""));
+  }, [allActivePanels]);
 
   const fetchData = useCallback(async (page = 1, limit = 10) => {
     setIsLoading(true);
@@ -102,7 +108,6 @@ export default function CampaignLabels() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Container cho DataTable để nó có thể cuộn */}
       <div style={{ flexGrow: 1, minHeight: 0 }}>
         <DataTable
           columns={columns}
@@ -111,6 +116,7 @@ export default function CampaignLabels() {
           onAddItem={() => handleOpenEditor(null)}
           onDeleteItem={handleDelete}
           showActions={true}
+          activeRowId={activeLabelIds} // ** MODIFIED: Truyền danh sách ID vào prop
         />
       </div>
       {/* Pagination Controls */}

@@ -1,6 +1,3 @@
-// web_tslhu/app/api/(calendar)/runca/route.js
-// -------------------- START: THAY THẾ TOÀN BỘ FILE --------------------
-// Chú thích: Cập nhật logic reset lúc 0h và bổ sung logic "đánh dấu" khách hàng.
 import { NextResponse } from "next/server";
 import connectToDatabase from "@/config/connectDB";
 import User from "@/models/users";
@@ -203,4 +200,3 @@ export async function POST(request) {
     );
   }
 }
-// --------------------  END: THAY THẾ TOÀN BỘ FILE  --------------------

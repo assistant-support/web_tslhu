@@ -1,9 +1,8 @@
-// ** MODIFIED: Thêm thẻ div bao bọc bên ngoài
+// ++ ADDED: Component mới để hiển thị thông tin Customer
 import styles from "./Display.module.css";
 
-const UserDisplay = ({ name, phone }) => {
+const CustomerDisplay = ({ name, phone }) => {
   return (
-    // ** MODIFIED: Thêm thẻ div này, không cần class
     <div>
       <p className={styles.mainText}>{name || "N/A"}</p>
       {phone && <p className={styles.subText}>{phone}</p>}
@@ -11,4 +10,4 @@ const UserDisplay = ({ name, phone }) => {
   );
 };
 
-export default UserDisplay;
+export default CustomerDisplay;

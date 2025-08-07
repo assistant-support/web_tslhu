@@ -162,7 +162,7 @@ export async function logCreateScheduleTask(user, job, task) {
     zalo: job.zaloAccount,
     status: { status: "SUCCESS" },
     actionDetail: {
-      scheduleId: job._id.toString(),
+      scheduleId: job._id,
       scheduleName: job.jobName,
       // Chi tiết của riêng task này
       scheduledFor: task.scheduledFor,
@@ -303,15 +303,17 @@ export async function getHistoryForSchedule(scheduleId) {
     await connectDB();
 
     if (!scheduleId || !mongoose.Types.ObjectId.isValid(scheduleId)) {
-      // ** MODIFIED: Kiểm tra ObjectId hợp lệ
-      console.error("ID lịch trình không hợp lệ hoặc không được cung cấp.");
+      console.error("ID lịch trình không hợp lệ:", scheduleId);
       return [];
     }
+    const scheduleObjectId = new mongoose.Types.ObjectId(scheduleId);
+    // -- KẾT THÚC THAY ĐỔI --
 
     //<-----------------THAY ĐỔI: Tìm kiếm trực tiếp bằng String----------------->
     // Bỏ hoàn toàn việc chuyển đổi sang ObjectId
     const historyRecords = await ActionHistory.find({
-      "actionDetail.scheduleId": new mongoose.Types.ObjectId(scheduleId),
+      // ** MODIFIED: Tìm kiếm bằng ObjectId đã được chuyển đổi
+      "actionDetail.scheduleId": scheduleObjectId,
       action: {
         $in: [
           "DO_SCHEDULE_SEND_MESSAGE",

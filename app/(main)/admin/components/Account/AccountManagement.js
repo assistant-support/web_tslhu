@@ -1,150 +1,176 @@
-// File: app/(main)/admin/components/AccountManagement.js
+// ** MODIFIED: Refactor toàn bộ component để sử dụng DataTable và chuẩn bị cho Panel mới
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
-import styles from "@/app/(main)/admin/admin.module.css";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { usePanels } from "@/contexts/PanelContext";
 import {
   getZaloAccounts,
-  getAllUsers,
-  toggleUserAccess,
+  deleteZaloAccount,
 } from "@/app/actions/zaloAccountActions";
-import CenterPopup from "@/components/(features)/(popup)/popup_center";
-import Loading from "@/components/(ui)/(loading)/loading";
+import LoadingSpinner from "../shared/LoadingSpinner";
+import PaginationControls from "../shared/PaginationControls";
+import DataTable from "../datatable/DataTable";
+import ZaloDisplay from "../shared/ZaloDisplay";
+import ZaloDetailsPanel from "../Panel/ZaloDetailsPanel";
 
-// --- Component Popup Gán Quyền ---
-const AssignUserPopup = ({ account, allUsers, onClose }) => {
-  const [isPending, startTransition] = useTransition();
-
-  const handleToggle = (userId) => {
-    startTransition(async () => {
-      await toggleUserAccess(account._id, userId);
-    });
+// ++ ADDED: Component con để hiển thị giới hạn, theo đúng kiến trúc
+const LimitDisplay = ({ rateLimitPerHour, rateLimitPerDay }) => {
+  const limitTextStyle = {
+    fontSize: "12px",
+    color: "#475569",
+    margin: 0,
+    lineHeight: 1.4,
   };
-
-  // ================= START: SỬA LỖI PHỤ TRONG POPUP =================
-  // Đảm bảo account.users luôn là mảng để tránh lỗi tương tự trong popup
-  const assignedUserIds = new Set((account.users || []).map((u) => u._id));
-  // =================  END: SỬA LỖI PHỤ TRONG POPUP  =================
-
   return (
-    <div className={styles.popupForm}>
-      <h3>Gán quyền cho tài khoản: {account.name}</h3>
-      <div className={styles.userList}>
-        {(allUsers || []).map((user) => (
-          <div key={user._id} className={styles.userListItem}>
-            <span>
-              {user.name} ({user.email})
-            </span>
-            <button
-              onClick={() => handleToggle(user._id)}
-              className={
-                assignedUserIds.has(user._id)
-                  ? styles.deleteButton
-                  : styles.addButton
-              }
-              disabled={isPending}
-            >
-              {isPending
-                ? "..."
-                : assignedUserIds.has(user._id)
-                ? "Thu hồi"
-                : "Gán quyền"}
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className={styles.formActions}>
-        <button onClick={onClose} className={styles.cancelButton}>
-          Đóng
-        </button>
-      </div>
+    <div>
+      <p style={limitTextStyle}>{rateLimitPerHour || 30}/giờ</p>
+      <p style={limitTextStyle}>{rateLimitPerDay || 200}/ngày</p>
     </div>
   );
 };
 
-// --- Component Chính ---
 export default function AccountManagement() {
+  const { openPanel, closePanel, allActivePanels } = usePanels();
   const [accounts, setAccounts] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
+  const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState(null);
 
-  useEffect(() => {
+  // ** MODIFIED: fetchData giờ sẽ xử lý phân trang từ server
+  const fetchData = useCallback(async (page = 1, limit = 10) => {
     setIsLoading(true);
-    Promise.all([getZaloAccounts(), getAllUsers()]).then(
-      ([accountData, userData]) => {
-        setAccounts(accountData);
-        setAllUsers(userData);
-        setIsLoading(false);
-      },
-    );
+    const result = await getZaloAccounts({ page, limit });
+    if (result.success) {
+      setAccounts(result.data);
+      setPagination(result.pagination);
+    } else {
+      alert(`Lỗi: ${result.error}`);
+    }
+    setIsLoading(false);
   }, []);
 
-  const handleOpenPopup = (account) => {
-    setSelectedAccount(account);
-    setIsPopupOpen(true);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const activeAccountIds = useMemo(() => {
+    return (allActivePanels || [])
+      .filter((panel) => panel.id.startsWith("zalo-details-"))
+      .map((panel) => panel.id.replace("zalo-details-", ""));
+  }, [allActivePanels]);
+
+  const handleOpenDetails = (account) => {
+    const panelId = `zalo-details-${account._id}`;
+
+    openPanel({
+      id: panelId,
+      title: `Chi tiết TK Zalo: ${account.name}`,
+      component: ZaloDetailsPanel,
+      props: {
+        accountId: account._id,
+        onClose: () => closePanel(panelId),
+        onUpdate: fetchData, // Callback để làm mới danh sách sau khi gán user
+      },
+    });
   };
 
+  const handleAddItem = () => {
+    const panelId = `zalo-details-new`;
+    openPanel({
+      id: panelId,
+      title: "Tạo Tài khoản Zalo Mới",
+      component: ZaloDetailsPanel,
+      props: {
+        // Không truyền accountId để panel hiểu là đang ở chế độ "tạo mới"
+        onClose: () => closePanel(panelId),
+        onUpdate: fetchData, // Tải lại bảng sau khi tạo thành công
+      },
+    });
+  };
+
+  const handleDeleteItem = async (item) => {
+    if (
+      prompt(
+        `Để XÁC NHẬN XÓA vĩnh viễn, vui lòng nhập lại SĐT "${item.phone}" của tài khoản:`,
+      ) === item.phone
+    ) {
+      const result = await deleteZaloAccount(item._id);
+      if (result.success) {
+        alert(`Đã xóa tài khoản ${item.name}`);
+        fetchData(pagination.page, pagination.limit);
+      } else {
+        alert(`Lỗi: ${result.error}`);
+      }
+    } else {
+      alert("Xác nhận không hợp lệ. Thao tác đã bị hủy.");
+    }
+  };
+
+  const columns = [
+    {
+      header: "Tên tài khoản",
+      accessor: "name",
+      width: "2fr",
+      cell: (item) => (
+        <ZaloDisplay name={item.name} phone={item.phone} avatar={item.avt} />
+      ),
+    },
+    {
+      header: "Nhân viên gán",
+      width: "1fr",
+      cell: (item) => (item.users || []).length,
+    },
+    // ++ ADDED: Cột Giới hạn mới
+    {
+      header: "Giới hạn",
+      width: "1fr",
+      cell: (item) => (
+        <LimitDisplay
+          rateLimitPerHour={item.rateLimitPerHour}
+          rateLimitPerDay={item.rateLimitPerDay}
+        />
+      ),
+    },
+    {
+      header: "Script Action",
+      accessor: "action",
+      width: "2fr",
+      cell: (item) => (
+        <span
+          style={{
+            fontFamily: "monospace",
+            fontSize: "12px",
+            wordBreak: "break-all",
+          }}
+        >
+          {item.action || "Chưa có"}
+        </span>
+      ),
+    },
+  ];
+
   if (isLoading) {
-    return <Loading content="Đang tải danh sách tài khoản..." />;
+    return <LoadingSpinner />;
   }
 
   return (
-    <div className={styles.managementContainer}>
-      <div className={styles.managementHeader}>
-        <h2>Danh sách Tài khoản Zalo</h2>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ flexGrow: 1, minHeight: 0 }}>
+        <DataTable
+          columns={columns}
+          data={accounts} // ** MODIFIED: Dùng data trực tiếp từ server
+          onRowDoubleClick={handleOpenDetails}
+          activeRowId={activeAccountIds}
+          showActions={true}
+          onAddItem={handleAddItem}
+          onDeleteItem={(id) => {
+            const itemToDelete = accounts.find((acc) => acc._id === id);
+            if (itemToDelete) handleDeleteItem(itemToDelete);
+          }}
+        />
       </div>
-      <div className={styles.tableContainer}>
-        <table>
-          <thead>
-            <tr>
-              <th>Tên tài khoản</th>
-              <th>Số điện thoại</th>
-              <th>Nhân viên được gán</th>
-              <th>Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {accounts.map((account) => (
-              <tr key={account._id}>
-                <td>{account.name}</td>
-                <td>{account.phone}</td>
-                <td>
-                  {/* ================= START: SỬA LỖI CHÍNH ================= */}
-                  {/*
-                    Thêm `(account.users || [])` để kiểm tra.
-                    Nếu `account.users` tồn tại và là một mảng, nó sẽ được sử dụng.
-                    Nếu `account.users` là `null` hoặc `undefined`, một mảng rỗng `[]` sẽ được sử dụng thay thế.
-                    Điều này giúp hàm `.map()` luôn chạy được mà không gây lỗi.
-                  */}
-                  {(account.users || []).map((u) => u.name).join(", ") ||
-                    "Chưa gán"}
-                  {/* =================  END: SỬA LỖI CHÍNH  ================= */}
-                </td>
-                <td>
-                  <button
-                    onClick={() => handleOpenPopup(account)}
-                    className={styles.editButton}
-                  >
-                    Gán quyền
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ flexShrink: 0 }}>
+        <PaginationControls pagination={pagination} onPageChange={fetchData} />
       </div>
-
-      {isPopupOpen && selectedAccount && (
-        <CenterPopup open={isPopupOpen} onClose={() => setIsPopupOpen(false)}>
-          <AssignUserPopup
-            account={selectedAccount}
-            allUsers={allUsers}
-            onClose={() => setIsPopupOpen(false)}
-          />
-        </CenterPopup>
-      )}
     </div>
   );
 }

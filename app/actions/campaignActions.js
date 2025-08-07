@@ -99,7 +99,7 @@ export async function getRunningJobs(page = 1, limit = 10) {
         .populate([
           {
             path: "createdBy",
-            select: "name email phone",
+            select: "name email phone role",
           },
           {
             path: "zaloAccount",
@@ -261,7 +261,7 @@ export async function getArchivedJobs({ page = 1, limit = 10 } = {}) {
         .populate([
           {
             path: "createdBy",
-            select: "name email phone", // Lấy thêm email
+            select: "name email phone role", // Lấy thêm email
           },
           {
             path: "zaloAccount",

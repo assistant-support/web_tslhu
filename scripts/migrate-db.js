@@ -45,6 +45,10 @@ const ActionHistorySchema = new mongoose.Schema(
 // --- END: Định nghĩa Schema ---
 
 // --- START: Khai báo Models ---
+// ** MODIFIED: Thêm khai báo model User
+const User =
+  mongoose.models.user ||
+  mongoose.model("user", new mongoose.Schema({}, { strict: false }));
 
 const ZaloAccount =
   mongoose.models.zaloaccount ||
@@ -218,6 +222,87 @@ async function migrateScheduleIds() {
   }
 }
 
+/**
+ * @description Sửa lỗi gán sai scheduleId cho các action DO_... bằng cách
+ * đối chiếu với action CREATE_... gần nhất của cùng một khách hàng.
+ */
+async function fixMismatchedHistoryIds() {
+  console.log("\n--- BẮT ĐẦU SỬA LỖI GÁN SAI SCHEDULE ID ---");
+
+  // 1. Tìm tất cả các hành động DO_... để kiểm tra
+  const doActions = await ActionHistory.find({ action: /^DO_/ }).lean();
+
+  if (doActions.length === 0) {
+    console.log("✅ Không tìm thấy hành động DO_... nào để kiểm tra.");
+    return;
+  }
+
+  // 2. Lấy tất cả các hành động CREATE_... để tra cứu
+  const createActions = await ActionHistory.find({ action: /^CREATE_/ }).lean();
+  const createActionsMap = new Map();
+  // Tạo một map lồng nhau để tra cứu nhanh: Map<customerId, Array<createAction>>
+  for (const action of createActions) {
+    if (!action.customer) continue;
+    const customerId = action.customer.toString();
+    if (!createActionsMap.has(customerId)) {
+      createActionsMap.set(customerId, []);
+    }
+    createActionsMap.get(customerId).push(action);
+  }
+
+  // Sắp xếp các hành động CREATE của mỗi khách hàng theo thời gian giảm dần
+  for (const actions of createActionsMap.values()) {
+    actions.sort((a, b) => new Date(b.time) - new Date(a.time));
+  }
+
+  console.log(
+    `🔍 Tìm thấy ${doActions.length} hành động DO_... để kiểm tra và sửa chữa.`,
+  );
+
+  const bulkOperations = [];
+  let updatedCount = 0;
+
+  for (const doAction of doActions) {
+    if (!doAction.customer) continue;
+
+    const customerId = doAction.customer.toString();
+    const doActionTime = new Date(doAction.time);
+    const potentialCreateActions = createActionsMap.get(customerId);
+
+    if (potentialCreateActions) {
+      // 3. Tìm hành động CREATE gần nhất xảy ra TRƯỚC hành động DO
+      const correctCreateAction = potentialCreateActions.find(
+        (createAction) => new Date(createAction.time) < doActionTime,
+      );
+
+      if (correctCreateAction && correctCreateAction.actionDetail.scheduleId) {
+        const correctId = correctCreateAction.actionDetail.scheduleId;
+        const currentId = doAction.actionDetail.scheduleId?.toString();
+
+        // 4. Chỉ cập nhật nếu ID hiện tại đang thiếu hoặc bị sai
+        if (!currentId || currentId !== correctId.toString()) {
+          bulkOperations.push({
+            updateOne: {
+              filter: { _id: doAction._id },
+              update: { $set: { "actionDetail.scheduleId": correctId } },
+            },
+          });
+          updatedCount++;
+        }
+      }
+    }
+  }
+
+  if (bulkOperations.length > 0) {
+    await ActionHistory.bulkWrite(bulkOperations);
+    console.log(
+      `✨ Sửa chữa và cập nhật thành công ${updatedCount} liên kết lịch sử.`,
+    );
+  } else {
+    console.log("✅ Không tìm thấy liên kết lịch sử nào cần sửa chữa.");
+  }
+}
+
 // ++ ADDED: Hàm di trú và dọn dẹp các job bị treo
 async function migrateAndCleanupHungJobs() {
   console.log(
@@ -320,6 +405,100 @@ async function migrateAndCleanupHungJobs() {
     session.endSession();
   }
 }
+
+/**
+ * @description Chuẩn hóa lại các SĐT trong collection 'zaloaccounts' từ dạng +84/84 sang dạng 0.
+ */
+async function migrateZaloPhoneNumbers() {
+  console.log("\n--- BẮT ĐẦU CHUẨN HÓA SỐ ĐIỆN THOẠI ZALO ---");
+  const accountsToFix = await ZaloAccount.find({
+    $or: [{ phone: /^\+84/ }, { phone: /^84/ }],
+  }).lean();
+
+  if (accountsToFix.length === 0) {
+    console.log("✅ Không có SĐT tài khoản Zalo nào cần chuẩn hóa.");
+    return;
+  }
+  console.log(
+    `🔍 Tìm thấy ${accountsToFix.length} tài khoản Zalo cần chuẩn hóa SĐT.`,
+  );
+
+  const bulkOps = accountsToFix.map((account) => {
+    let newPhone = account.phone;
+    if (newPhone.startsWith("+84")) {
+      newPhone = "0" + newPhone.substring(3);
+    } else if (newPhone.startsWith("84")) {
+      newPhone = "0" + newPhone.substring(2);
+    }
+    return {
+      updateOne: {
+        filter: { _id: account._id },
+        update: { $set: { phone: newPhone } },
+      },
+    };
+  });
+
+  const result = await ZaloAccount.bulkWrite(bulkOps);
+  console.log(
+    `✨ Chuẩn hóa thành công ${result.modifiedCount} số điện thoại Zalo.`,
+  );
+}
+
+/**
+ * @description Đặt lại rate limit cho TẤT CẢ các tài khoản Zalo về giá trị chuẩn: 30/giờ và 200/ngày.
+ */
+async function standardizeZaloLimits() {
+  console.log("\n--- BẮT ĐẦU CHUẨN HÓA GIỚI HẠN TÀI KHOẢN ZALO ---");
+
+  // Tìm tất cả các tài khoản không có giới hạn chuẩn
+  const query = {
+    $or: [{ rateLimitPerHour: { $ne: 30 } }, { rateLimitPerDay: { $ne: 200 } }],
+  };
+  const accountsToFix = await ZaloAccount.find(query).lean();
+
+  if (accountsToFix.length === 0) {
+    console.log("✅ Tất cả tài khoản Zalo đã có giới hạn chuẩn.");
+    return;
+  }
+
+  console.log(
+    `🔍 Tìm thấy ${accountsToFix.length} tài khoản Zalo cần chuẩn hóa giới hạn.`,
+  );
+
+  const result = await ZaloAccount.updateMany(query, {
+    $set: {
+      rateLimitPerHour: 30,
+      rateLimitPerDay: 200,
+    },
+  });
+
+  console.log(
+    `✨ Chuẩn hóa thành công giới hạn cho ${result.modifiedCount} tài khoản.`,
+  );
+}
+/**
+ * @description Tìm tất cả user có role 'Teacher' và cập nhật thành 'Employee'.
+ */
+async function migrateUserRoles() {
+  console.log("\n--- BẮT ĐẦU CHUẨN HÓA VAI TRÒ USER ---");
+  const query = { role: "Teacher" };
+  const usersToFix = await User.find(query).lean();
+
+  if (usersToFix.length === 0) {
+    console.log("✅ Không có user nào có vai trò 'Teacher'. Dữ liệu đã chuẩn.");
+    return;
+  }
+  console.log(`🔍 Tìm thấy ${usersToFix.length} user cần chuẩn hóa vai trò.`);
+
+  const result = await User.updateMany(query, {
+    $set: { role: "Employee" },
+  });
+
+  console.log(
+    `✨ Chuẩn hóa thành công vai trò cho ${result.modifiedCount} user.`,
+  );
+}
+
 /**
  * Hàm chính để chạy toàn bộ quá trình di trú.
  */
@@ -335,18 +514,14 @@ async function runMigration() {
     await mongoose.connect(mongoURI);
     console.log("✅ Kết nối thành công!");
 
-    // --- CHỌN LOGIC CẦN CHẠY ---
-    // Bỏ comment dòng tương ứng để chạy logic di trú bạn muốn.
-    // Nên chạy từng cái một để dễ kiểm soát.
-
-    // Chạy logic di trú cho collection 'statuses'
     await migrateStatuses();
-
-    // Chạy logic di trú cho collection 'zaloaccounts'
     await migrateZaloAccounts();
-    await migrateScheduleIds(); // ++ ADDED: Chạy logic mới
-    // ++ ADDED: Chạy logic di trú và dọn dẹp job bị treo
+    await migrateZaloPhoneNumbers();
+    await standardizeZaloLimits();
+    await migrateScheduleIds();
+    await fixMismatchedHistoryIds();
     await migrateAndCleanupHungJobs();
+    await migrateUserRoles();
   } catch (error) {
     console.error("❌ Đã xảy ra lỗi trong quá trình di trú:", error);
   } finally {

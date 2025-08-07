@@ -3,11 +3,11 @@ import React, { useState, useEffect } from "react";
 import styles from "./PaginationControls.module.css";
 
 export default function PaginationControls({ pagination, onPageChange }) {
-  const [pageInput, setPageInput] = useState(pagination.page);
+  const [pageInput, setPageInput] = useState(pagination?.page || 1);
 
   useEffect(() => {
-    setPageInput(pagination.page);
-  }, [pagination.page]);
+    setPageInput(pagination?.page || 1);
+  }, [pagination?.page]);
 
   const handleGoToPage = (e) => {
     if (e.key === "Enter") {
@@ -31,7 +31,10 @@ export default function PaginationControls({ pagination, onPageChange }) {
     }
   };
 
-  if (pagination.totalPages <= 1) return null;
+  const currentPage = pagination?.page || 1;
+  const totalPages = pagination?.totalPages || 1;
+  const limit = pagination?.limit || 10;
+  const totalItems = pagination?.total || 0;
 
   return (
     <div className={styles.pagination}>
@@ -41,7 +44,7 @@ export default function PaginationControls({ pagination, onPageChange }) {
           <input
             id="limitInput"
             type="number"
-            defaultValue={pagination.limit}
+            defaultValue={limit}
             onKeyDown={handleLimitChange}
             className={styles.pageInput}
           />
@@ -49,9 +52,9 @@ export default function PaginationControls({ pagination, onPageChange }) {
       </div>
       <div className={styles.pageNavGroup}>
         <button
-          onClick={() => onPageChange(pagination.page - 1, pagination.limit)}
+          onClick={() => onPageChange(currentPage - 1, limit)}
           className={styles.pageBtn}
-          disabled={pagination.page <= 1}
+          disabled={currentPage <= 1}
         >
           &laquo;
         </button>
@@ -63,19 +66,20 @@ export default function PaginationControls({ pagination, onPageChange }) {
             onChange={(e) => setPageInput(e.target.value)}
             onKeyDown={handleGoToPage}
             className={styles.pageInput}
+            disabled={totalPages <= 1}
           />
-          / {pagination.totalPages}
+          / {totalPages}
         </span>
         <button
-          onClick={() => onPageChange(pagination.page + 1, pagination.limit)}
+          onClick={() => onPageChange(currentPage + 1, limit)}
           className={styles.pageBtn}
-          disabled={pagination.page >= pagination.totalPages}
+          disabled={currentPage >= totalPages}
         >
           &raquo;
         </button>
       </div>
       <div>
-        <span>(Tổng cộng {pagination.total} mục)</span>
+        <span>(Tổng cộng {totalItems} mục)</span>
       </div>
     </div>
   );

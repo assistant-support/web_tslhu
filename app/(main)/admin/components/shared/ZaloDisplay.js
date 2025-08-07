@@ -1,25 +1,21 @@
-// ++ ADDED: Component mới để hiển thị thông tin Zalo đồng bộ
+// ** MODIFIED: Refactor để sử dụng CSS Modules
 import Image from "next/image";
+import styles from "./Display.module.css"; // ++ ADDED: Import file style mới
 
-const ZaloDisplay = ({
-  name,
-  phone,
-  avatar,
-  nameClass = "font-medium",
-  phoneClass = "text-xs text-gray-500",
-}) => {
+const ZaloDisplay = ({ name, phone, avatar }) => {
   return (
-    <div className="flex items-center gap-2">
+    // ** MODIFIED: Sử dụng className từ file CSS module
+    <div className={styles.container}>
       <Image
-        src={avatar || "/images/placeholder.jpg"}
+        src={avatar || "/default-avatar.png"} // Sử dụng một ảnh placeholder mặc định
         alt={name || "Zalo Avatar"}
         width={32}
         height={32}
-        className="rounded-full h-8 w-8 object-cover"
+        className={styles.avatar} // Class để bo tròn ảnh
       />
       <div>
-        <p className={nameClass}>{name || "N/A"}</p>
-        {phone && <p className={phoneClass}>{phone}</p>}
+        <p className={styles.mainText}>{name || "N/A"}</p>
+        {phone && <p className={styles.subText}>{phone}</p>}
       </div>
     </div>
   );

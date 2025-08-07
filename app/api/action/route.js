@@ -23,7 +23,7 @@ export const OPTIONS = () => new NextResponse(null, { headers: cors });
  * Sinh tin nhắn cuối cùng từ template và các biến thể trong DB.
  */
 const generateFinalMessage = (messageTemplate, variants) => {
-  if (!messageTemplate || !variants.length) {
+  if (!messageTemplate || !variants || !variants.length) {
     return messageTemplate;
   }
   let finalMessage = messageTemplate;
@@ -49,7 +49,11 @@ const executeExternalScript = async (type, acc, person, cfg, variants) => {
   if (type === "sendMessage" && cfg.messageTemplate) {
     finalMessage = generateFinalMessage(cfg.messageTemplate, variants);
   }
-
+  if (!acc || !acc.action) {
+    throw new Error(
+      `Tài khoản Zalo ${acc?.name || ""} chưa được cấu hình script action.`,
+    );
+  }
   const response = await fetch(acc.action, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -112,40 +116,38 @@ const updateDataAfterExecution = async ({
  * @param {object} jobToFinish - Document của job sắp hoàn thành.
  */
 // ** MODIFIED: Hàm này giờ nhận vào cả document của job để lấy danh sách khách hàng
-const archiveAndCleanupJob = async (jobToFinish) => {
-  if (!jobToFinish) return;
+const archiveAndCleanupJob = async (completedJob) => {
+  if (!completedJob) return;
 
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    // ++ ADDED: Bước 1 - Dọn dẹp Customer.action
-    const customerIds = jobToFinish.tasks.map((task) => task.person._id);
+    const customerIds = (completedJob.tasks || []).map(
+      (task) => task.person._id,
+    );
     if (customerIds.length > 0) {
       await Customer.updateMany(
         { _id: { $in: customerIds } },
-        { $pull: { action: { job: jobToFinish._id } } },
+        { $pull: { action: { job: completedJob._id } } },
         { session },
       );
     }
 
     // Bước 2: Lưu trữ job
     const archiveData = {
-      ...jobToFinish.toObject(),
-      _id: jobToFinish._id,
+      ...completedJob.toObject(),
+      _id: completedJob._id,
       status: "completed",
       completedAt: new Date(),
     };
     delete archiveData.tasks;
     await ArchivedJob.create([archiveData], { session });
-
-    // Bước 3: Xóa job khỏi collection đang chạy
-    await ScheduledJob.findByIdAndDelete(jobToFinish._id, { session });
-
+    await ScheduledJob.findByIdAndDelete(completedJob._id, { session });
     await session.commitTransaction();
   } catch (error) {
     await session.abortTransaction();
     console.error(
-      `[ARCHIVE FAILED] Lỗi khi lưu trữ Job ${jobToFinish._id}:`,
+      `[ARCHIVE FAILED] Lỗi khi lưu trữ Job ${completedJob._id}:`,
       error,
     );
   } finally {
@@ -160,44 +162,47 @@ export const GET = async () => {
 
     // ++ ADDED: BƯỚC 1 - CƠ CHẾ TỰ CHỮA LỖI (SELF-HEALING)
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-    await ScheduledJob.updateMany(
-      {
-        "tasks.status": "processing",
-        "tasks.processedAt": { $lt: fiveMinutesAgo },
-      },
-      {
-        $set: {
-          "tasks.$[elem].status": "failed",
-          "tasks.$[elem].resultMessage":
-            "Task timed out and was automatically failed.",
-        },
-        $inc: { "statistics.failed": 1 },
-      },
-      {
-        arrayFilters: [
-          {
-            "elem.status": "processing",
-            "elem.processedAt": { $lt: fiveMinutesAgo },
-          },
-        ],
-      },
-    );
+    const timedOutJobs = await ScheduledJob.find({
+      "tasks.status": "processing",
+      "tasks.processedAt": { $lt: fiveMinutesAgo },
+    });
+
+    for (const job of timedOutJobs) {
+      const tasksToFail = job.tasks.filter(
+        (t) =>
+          t.status === "processing" && new Date(t.processedAt) < fiveMinutesAgo,
+      );
+      if (tasksToFail.length > 0) {
+        const taskIdsToFail = tasksToFail.map((t) => t._id);
+        const customerIdsToClean = tasksToFail.map((t) => t.person._id);
+        await Promise.all([
+          ScheduledJob.updateOne(
+            { _id: job._id },
+            {
+              $set: {
+                "tasks.$[elem].status": "failed",
+                "tasks.$[elem].resultMessage": "Task timed out",
+              },
+              $inc: { "statistics.failed": tasksToFail.length },
+            },
+            { arrayFilters: [{ "elem._id": { $in: taskIdsToFail } }] },
+          ),
+          Customer.updateMany(
+            { _id: { $in: customerIdsToClean } },
+            { $pull: { action: { job: job._id } } },
+          ),
+        ]);
+      }
+    }
 
     let processedCount = 0;
     const allVariants = await Variant.find().lean();
 
     while (true) {
-      const cronProcessId = new mongoose.Types.ObjectId().toString(); // Tạo ID mới cho mỗi lần tìm
-      const jobWithLockedTask = await ScheduledJob.findOneAndUpdate(
-        {
-          status: { $in: ["scheduled", "processing"] },
-          tasks: {
-            $elemMatch: {
-              status: "pending",
-              scheduledFor: { $lte: now },
-            },
-          },
-        },
+      const cronProcessId = new mongoose.Types.ObjectId().toString();
+
+      const jobToProcess = await ScheduledJob.findOneAndUpdate(
+        { "tasks.status": "pending", "tasks.scheduledFor": { $lte: now } },
         {
           $set: {
             status: "processing",
@@ -212,31 +217,21 @@ export const GET = async () => {
         },
       ).populate("zaloAccount createdBy"); // Populated createdBy
 
-      if (!jobWithLockedTask) {
-        break; // Không còn task nào để xử lý
-      }
+      if (!jobToProcess) break; // Hết task để xử lý
 
-      const taskToProcess = jobWithLockedTask.tasks.find(
+      const taskToProcess = jobToProcess.tasks.find(
         (t) => t.processingId === cronProcessId,
       );
-
-      if (!taskToProcess) {
-        continue; // Lỗi logic hiếm gặp, bỏ qua để vòng lặp tiếp tục
-      }
-      const originalJobStateBeforeUpdate = await ScheduledJob.findById(
-        jobWithLockedTask._id,
-      ).lean();
-      const jobInfo = jobWithLockedTask; // Đã populate sẵn
-      const bot = jobInfo.zaloAccount;
+      if (!taskToProcess) continue;
 
       let executionResult;
 
       try {
         const scriptResponse = await executeExternalScript(
-          jobWithLockedTask.actionType,
-          jobWithLockedTask.zaloAccount,
+          jobToProcess.actionType,
+          jobToProcess.zaloAccount,
           taskToProcess.person,
-          jobWithLockedTask.config,
+          jobToProcess.config,
           allVariants,
         );
         executionResult = {
@@ -249,25 +244,29 @@ export const GET = async () => {
 
       const statusName =
         executionResult.actionStatus === "success" ? "SUCCESS" : "FAILED";
-      const customerUpdatePayload = {};
 
       // ** MODIFIED: Tái cấu trúc logic xử lý kết quả
       const { uidStatus, targetUid, actionMessage } = executionResult;
+      const customerUpdatePayload = {};
       if (uidStatus === "found_new" && targetUid) {
         customerUpdatePayload.uid = targetUid;
       } else if (uidStatus === "provided" && statusName === "FAILED") {
         customerUpdatePayload.uid = null;
       } else if (
         uidStatus === "not_found" ||
-        (jobWithLockedTask.actionType === "findUid" && statusName === "FAILED")
+        (jobToProcess.actionType === "findUid" && statusName === "FAILED")
       ) {
         customerUpdatePayload.uid = actionMessage || "Lỗi không xác định";
       }
+      const jobInfoForLogging = {
+        ...jobToProcess.toObject(),
+        jobId: jobToProcess._id, // <-- ĐÂY LÀ DÒNG CODE QUAN TRỌNG NHẤT
+      };
 
       // Thực hiện ghi log và cập nhật UID song song
       await Promise.all([
         logExecuteScheduleTask({
-          jobInfo: jobWithLockedTask,
+          jobInfo: jobInfoForLogging,
           task: taskToProcess,
           customerId: taskToProcess.person._id,
           statusName,
@@ -283,33 +282,29 @@ export const GET = async () => {
         Customer.updateOne(
           // Dọn dẹp tham chiếu action
           { _id: taskToProcess.person._id },
-          { $pull: { action: { job: jobWithLockedTask._id } } },
+          { $pull: { action: { job: jobToProcess._id } } },
         ),
       ]);
 
-      // ++ ADDED: XỬ LÝ LỖI GIỚI HẠN SAU KHI ĐÃ LOG TASK GỐC
-      if (statusName === "FAILED") {
+      // **RE-INTEGRATED**: XỬ LÝ LỖI GIỚI HẠN (RATE LIMIT)
+      if (statusName === "FAILED" && jobToProcess.actionType === "findUid") {
         const errorMessage = executionResult.actionMessage || "";
         let cancelScope = null;
         if (errorMessage.includes("trong 1 giờ")) cancelScope = "hour";
         else if (errorMessage.includes("trong 1 ngày")) cancelScope = "day";
 
         if (cancelScope) {
-          const startTime = new Date(now);
+          const originalJobState = await ScheduledJob.findById(
+            jobToProcess._id,
+          ).lean();
           const endTime = new Date(now);
           if (cancelScope === "hour") {
-            startTime.setMinutes(0, 0, 0);
             endTime.setMinutes(59, 59, 999);
           } else {
-            // day
-            startTime.setHours(0, 0, 0, 0);
             endTime.setHours(23, 59, 59, 999);
           }
 
-          // Tìm các task pending trong phạm vi thời gian
-          const tasksToCancel = (
-            originalJobStateBeforeUpdate.tasks || []
-          ).filter(
+          const tasksToCancel = (originalJobState.tasks || []).filter(
             (t) =>
               t.status === "pending" && new Date(t.scheduledFor) <= endTime,
           );
@@ -318,47 +313,40 @@ export const GET = async () => {
             console.log(
               `⚠️  Phát hiện lỗi giới hạn ${cancelScope}, đang hủy ${tasksToCancel.length} task...`,
             );
-
-            for (const task of tasksToCancel) {
-              await logAutoCancelTask(
-                originalJobStateBeforeUpdate,
-                task,
-                cancelScope,
-              );
-            }
-
             const taskIdsToCancel = tasksToCancel.map((t) => t._id);
             const customerIdsToClean = tasksToCancel.map((t) => t.person._id);
+            for (const task of tasksToCancel) {
+              await logAutoCancelTask(originalJobState, task, cancelScope);
+            }
 
-            // Hủy hàng loạt và dọn dẹp Customer
-            await Promise.all([
-              ScheduledJob.updateOne(
-                { _id: jobWithLockedTask._id },
-                {
-                  $set: {
-                    "tasks.$[elem].status": "failed",
-                    "tasks.$[elem].resultMessage": `Tự động hủy do đạt giới hạn ${cancelScope}`,
-                  },
-                  $inc: { "statistics.failed": taskIdsToCancel.length },
+            await ScheduledJob.updateOne(
+              { _id: jobToProcess._id },
+              {
+                $set: {
+                  "tasks.$[elem].status": "failed",
+                  "tasks.$[elem].resultMessage": `Tự động hủy do đạt giới hạn ${cancelScope}`,
                 },
-                { arrayFilters: [{ "elem._id": { $in: taskIdsToCancel } }] },
-              ),
-              Customer.updateMany(
-                { _id: { $in: customerIdsToClean } },
-                { $pull: { action: { job: jobWithLockedTask._id } } },
-              ),
-            ]);
-            console.log(
-              `✅  Đã hủy và dọn dẹp thành công ${tasksToCancel.length} task.`,
+                $inc: { "statistics.failed": tasksToCancel.length },
+              },
+              { arrayFilters: [{ "elem._id": { $in: taskIdsToCancel } }] },
+            );
+
+            await Customer.updateMany(
+              { _id: { $in: customerIdsToClean } },
+              { $pull: { action: { job: jobToProcess._id } } },
             );
           }
         }
       }
 
-      const updatedJob = await ScheduledJob.findByIdAndUpdate(
-        jobWithLockedTask._id,
+      await ScheduledJob.updateOne(
+        { _id: jobToProcess._id, "tasks.processingId": cronProcessId },
         {
-          $pull: { tasks: { _id: taskToProcess._id } },
+          $set: {
+            "tasks.$.status": statusName === "SUCCESS" ? "completed" : "failed",
+            "tasks.$.resultMessage":
+              executionResult.actionMessage || statusName,
+          },
           $inc: {
             [statusName === "SUCCESS"
               ? "statistics.completed"
@@ -370,9 +358,24 @@ export const GET = async () => {
 
       processedCount++;
 
-      if (updatedJob && updatedJob.tasks.length === 0) {
-        await archiveAndCleanupJob(originalJobStateBeforeUpdate);
+      // ** MODIFIED: Kiểm tra hoàn thành một cách an toàn
+      const finalJobState = await ScheduledJob.findById(jobToProcess._id);
+      if (finalJobState) {
+        const stats = finalJobState.statistics;
+        if (stats && stats.completed + stats.failed >= stats.total) {
+          await archiveAndCleanupJob(finalJobState);
+        }
       }
+    }
+
+    // ** ADDED: Kiểm tra lại các job đã hết task nhưng chưa được lưu
+    const lingeringJobs = await ScheduledJob.find({
+      $where:
+        "this.statistics.total > 0 && (this.statistics.completed + this.statistics.failed) >= this.statistics.total",
+    });
+    for (const job of lingeringJobs) {
+      console.log(`🧹 Dọn dẹp job bị treo (hết task): ${job.jobName}`);
+      await archiveAndCleanupJob(job);
     }
 
     if (processedCount > 0) {
