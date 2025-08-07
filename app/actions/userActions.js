@@ -7,7 +7,7 @@ import User from "@/models/users.js"; // Sửa lại thành 'users.js' cho đún
 import Customer from "@/models/customer.js";
 import { unstable_noStore as noStore } from "next/cache";
 import bcrypt from "bcryptjs";
-import ZaloAccount from "@/models/zalo.js"; // ++ ADDED: Thêm import ZaloAccount
+import ZaloAccount from "@/models/zalo.js"; // ++ ADDED: Thêm import ZaloAccount`
 import { Types } from "mongoose";
 
 const getLatestActionAggregation = (matchConditions = {}) => [
@@ -185,7 +185,7 @@ export async function getUserDetails(userId) {
  */
 export async function updateUserDetails(userId, dataToUpdate) {
   try {
-    await connectToDB();
+    await connectDB();
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $set: dataToUpdate },
@@ -206,7 +206,7 @@ export async function updateUserDetails(userId, dataToUpdate) {
  */
 export async function createUser(userData) {
   try {
-    await connectToDB();
+    await connectDB();
     const { name, email, phone, password } = userData;
 
     if (!name || !email || !password) {
@@ -242,7 +242,7 @@ export async function createUser(userData) {
  */
 export async function deleteUser(userId) {
   try {
-    await connectToDB();
+    await connectDB();
     // Thêm logic kiểm tra quyền hạn ở đây nếu cần, ví dụ: chỉ Admin mới được xóa
     await User.findByIdAndDelete(userId);
     return { success: true };

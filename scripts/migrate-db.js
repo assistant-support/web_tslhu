@@ -500,6 +500,32 @@ async function migrateUserRoles() {
 }
 
 /**
+ * @description Quét và thêm trường `isTokenActive: true` cho các tài khoản Zalo còn thiếu.
+ */
+async function addIsTokenActiveField() {
+  console.log("\n--- BẮT ĐẦU THÊM TRƯỜNG isTokenActive ---");
+  const query = { isTokenActive: { $exists: false } };
+  const accountsToUpdate = await ZaloAccount.countDocuments(query);
+
+  if (accountsToUpdate === 0) {
+    console.log("✅ Tất cả tài khoản Zalo đã có trường isTokenActive.");
+    return;
+  }
+
+  console.log(
+    `🔍 Tìm thấy ${accountsToUpdate} tài khoản cần thêm trường isTokenActive.`,
+  );
+
+  const result = await ZaloAccount.updateMany(query, {
+    $set: { isTokenActive: true },
+  });
+
+  console.log(
+    `✨ Thêm trường isTokenActive thành công cho ${result.modifiedCount} tài khoản.`,
+  );
+}
+
+/**
  * Hàm chính để chạy toàn bộ quá trình di trú.
  */
 async function runMigration() {
@@ -513,7 +539,7 @@ async function runMigration() {
     console.log("🔄 Đang kết nối đến MongoDB...");
     await mongoose.connect(mongoURI);
     console.log("✅ Kết nối thành công!");
-
+    await addIsTokenActiveField();
     await migrateZaloAccounts();
     await migrateZaloPhoneNumbers();
     await standardizeZaloLimits();

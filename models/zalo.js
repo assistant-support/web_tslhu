@@ -31,6 +31,8 @@ const ZaloAccountSchema = new Schema(
     activeSession: { type: ActiveSessionSchema, default: null },
     isLocked: { type: Boolean, default: false },
     action: { type: String, trim: true, default: null },
+
+    isTokenActive: { type: Boolean, default: true },
   },
   { timestamps: true },
 );

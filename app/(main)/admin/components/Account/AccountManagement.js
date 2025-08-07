@@ -12,6 +12,7 @@ import PaginationControls from "../shared/PaginationControls";
 import DataTable from "../datatable/DataTable";
 import ZaloDisplay from "../shared/ZaloDisplay";
 import ZaloDetailsPanel from "../Panel/ZaloDetailsPanel";
+import Switch from "@/components/(ui)/(button)/swith";
 
 // ++ ADDED: Component con để hiển thị giới hạn, theo đúng kiến trúc
 const LimitDisplay = ({ rateLimitPerHour, rateLimitPerDay }) => {
@@ -25,6 +26,32 @@ const LimitDisplay = ({ rateLimitPerHour, rateLimitPerDay }) => {
     <div>
       <p style={limitTextStyle}>{rateLimitPerHour || 30}/giờ</p>
       <p style={limitTextStyle}>{rateLimitPerDay || 200}/ngày</p>
+    </div>
+  );
+};
+
+const TokenStatusDisplay = ({ isActive }) => {
+  const statusStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    fontSize: "12px",
+    fontWeight: 500,
+    padding: "2px 10px",
+    borderRadius: "12px",
+    color: isActive ? "#15803d" : "#374151",
+    backgroundColor: isActive ? "#dcfce7" : "#f3f4f6",
+  };
+  const dotStyle = {
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    backgroundColor: isActive ? "#22c55e" : "#9ca3af",
+  };
+  return (
+    <div style={statusStyle}>
+      <div style={dotStyle} />
+      {isActive ? "Hoạt động" : "Không HĐ"}
     </div>
   );
 };
@@ -113,6 +140,11 @@ export default function AccountManagement() {
       cell: (item) => (
         <ZaloDisplay name={item.name} phone={item.phone} avatar={item.avt} />
       ),
+    },
+    {
+      header: "Trạng thái Token",
+      width: "1fr",
+      cell: (item) => <TokenStatusDisplay isActive={item.isTokenActive} />,
     },
     {
       header: "Nhân viên gán",

@@ -6,7 +6,8 @@ import styles from "./DetailsPanel.module.css";
 import {
   getZaloAccountDetails,
   updateZaloAccountDetails,
-  createZaloAccount,
+  createOrUpdateAccountByToken,
+  getZaloTokenByUid, // ++ ADDED
 } from "@/app/actions/zaloAccountActions";
 import LoadingSpinner from "../shared/LoadingSpinner";
 import ZaloDisplay from "../shared/ZaloDisplay";
@@ -15,22 +16,19 @@ import { usePanels } from "@/contexts/PanelContext";
 import AssignUserPanel from "./AssignUserPanel";
 import UserDetailsPanel from "./UserDetailsPanel";
 import UserTag from "../shared/UserTag";
+import Switch from "@/components/(ui)/(button)/swith";
 
-const handleUserDoubleClick = (user) => {
-  const panelId = `user-details-${user._id}`;
-  openPanel({
-    id: panelId,
-    title: `Chi tiết User: ${user.name}`,
-    component: UserDetailsPanel,
-    props: {
-      userId: user._id,
-      onUpdate,
-      closePanel: () => closeChildPanel(panelId),
-    },
-  });
-};
+// Component này cho rõ ràng hơn
+const InfoRow = ({ label, value, isCode = false }) => (
+  <div className={styles.infoRowReadOnly}>
+    <span className={styles.infoLabel}>{label}:</span>
+    <span className={`${styles.infoValue} ${isCode ? styles.scriptUrl : ""}`}>
+      {value || "N/A"}
+    </span>
+  </div>
+);
 
-// Component con có thể thu gọn/mở rộng
+// ... (CollapsibleList component không đổi)
 const CollapsibleList = ({ title, items, onDoubleClick }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
@@ -70,13 +68,20 @@ const CollapsibleList = ({ title, items, onDoubleClick }) => {
 };
 
 // Component con cho phép chỉnh sửa trực tiếp
-const EditableField = ({ label, value, name, type = "text", onSave }) => {
+const EditableField = ({
+  label,
+  value,
+  name,
+  type = "number", // Mặc định là number cho rate limit
+  onSave,
+  children,
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    setCurrentValue(value); // Cập nhật giá trị khi prop thay đổi
+    setCurrentValue(value);
   }, [value]);
 
   const handleSave = () => {
@@ -91,12 +96,11 @@ const EditableField = ({ label, value, name, type = "text", onSave }) => {
       <span className={styles.infoLabel}>{label}:</span>
       {isEditing ? (
         <div className={styles.editGroup}>
-          {type === "textarea" ? (
-            <textarea
-              value={currentValue}
-              onChange={(e) => setCurrentValue(e.target.value)}
-              className={`${styles.input} ${styles.textareaScript}`}
-            />
+          {children ? (
+            React.cloneElement(children, {
+              value: currentValue,
+              onChange: (e) => setCurrentValue(e.target.value),
+            })
           ) : (
             <input
               type={type}
@@ -139,33 +143,41 @@ const EditableField = ({ label, value, name, type = "text", onSave }) => {
   );
 };
 
+// ++ ADDED: Component mới để hiển thị thông tin chỉ đọc
+const ReadOnlyField = ({ label, value }) => (
+  <div className={styles.infoRowReadOnly}>
+    <span className={styles.infoLabel}>{label}:</span>
+    <span className={styles.infoValue}>{value || "N/A"}</span>
+  </div>
+);
+
 export default function ZaloDetailsPanel({ accountId, onUpdate, closePanel }) {
   const [account, setAccount] = useState(null);
-  const [isLoading, setIsLoading] = useState(!!accountId); // Chỉ loading nếu có accountId
+  const [isLoading, setIsLoading] = useState(!!accountId);
   const { openPanel, closePanel: closeChildPanel } = usePanels();
-
-  // ** MODIFIED: State để quản lý dữ liệu form cho cả 2 chế độ
-  const [formData, setFormData] = useState({
-    name: "",
-    phone: "",
-    avt: "",
-    action: "",
-    uid: "", // Thêm uid vào form
-  });
-  const isCreating = !accountId; // Xác định chế độ "tạo mới"
+  const isCreating = !accountId;
+  const [tokenInput, setTokenInput] = useState("");
+  const [isSubmitting, startTransition] = useTransition();
 
   const fetchData = useCallback(async () => {
     if (isCreating) return;
-    setIsLoading(true); // Bật loading khi fetch
+    setIsLoading(true);
     const accountData = await getZaloAccountDetails(accountId);
     setAccount(accountData);
-    if (accountData) setFormData(accountData); // Đồng bộ form data
     setIsLoading(false);
+
+    // ++ ADDED: Lấy token sau khi đã có thông tin account
+    if (accountData?.uid) {
+      const token = await getZaloTokenByUid(accountData.uid);
+      if (token) {
+        setTokenInput(token);
+      }
+    }
   }, [accountId, isCreating]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (!isCreating) fetchData();
+  }, [fetchData, isCreating]);
 
   const handleOpenAssignPanel = () => {
     const panelId = `assign-user-for-${accountId}`;
@@ -184,6 +196,37 @@ export default function ZaloDetailsPanel({ accountId, onUpdate, closePanel }) {
     });
   };
 
+  const handleTokenSubmit = () => {
+    startTransition(async () => {
+      const result = await createOrUpdateAccountByToken(tokenInput);
+      if (result.success) {
+        alert("Xử lý token thành công!");
+        onUpdate();
+        if (isCreating) {
+          closePanel();
+        } else {
+          setAccount(result.data);
+          setTokenInput("");
+        }
+      } else {
+        alert(`Lỗi: ${result.error}`);
+      }
+    });
+  };
+
+  const handleFieldSave = async (fieldName, newValue) => {
+    const result = await updateZaloAccountDetails(accountId, {
+      [fieldName]: newValue,
+    });
+    if (result.success) {
+      setAccount(result.data);
+      onUpdate();
+      return true;
+    }
+    alert(`Lỗi: ${result.error}`);
+    return false;
+  };
+
   const handleUserDoubleClick = (user) => {
     const panelId = `user-details-${user._id}`;
     openPanel({
@@ -198,173 +241,168 @@ export default function ZaloDetailsPanel({ accountId, onUpdate, closePanel }) {
     });
   };
 
-  const handleFieldSave = async (fieldName, newValue) => {
-    if (isCreating) {
-      setFormData((prev) => ({ ...prev, [fieldName]: newValue }));
-      return true; // Chỉ cập nhật state ở client khi tạo mới
-    }
-    // Logic lưu khi chỉnh sửa
-    const result = await updateZaloAccountDetails(accountId, {
-      [fieldName]: newValue,
-    });
-    if (result.success) {
-      setAccount(result.data);
-      onUpdate(); // Cập nhật lại bảng chính
-      return true;
-    }
-    alert(`Lỗi: ${result.error}`);
-    return false;
-  };
-
-  // ** ADDED: Hàm xử lý khi bấm nút "Tạo mới"
-  const handleCreateAccount = async () => {
-    const result = await createZaloAccount(formData);
-    if (result.success) {
-      alert("Tạo tài khoản thành công!");
-      onUpdate();
-      closePanel();
-    } else {
-      alert(`Lỗi: ${result.error}`);
-    }
-  };
-
   if (isLoading) return <LoadingSpinner />;
-
-  // ** MODIFIED: Sửa lỗi logic hiển thị
-  // Nếu không phải đang tạo mới VÀ không tìm thấy tài khoản, mới báo lỗi
-  if (!isCreating && !account) {
+  if (!isCreating && !account)
     return <div className={styles.error}>Không tìm thấy tài khoản.</div>;
+
+  // ** MODIFIED: Giao diện cho chế độ TẠO MỚI
+  if (isCreating) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <p className={styles.sectionTitle} style={{ border: "none" }}>
+            Thêm tài khoản Zalo mới bằng Token
+          </p>
+        </div>
+        <div className={styles.content}>
+          <div className={styles.section}>
+            <div className={styles.infoRow}>
+              <span className={styles.infoLabel}>Token:</span>
+              <div className={styles.editGroup}>
+                <textarea
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                  className={`${styles.input} ${styles.textareaScript}`}
+                  placeholder="Dán mã token lấy từ script vào đây..."
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className={styles.footer}>
+          <button
+            className={styles.primaryButton}
+            onClick={handleTokenSubmit}
+            disabled={isSubmitting || !tokenInput.trim()}
+          >
+            {isSubmitting ? "Đang xử lý..." : "Thêm tài khoản"}
+          </button>
+        </div>
+      </div>
+    );
   }
 
+  // ** MODIFIED: Giao diện cho chế độ CHỈNH SỬA
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        {isCreating ? (
-          <p className={styles.sectionTitle} style={{ border: "none" }}>
-            Nhập thông tin tài khoản mới
-          </p>
-        ) : (
-          <ZaloDisplay
-            name={account.name}
-            phone={account.phone}
-            avatar={account.avt}
-          />
-        )}
+        <ZaloDisplay
+          name={account.name}
+          phone={account.phone}
+          avatar={account.avt}
+        />
       </div>
 
       <div className={styles.content}>
-        {/* Chỉ hiển thị danh sách user khi đang chỉnh sửa */}
-        {!isCreating && account && (
-          <CollapsibleList
-            title="Nhân viên được gán"
-            items={account.users || []}
-            onDoubleClick={() => {}}
-          />
-        )}
+        <CollapsibleList
+          title="Nhân viên được gán"
+          items={account.users || []}
+          onDoubleClick={handleUserDoubleClick}
+        />
+
+        <div className={styles.section}>
+          <h4 className={styles.sectionTitle}>Cập nhật Token & Trạng thái</h4>
+          <div className={styles.infoRow}>
+            <span className={styles.infoLabel}>Token mới:</span>
+            <div className={styles.editGroup}>
+              <textarea
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                className={`${styles.input} ${styles.textareaScript}`}
+                placeholder="Dán token mới để cập nhật thông tin"
+              />
+              <button
+                onClick={handleTokenSubmit}
+                className={styles.saveInlineBtn}
+                disabled={isSubmitting || !tokenInput.trim()}
+              >
+                {isSubmitting ? "..." : "Cập nhật"}
+              </button>
+            </div>
+          </div>
+          <div className={styles.infoRow}>
+            <span className={styles.infoLabel}>Token hoạt động:</span>
+            <div className={styles.valueGroup}>
+              <Switch
+                checked={account.isTokenActive}
+                onChange={(isChecked) =>
+                  handleFieldSave("isTokenActive", isChecked)
+                }
+              />
+            </div>
+          </div>
+        </div>
 
         <div className={styles.section}>
           <h4 className={styles.sectionTitle}>Thông tin Cơ bản & Script</h4>
-          <EditableField
-            label="Tên tài khoản"
-            name="name"
-            value={formData.name}
-            onSave={handleFieldSave}
-          />
-          <EditableField
-            label="Số điện thoại"
-            name="phone"
-            value={formData.phone}
-            onSave={handleFieldSave}
-          />
-          <EditableField
-            label="UID tài khoản"
-            name="uid"
-            value={formData.uid}
-            onSave={handleFieldSave}
-          />
-          <EditableField
-            label="Avatar URL"
-            name="avt"
-            value={formData.avt}
-            onSave={handleFieldSave}
-          />
+          <InfoRow label="Tên tài khoản" value={account.name} />
+          <InfoRow label="Số điện thoại" value={account.phone} />
+          <InfoRow label="UID tài khoản" value={account.uid} isCode />
           <EditableField
             label="Script Action URL"
             name="action"
-            value={formData.action}
+            value={account.action}
             type="textarea"
             onSave={handleFieldSave}
           />
         </div>
 
-        {/* Chỉ hiển thị thông số limit khi đang chỉnh sửa */}
-        {!isCreating && account && (
-          <div className={styles.section}>
-            <h4 className={styles.sectionTitle}>
-              Thông số Giới hạn (Rate Limit)
-            </h4>
-            <EditableField
-              label="Giới hạn / giờ"
-              name="rateLimitPerHour"
-              value={account.rateLimitPerHour}
-              type="number"
-              onSave={handleFieldSave}
-            />
-            <EditableField
-              label="Giới hạn / ngày"
-              name="rateLimitPerDay"
-              value={account.rateLimitPerDay}
-              type="number"
-              onSave={handleFieldSave}
-            />
-            <div className={styles.infoRowReadOnly}>
-              <span className={styles.infoLabel}>Đã dùng / giờ:</span>
-              <span className={styles.infoValue}>
-                {account.actionsUsedThisHour || 0} (Làm mới lúc:{" "}
-                {new Date(account.rateLimitHourStart).toLocaleTimeString(
-                  "vi-VN",
-                )}
-                )
-              </span>
-            </div>
-            <div className={styles.infoRowReadOnly}>
-              <span className={styles.infoLabel}>Đã dùng / ngày:</span>
-              <span className={styles.infoValue}>
-                {account.actionsUsedThisDay || 0} (Làm mới lúc:{" "}
-                {new Date(account.rateLimitDayStart).toLocaleDateString(
-                  "vi-VN",
-                )}
-                )
-              </span>
-            </div>
+        <div className={styles.section}>
+          <h4 className={styles.sectionTitle}>
+            Thông số Giới hạn (Rate Limit)
+          </h4>
+          <EditableField
+            label="Giới hạn / giờ"
+            name="rateLimitPerHour"
+            value={account.rateLimitPerHour}
+            type="number"
+            onSave={handleFieldSave}
+          />
+          <div
+            className={styles.infoRowReadOnly}
+            style={{ paddingTop: 0, border: "none" }}
+          >
+            <span className={styles.infoLabel}></span>
+            <span style={{ fontSize: "11px", color: "#6b7280" }}>
+              Đã dùng: {account.actionsUsedThisHour || 0} (Làm mới lúc:{" "}
+              {new Date(account.rateLimitHourStart).toLocaleTimeString("vi-VN")}
+              )
+            </span>
           </div>
-        )}
+
+          <EditableField
+            label="Giới hạn / ngày"
+            name="rateLimitPerDay"
+            value={account.rateLimitPerDay}
+            type="number"
+            onSave={handleFieldSave}
+          />
+          <div
+            className={styles.infoRowReadOnly}
+            style={{ paddingTop: 0, border: "none" }}
+          >
+            <span className={styles.infoLabel}></span>
+            <span style={{ fontSize: "11px", color: "#6b7280" }}>
+              Đã dùng: {account.actionsUsedThisDay || 0} (Làm mới lúc:{" "}
+              {new Date(account.rateLimitDayStart).toLocaleDateString("vi-VN")})
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className={styles.footer}>
-        {isCreating ? (
-          <button
-            className={styles.primaryButton}
-            onClick={handleCreateAccount}
-          >
-            Tạo tài khoản
-          </button>
-        ) : (
-          <>
-            <button
-              className={styles.deleteButton}
-              onClick={() => alert("Chức năng xóa sẽ được phát triển sau.")}
-            >
-              Xóa tài khoản
-            </button>
-            <button
-              className={styles.primaryButton}
-              onClick={handleOpenAssignPanel}
-            >
-              Gán / Thu hồi User
-            </button>
-          </>
-        )}
+        <button
+          className={styles.deleteButton}
+          onClick={() => alert("Chức năng xóa sẽ được phát triển sau.")}
+        >
+          Xóa tài khoản
+        </button>
+        <button
+          className={styles.primaryButton}
+          onClick={handleOpenAssignPanel}
+        >
+          Gán / Thu hồi User
+        </button>
       </div>
     </div>
   );
