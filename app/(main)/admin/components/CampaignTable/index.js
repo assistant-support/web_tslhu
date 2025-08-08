@@ -14,9 +14,9 @@ import StackedProgressBar from "../shared/StackedProgressBar";
 import { getRunningJobs, getArchivedJobs } from "@/app/actions/campaignActions";
 import LoadingSpinner from "../shared/LoadingSpinner";
 import PaginationControls from "../shared/PaginationControls";
-import DataTable from "../datatable/DataTable"; // ++ ADDED: Import DataTable
+import DataTable from "../datatable/DataTable";
 import ZaloDisplay from "../shared/ZaloDisplay";
-import UserTag from "../shared/UserTag"; // ++ ADDED: Import ZaloDisplay
+import UserTag from "../shared/UserTag";
 
 // Component TimeCell vẫn được giữ lại để xử lý logic thời gian phức tạp
 const TimeCell = ({ job, mode }) => {
@@ -134,16 +134,13 @@ export default function CampaignTable({ mode }) {
 
   // ++ ADDED: useEffect này chỉ chạy 1 lần để thiết lập interval
   useEffect(() => {
-    // Chỉ thiết lập interval cho tab Lịch sử (archived)
-    if (mode === "archived") {
-      const intervalId = setInterval(() => {
-        const { page, limit } = paginationRef.current;
-        fetchData(page || 1, limit || 10, false); // Luôn gọi với isInitialLoad = false
-      }, 10000); // 10 giây
+    const intervalId = setInterval(() => {
+      const { page, limit } = paginationRef.current;
+      fetchData(page || 1, limit || 10, false);
+    }, 10000); // 10 giây
 
-      return () => clearInterval(intervalId); // Dọn dẹp khi component unmount
-    }
-  }, [mode, fetchData]);
+    return () => clearInterval(intervalId);
+  }, [fetchData]);
 
   const handleDataRefresh = useCallback(() => {
     fetchData(pagination.page, pagination.limit, false);

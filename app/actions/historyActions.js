@@ -294,6 +294,35 @@ export async function logAutoCancelTask(job, task, reason) {
     console.error("❌ LỖI KHI GHI LOG HỦY TỰ ĐỘNG:", error);
   }
 }
+/**
+ * Ghi log cho một task bị hủy tự động do tài khoản Zalo không hợp lệ.
+ * @param {object} job - Toàn bộ object lịch trình (ScheduledJob).
+ * @param {object} task - Task (khách hàng) cụ thể bị hủy.
+ * @param {string} reason - Lý do lỗi chi tiết từ script.
+ */
+// ++ ADDED: Toàn bộ hàm mới này
+export async function logAutoCancelTaskForZaloFailure(job, task, reason) {
+  try {
+    await ActionHistory.create({
+      action: "AUTO_CANCEL_ZALO_FAILURE",
+      user: job.createdBy,
+      customer: task.person._id,
+      zalo: job.zaloAccount,
+      status: {
+        status: "FAILED",
+        detail: { reason: "Tài khoản Zalo không hợp lệ", scriptError: reason },
+      },
+      actionDetail: {
+        scheduleId: job._id.toString(),
+        scheduleName: job.jobName,
+        cancelledAt: new Date(),
+        reasonMessage: "Tự động hủy do tài khoản Zalo không hợp lệ",
+      },
+    });
+  } catch (error) {
+    console.error("❌ LỖI KHI GHI LOG HỦY DO ZALO FAILURE:", error);
+  }
+}
 
 /**
  * Lấy tất cả lịch sử THỰC THI (DO_...) của một chiến dịch.

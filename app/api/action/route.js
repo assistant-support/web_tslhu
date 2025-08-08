@@ -5,9 +5,11 @@ import ScheduledJob from "@/models/schedule";
 import ArchivedJob from "@/models/archivedJob";
 import Variant from "@/models/variant";
 import { revalidateTag } from "next/cache";
+import ZaloAccount from "@/models/zalo";
 import {
   logExecuteScheduleTask,
   logAutoCancelTask,
+  logAutoCancelTaskForZaloFailure,
 } from "@/app/actions/historyActions";
 import mongoose from "mongoose";
 import { revalidateAndBroadcast } from "@/lib/revalidation";
@@ -115,9 +117,13 @@ const updateDataAfterExecution = async ({
 /**
  * Lưu trữ, dọn dẹp và xóa một Job đã hoàn thành.
  * @param {object} jobToFinish - Document của job sắp hoàn thành.
+ * @param {'completed' | 'failed'} finalStatus - Trạng thái cuối cùng của job.
  */
-// ** MODIFIED: Hàm này giờ nhận vào cả document của job để lấy danh sách khách hàng
-const archiveAndCleanupJob = async (completedJob) => {
+// ** MODIFIED: Thêm tham số finalStatus
+const archiveAndCleanupJob = async (
+  completedJob,
+  finalStatus = "completed",
+) => {
   if (!completedJob) return;
 
   const session = await mongoose.startSession();
@@ -139,7 +145,8 @@ const archiveAndCleanupJob = async (completedJob) => {
     const archiveData = {
       ...completedJob.toObject(),
       _id: completedJob._id,
-      status: "completed",
+      // ** MODIFIED: Sử dụng trạng thái cuối cùng được truyền vào
+      status: finalStatus,
       completedAt: new Date(),
     };
     delete archiveData.tasks;
@@ -196,6 +203,68 @@ export const GET = async () => {
         ]);
       }
     }
+    const handleZaloTokenFailure = async (job, task, errorMessage) => {
+      console.log(
+        `🔴 Lỗi Token Zalo cho TK ${job.zaloAccount._id} trong Job ${job._id}. Bắt đầu hủy toàn bộ chiến dịch.`,
+      );
+
+      // Bước 1: Vô hiệu hóa tài khoản Zalo
+      await ZaloAccount.findByIdAndUpdate(job.zaloAccount._id, {
+        isTokenActive: false,
+      });
+      console.log(`   -> Đã đặt isTokenActive = false cho tài khoản Zalo.`);
+
+      // Bước 2: Tìm tất cả các task còn lại để hủy
+      const remainingTasks = job.tasks.filter((t) => t.status === "pending");
+      const remainingTaskIds = remainingTasks.map((t) => t._id);
+      const remainingCustomerIds = remainingTasks.map((t) => t.person._id);
+      console.log(
+        `   -> Tìm thấy ${remainingTasks.length} task 'pending' cần hủy.`,
+      );
+
+      // Bước 3: Ghi log cho từng task bị hủy
+      for (const remainingTask of remainingTasks) {
+        await logAutoCancelTaskForZaloFailure(job, remainingTask, errorMessage);
+      }
+      console.log(
+        `   -> Đã ghi log hủy hàng loạt cho ${remainingTasks.length} task.`,
+      );
+
+      // Bước 4: Cập nhật trạng thái và thống kê
+      const failedCount = remainingTasks.length + 1; // +1 cho task hiện tại đang lỗi
+      job.statistics.failed += remainingTasks.length;
+
+      if (remainingTaskIds.length > 0) {
+        await ScheduledJob.updateOne(
+          { _id: job._id },
+          {
+            $set: {
+              "tasks.$[elem].status": "failed",
+              "tasks.$[elem].resultMessage": "Hủy do lỗi tài khoản Zalo",
+            },
+            $inc: { "statistics.failed": remainingTasks.length },
+          },
+          { arrayFilters: [{ "elem._id": { $in: remainingTaskIds } }] },
+        );
+      }
+
+      // Dọn dẹp customer refs
+      if (remainingCustomerIds.length > 0) {
+        await Customer.updateMany(
+          { _id: { $in: remainingCustomerIds } },
+          { $pull: { action: { job: job._id } } },
+        );
+      }
+
+      console.log(`   -> Đã cập nhật trạng thái 'failed' cho các task.`);
+
+      // Bước 5: Kết thúc và lưu trữ chiến dịch với trạng thái 'failed'
+      const finalJobState = await ScheduledJob.findById(job._id); // Lấy trạng thái mới nhất
+      await archiveAndCleanupJob(finalJobState, "failed");
+      console.log(`   -> Đã lưu trữ và kết thúc chiến dịch.`);
+
+      revalidateAndBroadcast("zalo_accounts"); // Cập nhật trạng thái Zalo Account ở client
+    };
 
     let processedCount = 0;
     const allVariants = await Variant.find().lean();
@@ -293,6 +362,18 @@ export const GET = async () => {
         };
       } catch (e) {
         executionResult = { actionStatus: "error", actionMessage: e.message };
+        // ** MODIFIED: Bắt đầu logic xử lý lỗi token
+        if (e.message.includes("SyntaxError: Unexpected end of JSON input")) {
+          // Lấy lại bản đầy đủ của job để xử lý
+          const fullJob = await ScheduledJob.findById(jobId)
+            .populate("zaloAccount")
+            .lean();
+          if (fullJob) {
+            await handleZaloTokenFailure(fullJob, task, e.message);
+          }
+          // Bỏ qua các bước xử lý task hiện tại và chuyển sang task tiếp theo của job khác
+          continue;
+        }
       }
 
       const statusName =
