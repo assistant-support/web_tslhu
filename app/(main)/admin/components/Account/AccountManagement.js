@@ -190,7 +190,7 @@ export default function AccountManagement() {
         <DataTable
           columns={columns}
           data={accounts} // ** MODIFIED: Dùng data trực tiếp từ server
-          onRowDoubleClick={handleOpenDetails}
+          onRowClick={handleOpenDetails}
           activeRowId={activeAccountIds}
           showActions={true}
           onAddItem={handleAddItem}

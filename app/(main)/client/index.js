@@ -123,7 +123,7 @@ const Row = React.memo(function Row({
       className={`${styles.gridRow} ${isUpdated ? styles.rowUpdated : ""} ${
         isActive ? styles.activeRow : ""
       }`}
-      onDoubleClick={() => onRowClick(row)}
+      onClick={() => onRowClick(row)}
     >
       <div className={styles.cell} onClick={(e) => e.stopPropagation()}>
         <input

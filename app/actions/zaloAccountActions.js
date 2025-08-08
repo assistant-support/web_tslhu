@@ -6,6 +6,14 @@ import ZaloAccount from "@/models/zalo";
 import User from "@/models/users";
 import { revalidatePath } from "next/cache";
 import { revalidateAndBroadcast } from "@/lib/revalidation";
+import { getTokenFromSheetByUid } from "@/app/api/(account)/acc/route";
+
+// ++ ADDED: Hàm getBaseUrl để đảm bảo URL luôn chính xác
+function getBaseUrl() {
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  if (process.env.URL) return process.env.URL;
+  return `http://localhost:3000`;
+}
 
 /**
  * Lấy tất cả tài khoản Zalo. Hỗ trợ cả phân trang và lấy tất cả.
@@ -212,19 +220,19 @@ export async function createOrUpdateAccountByToken(token) {
 export async function getZaloTokenByUid(uid) {
   if (!uid) return null;
   try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL}/api/acc?uid=${uid}`,
-      {
-        method: "GET",
-        cache: "no-store", // Luôn lấy dữ liệu mới nhất
-      },
+    // ** MODIFIED: Loại bỏ hoàn toàn fetch và gọi thẳng vào hàm logic
+    console.log(
+      `[Action getZaloTokenByUid] Calling logic function for UID ${uid}...`,
     );
-    if (!response.ok) return null;
+    const result = await getTokenFromSheetByUid(uid);
+    console.log(
+      `[Action getZaloTokenByUid] Logic function response for UID ${uid}:`,
+      result,
+    );
 
-    const result = await response.json();
     return result.success ? result.token : null;
   } catch (error) {
-    console.error("Lỗi khi lấy Zalo token:", error);
+    console.error("Lỗi trong action getZaloTokenByUid:", error);
     return null;
   }
 }
