@@ -197,6 +197,25 @@ export default function CampaignTable({ mode }) {
       cell: (item) => <UserTag user={item.createdBy} />,
     },
     { header: "Hành động", accessor: "actionType", width: "0.7fr" },
+    // ++ ADDED: Cột mới để hiển thị kết quả self-healing
+    {
+      header: "Kết quả cuối",
+      accessor: "lastExecutionResult",
+      width: "1.2fr",
+      cell: (item) => (
+        <span
+          style={{
+            fontSize: "11px",
+            color: "#475569",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+          title={item.lastExecutionResult}
+        >
+          {item.lastExecutionResult || "Chưa có"}
+        </span>
+      ),
+    },
     {
       header: "Thời gian",
       accessor: "createdAt",

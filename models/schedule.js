@@ -75,6 +75,10 @@ const ScheduledJobSchema = new Schema(
       ref: "user",
       required: true,
     },
+    lastExecutionResult: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
