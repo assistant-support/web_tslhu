@@ -122,6 +122,12 @@ export default function ScheduleDetailPanel({
           label="Tốc độ"
           value={`${job.config?.actionsPerHour || 50} hđ/giờ`}
         />
+        {/* ++ ADDED: Hiển thị kết quả thực thi cuối cùng */}
+        <InfoRow
+          icon="📋"
+          label="Kết quả cuối"
+          value={job.lastExecutionResult}
+        />
         <InfoRow
           icon="⏰"
           label="Tạo lúc"

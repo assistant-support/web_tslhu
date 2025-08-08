@@ -228,6 +228,9 @@ export const GET = async () => {
       }
     }
     const handleZaloTokenFailure = async (job, task, errorMessage) => {
+      // ** MODIFIED: Sửa lỗi tham chiếu biến không xác định
+      const zaloAccountId = job.zaloAccount._id;
+      const jobId = job._id;
       console.log(
         `🔴 Lỗi Token Zalo cho TK ${zaloAccountId} trong Job ${jobId}. Bắt đầu hủy toàn bộ chiến dịch.`,
       );
@@ -393,13 +396,13 @@ export const GET = async () => {
           { projection: { _id: 1 } },
         );
 
-        if (!lockResult) continue; // Task đã bị tiến trình khác khóa, bỏ qua
+        if (!lockResult) continue;
 
         // BƯỚC 2: LẤY DỮ LIỆU ĐẦY ĐỦ SAU KHI KHÓA THÀNH CÔNG
         const jobUpdate = await ScheduledJob.findById(jobId).populate(
           "zaloAccount",
         );
-        if (!jobUpdate) continue; // Job đã bị xóa, bỏ qua
+        if (!jobUpdate) continue;
 
         let executionResult;
 
@@ -419,20 +422,28 @@ export const GET = async () => {
           executionResult = { actionStatus: "error", actionMessage: e.message };
           // ** MODIFIED: Bắt đầu logic xử lý lỗi token
           if (e.message.includes("SyntaxError: Unexpected end of JSON input")) {
-            // Lấy lại bản đầy đủ của job để xử lý
-            const fullJob = await ScheduledJob.findById(jobId)
-              .populate("zaloAccount")
-              .lean();
-            if (fullJob) {
-              await handleZaloTokenFailure(fullJob, task, e.message);
-            }
-            // Bỏ qua các bước xử lý task hiện tại và chuyển sang task tiếp theo của job khác
+            await ScheduledJob.updateOne(
+              { _id: jobId, "tasks._id": task._id },
+              {
+                $set: {
+                  "tasks.$.status": "failed",
+                  "tasks.$.resultMessage": e.message,
+                },
+                $inc: { "statistics.failed": 1 },
+              },
+            );
+            await handleZaloTokenFailure(
+              jobId,
+              jobUpdate.zaloAccount._id,
+              e.message,
+            );
             continue;
           }
         }
 
         const statusName =
           executionResult.actionStatus === "success" ? "SUCCESS" : "FAILED";
+        const resultMessage = executionResult.actionMessage || statusName;
 
         // ** MODIFIED: Tái cấu trúc logic xử lý kết quả
         const { uidStatus, targetUid, actionMessage } = executionResult;
@@ -547,8 +558,7 @@ export const GET = async () => {
             $set: {
               "tasks.$.status":
                 statusName === "SUCCESS" ? "completed" : "failed",
-              "tasks.$.resultMessage":
-                executionResult.actionMessage || statusName,
+              "tasks.$.resultMessage": resultMessage,
             },
             $inc: {
               [statusName === "SUCCESS"
@@ -556,7 +566,7 @@ export const GET = async () => {
                 : "statistics.failed"]: 1,
             },
           },
-          { new: true },
+          { new: true, lean: true },
         );
         processedCount++;
 
@@ -594,6 +604,22 @@ export const GET = async () => {
     });
   } catch (err) {
     console.error("CRON JOB FAILED:", err);
+
+    // Cố gắng cập nhật tất cả các job đang chạy với thông báo lỗi
+    try {
+      await connectDB();
+      await ScheduledJob.updateMany(
+        { status: { $in: ["scheduled", "processing"] } },
+        { $set: { lastExecutionResult: `CRON FAILED: ${err.message}` } },
+      );
+      revalidateAndBroadcast("running_jobs"); // Gửi tín hiệu cập nhật giao diện
+    } catch (updateError) {
+      console.error(
+        "Failed to update running jobs with critical error:",
+        updateError,
+      );
+    }
+
     return NextResponse.json(
       { message: "Lỗi nghiêm trọng trong CRON job.", error: err.message },
       { status: 500 },
