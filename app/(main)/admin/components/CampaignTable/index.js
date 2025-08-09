@@ -234,8 +234,7 @@ export default function CampaignTable({ mode }) {
         <DataTable
           columns={columns}
           data={jobs}
-          onRowDoubleClick={handleOpenDetail}
-          // ** MODIFIED: Kết hợp highlightedId vào activeRowId
+          onRowClick={handleOpenDetail}
           activeRowId={[...activeJobIds, highlightedId].filter(Boolean)}
         />
       </div>

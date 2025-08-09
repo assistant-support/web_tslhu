@@ -30,7 +30,7 @@ const InfoRow = ({ label, value, isCode = false }) => (
 );
 
 // ... (CollapsibleList component không đổi)
-const CollapsibleList = ({ title, items, onDoubleClick }) => {
+const CollapsibleList = ({ title, items, onClick }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <div className={styles.collapsibleSection}>
@@ -54,7 +54,7 @@ const CollapsibleList = ({ title, items, onDoubleClick }) => {
               <div
                 key={user._id}
                 className={`${styles.listItem} ${styles.listItemAction}`}
-                onDoubleClick={() => onDoubleClick(user)}
+                onClick={() => onClick(user)}
               >
                 <UserTag user={user} />
               </div>
@@ -240,15 +240,15 @@ export default function ZaloDetailsPanel({ accountId, onUpdate, closePanel }) {
         isTokenActive: isChecked,
       });
       if (result.success) {
-        setAccount(result.data); // Cập nhật state nội bộ của panel
-        onUpdate(); // Gọi callback để làm mới bảng dữ liệu ở ngoài
+        setAccount(result.data);
+        onUpdate(result.data);
       } else {
         alert(`Lỗi: ${result.error}`);
       }
     });
   };
 
-  const handleUserDoubleClick = (user) => {
+  const handleUserClick = (user) => {
     const panelId = `user-details-${user._id}`;
     openPanel({
       id: panelId,
@@ -319,7 +319,7 @@ export default function ZaloDetailsPanel({ accountId, onUpdate, closePanel }) {
           <CollapsibleList
             title="Nhân viên được gán"
             items={account.users || []}
-            onDoubleClick={handleUserDoubleClick}
+            onClick={handleUserClick}
           />
 
           <div className={styles.section}>

@@ -79,6 +79,15 @@ export default function AccountManagement() {
     fetchData();
   }, [fetchData]);
 
+  // ++ ADDED: Hàm mới để cập nhật state ở client
+  const handleSuccess = (updatedAccount) => {
+    setAccounts((prev) =>
+      prev.map((acc) =>
+        acc._id === updatedAccount._id ? updatedAccount : acc,
+      ),
+    );
+  };
+
   const activeAccountIds = useMemo(() => {
     return (allActivePanels || [])
       .filter((panel) => panel.id.startsWith("zalo-details-"))
@@ -95,7 +104,7 @@ export default function AccountManagement() {
       props: {
         accountId: account._id,
         onClose: () => closePanel(panelId),
-        onUpdate: fetchData, // Callback để làm mới danh sách sau khi gán user
+        onUpdate: handleSuccess, // Callback để làm mới danh sách sau khi gán user
       },
     });
   };
@@ -189,7 +198,7 @@ export default function AccountManagement() {
       <div style={{ flexGrow: 1, minHeight: 0 }}>
         <DataTable
           columns={columns}
-          data={accounts} // ** MODIFIED: Dùng data trực tiếp từ server
+          data={accounts}
           onRowClick={handleOpenDetails}
           activeRowId={activeAccountIds}
           showActions={true}
