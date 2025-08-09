@@ -221,14 +221,7 @@ export async function getZaloTokenByUid(uid) {
   if (!uid) return null;
   try {
     // ** MODIFIED: Loại bỏ hoàn toàn fetch và gọi thẳng vào hàm logic
-    console.log(
-      `[Action getZaloTokenByUid] Calling logic function for UID ${uid}...`,
-    );
     const result = await getTokenFromSheetByUid(uid);
-    console.log(
-      `[Action getZaloTokenByUid] Logic function response for UID ${uid}:`,
-      result,
-    );
 
     return result.success ? result.token : null;
   } catch (error) {
