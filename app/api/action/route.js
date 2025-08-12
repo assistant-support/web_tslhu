@@ -6,6 +6,7 @@ import ArchivedJob from "@/models/archivedJob";
 import Variant from "@/models/variant";
 import { revalidateTag } from "next/cache";
 import ZaloAccount from "@/models/zalo";
+import Lock from "@/models/lock"; // ++ ADDED: Import model Lock mới
 import {
   logExecuteScheduleTask,
   logAutoCancelTask,
@@ -130,12 +131,12 @@ const updateDataAfterExecution = async ({
 const archiveAndCleanupJob = async (
   completedJob,
   finalStatus = "completed",
+  existingSession = null,
 ) => {
-  if (!completedJob) return;
-
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  const session = existingSession || (await mongoose.startSession());
   try {
+    if (!existingSession) session.startTransaction();
+
     const customerIdsInJob = (completedJob.tasks || []).map(
       (task) => new mongoose.Types.ObjectId(task.person._id),
     );
@@ -159,19 +160,52 @@ const archiveAndCleanupJob = async (
     delete archiveData.tasks;
     await ArchivedJob.create([archiveData], { session });
     await ScheduledJob.findByIdAndDelete(completedJob._id, { session });
-    await session.commitTransaction();
+
+    if (!existingSession) await session.commitTransaction();
   } catch (error) {
-    await session.abortTransaction();
+    if (!existingSession) await session.abortTransaction();
     console.error(
       `[ARCHIVE FAILED] Lỗi khi lưu trữ Job ${completedJob._id}:`,
       error,
     );
   } finally {
-    session.endSession();
+    if (!existingSession) session.endSession();
   }
 };
 
+const LOCK_ID = "cron_lock_action_route";
+const LOCK_TIMEOUT_MS = 15 * 60 * 1000;
+
+const acquireLock = async () => {
+  const now = new Date();
+  const lock = await Lock.findOneAndUpdate(
+    {
+      _id: LOCK_ID,
+      $or: [
+        { isLocked: false },
+        { lockedAt: { $lt: new Date(now.getTime() - LOCK_TIMEOUT_MS) } },
+      ],
+    },
+    { $set: { isLocked: true, lockedAt: now } },
+    { upsert: true, new: true },
+  );
+  return !!lock;
+};
+
+const releaseLock = async () => {
+  await Lock.updateOne({ _id: LOCK_ID }, { $set: { isLocked: false } });
+};
+
 export const GET = async () => {
+  // ** MODIFIED: TRIỂN KHAI GLOBAL LOCK **
+  if (!(await acquireLock())) {
+    console.log("CRON SKIPPED: Một tiến trình khác đang chạy.");
+    return NextResponse.json({
+      headers: cors,
+      message: "Cron đang chạy ở tiến trình khác.",
+    });
+  }
+
   try {
     await connectDB();
     const now = new Date();
@@ -194,10 +228,10 @@ export const GET = async () => {
     }
 
     // Cơ chế 2: Dọn dẹp các task bị treo (self-healing)
-    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
     const timedOutJobs = await ScheduledJob.find({
       "tasks.status": "processing",
-      "tasks.processedAt": { $lt: fiveMinutesAgo },
+      "tasks.processedAt": { $lt: tenMinutesAgo },
     });
 
     for (const job of timedOutJobs) {
@@ -257,27 +291,22 @@ export const GET = async () => {
           return;
         }
 
-        const remainingTasks = jobToCancel.tasks.filter(
-          (t) => t.status === "pending",
+        // ** MODIFIED: Hủy tất cả task chưa hoàn thành (pending và processing)
+        const tasksToCancel = jobToCancel.tasks.filter(
+          (t) => t.status !== "completed" && t.status !== "failed",
         );
-        if (remainingTasks.length > 0) {
-          const remainingTaskIds = remainingTasks.map((t) => t._id);
-          const remainingCustomerIds = remainingTasks.map((t) => t.person._id);
-          console.log(
-            `   -> Tìm thấy ${remainingTasks.length} task 'pending' cần hủy.`,
-          );
 
-          // Bước 3: Ghi log cho từng task bị hủy
-          for (const remainingTask of remainingTasks) {
+        if (tasksToCancel.length > 0) {
+          const taskIdsToCancel = tasksToCancel.map((t) => t._id);
+          const customerIdsToClean = tasksToCancel.map((t) => t.person._id);
+
+          for (const taskToCancel of tasksToCancel) {
             await logAutoCancelTaskForZaloFailure(
               jobToCancel,
-              remainingTask,
+              taskToCancel,
               errorMessage,
             );
           }
-          console.log(
-            `   -> Đã ghi log hủy hàng loạt cho ${remainingTasks.length} task.`,
-          );
 
           // Bước 4: Cập nhật trạng thái và thống kê cho các task còn lại
           await ScheduledJob.updateOne(
@@ -287,17 +316,16 @@ export const GET = async () => {
                 "tasks.$[elem].status": "failed",
                 "tasks.$[elem].resultMessage": "Hủy do lỗi tài khoản Zalo",
               },
-              $inc: { "statistics.failed": remainingTasks.length },
+              $inc: { "statistics.failed": tasksToCancel.length },
             },
             {
-              arrayFilters: [{ "elem._id": { $in: remainingTaskIds } }],
+              arrayFilters: [{ "elem._id": { $in: taskIdsToCancel } }],
               session,
             },
           );
 
-          // Dọn dẹp customer refs
           await Customer.updateMany(
-            { _id: { $in: remainingCustomerIds } },
+            { _id: { $in: customerIdsToClean } },
             { $pull: { action: { job: jobId } } },
             { session },
           );
@@ -309,8 +337,8 @@ export const GET = async () => {
         const finalJobState = await ScheduledJob.findById(jobId)
           .session(session)
           .lean();
-        await archiveAndCleanupJob(finalJobState, "failed");
-        console.log(`   -> Đã lưu trữ và kết thúc chiến dịch.`);
+        // ** MODIFIED: Truyền session hiện có vào hàm archive để tránh lỗi WriteConflict
+        await archiveAndCleanupJob(finalJobState, "failed", session);
 
         await session.commitTransaction();
         revalidateAndBroadcast("zalo_accounts");
@@ -349,7 +377,6 @@ export const GET = async () => {
       // Sắp xếp TẤT CẢ CÁC TASK theo thời gian đến hạn
       { $sort: { "tasks.scheduledFor": 1 } },
       // Giới hạn số lượng task xử lý trong một lần chạy cron để tránh quá tải
-      { $limit: 20 },
       // Gom lại các thông tin cần thiết
       {
         $project: {
@@ -433,8 +460,8 @@ export const GET = async () => {
               },
             );
             await handleZaloTokenFailure(
-              jobId,
-              jobUpdate.zaloAccount._id,
+              jobUpdate, // Truyền vào toàn bộ object `jobUpdate`
+              task, // Truyền vào object `task`
               e.message,
             );
             continue;
@@ -612,7 +639,7 @@ export const GET = async () => {
         { status: { $in: ["scheduled", "processing"] } },
         { $set: { lastExecutionResult: `CRON FAILED: ${err.message}` } },
       );
-      revalidateAndBroadcast("running_jobs"); // Gửi tín hiệu cập nhật giao diện
+      revalidateAndBroadcast("running_jobs");
     } catch (updateError) {
       console.error(
         "Failed to update running jobs with critical error:",
@@ -624,5 +651,9 @@ export const GET = async () => {
       { message: "Lỗi nghiêm trọng trong CRON job.", error: err.message },
       { status: 500 },
     );
+  } finally {
+    // ** MODIFIED: LUÔN LUÔN NHẢ KHÓA **
+    await releaseLock();
+    console.log("CRON FINISHED: Đã giải phóng khóa.");
   }
 };
