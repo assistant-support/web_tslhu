@@ -60,6 +60,82 @@ const ActionHistory =
   mongoose.model("actionhistory", ActionHistorySchema);
 // --- END: Khai báo Models ---
 
+async function migrateCustomerUids() {
+  console.log("\n--- BẮT ĐẦU DI TRÚ DỮ LIỆU UID KHÁCH HÀNG ---");
+
+  // 1. Tìm tất cả customer có trường `uid` là kiểu string
+  const customersToMigrate = await Customer.find({
+    uid: { $type: "string", $ne: "" },
+  }).lean();
+
+  if (customersToMigrate.length === 0) {
+    console.log("✅ Không tìm thấy khách hàng nào có UID cũ cần di trú.");
+    return;
+  }
+
+  console.log(
+    `🔍 Tìm thấy ${customersToMigrate.length} khách hàng cần di trú UID...`,
+  );
+
+  const customerIds = customersToMigrate.map((c) => c._id);
+
+  // 2. Tìm tất cả lịch sử tìm UID liên quan đến các khách hàng này
+  const histories = await ActionHistory.find({
+    customer: { $in: customerIds },
+    action: "DO_SCHEDULE_FIND_UID",
+    "status.status": "SUCCESS", // Chỉ lấy các lần tìm thành công
+  })
+    .sort({ time: -1 }) // Sắp xếp để lấy lần gần nhất
+    .lean();
+
+  // 3. Tạo một map để tra cứu lịch sử nhanh: Map<customerId, history>
+  const historyMap = new Map();
+  for (const history of histories) {
+    const customerId = history.customer.toString();
+    // Chỉ lưu lịch sử gần nhất cho mỗi khách hàng
+    if (!historyMap.has(customerId)) {
+      historyMap.set(customerId, history);
+    }
+  }
+
+  // 4. Chuẩn bị các lệnh cập nhật hàng loạt (bulk write)
+  const bulkOperations = customersToMigrate.map((customer) => {
+    const latestHistory = historyMap.get(customer._id.toString());
+
+    if (latestHistory && latestHistory.zalo) {
+      // Nếu tìm thấy lịch sử, tạo mảng uid mới
+      const newUidArray = [
+        {
+          zaloId: latestHistory.zalo,
+          uid: customer.uid, // Giữ lại giá trị uid cũ
+        },
+      ];
+      return {
+        updateOne: {
+          filter: { _id: customer._id },
+          update: { $set: { uid: newUidArray } },
+        },
+      };
+    } else {
+      // Nếu không có lịch sử, xóa trường uid (đặt lại thành mảng rỗng)
+      return {
+        updateOne: {
+          filter: { _id: customer._id },
+          update: { $set: { uid: [] } },
+        },
+      };
+    }
+  });
+
+  // 5. Thực thi các lệnh cập nhật
+  if (bulkOperations.length > 0) {
+    const result = await Customer.bulkWrite(bulkOperations);
+    console.log(
+      `✨ Di trú thành công ${result.modifiedCount} bản ghi khách hàng!`,
+    );
+  }
+}
+
 /**
  * Logic để di trú dữ liệu cho collection 'zaloaccounts'.
  * Thêm các trường còn thiếu và sửa các giá trị mặc định bị sai.
@@ -546,6 +622,7 @@ async function runMigration() {
     await migrateScheduleIds();
     await fixMismatchedHistoryIds();
     await migrateAndCleanupHungJobs();
+    await migrateCustomerUids();
     await migrateUserRoles();
   } catch (error) {
     console.error("❌ Đã xảy ra lỗi trong quá trình di trú:", error);

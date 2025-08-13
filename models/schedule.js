@@ -5,7 +5,8 @@ const TaskSchema = new Schema({
     type: {
       name: String,
       phone: String,
-      uid: String,
+      // ** MODIFIED: Thay đổi kiểu dữ liệu để chấp nhận mảng uid
+      uid: Schema.Types.Mixed,
     },
     required: true,
   },
@@ -15,9 +16,9 @@ const TaskSchema = new Schema({
     default: "pending",
   },
   processingId: {
-    type: String, // Lưu một ID duy nhất của tiến trình CRON
+    type: String,
     default: null,
-    index: true, // Đánh index để tối ưu việc tìm kiếm
+    index: true,
   },
   processedAt: {
     type: Date,

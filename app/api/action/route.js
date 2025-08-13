@@ -48,7 +48,14 @@ const generateFinalMessage = (messageTemplate, variants) => {
 /**
  * Gửi yêu cầu đến script bên ngoài.
  */
-const executeExternalScript = async (type, acc, person, cfg, variants) => {
+const executeExternalScript = async (
+  type,
+  acc,
+  person,
+  cfg,
+  variants,
+  uidForAction,
+) => {
   let finalMessage = null;
   if (type === "sendMessage" && cfg.messageTemplate) {
     finalMessage = generateFinalMessage(cfg.messageTemplate, variants);
@@ -64,7 +71,8 @@ const executeExternalScript = async (type, acc, person, cfg, variants) => {
     body: JSON.stringify({
       uid: acc.uid,
       phone: person.phone,
-      uidPerson: person.uid || null,
+      // ** MODIFIED: Sử dụng uidForAction thay vì person.uid
+      uidPerson: uidForAction || null,
       actionType: type,
       message: finalMessage || "",
     }),
@@ -92,33 +100,51 @@ const updateDataAfterExecution = async ({
   actionType,
   apiResult,
   customerId,
+  zaloAccountId, // ++ ADDED: Thêm zaloAccountId để biết ai đã tìm
 }) => {
-  const customer = await Customer.findById(customerId).select("uid").lean();
-  if (!customer) return;
-
-  const updatePayload = {};
   const { uidStatus, targetUid, actionMessage, actionStatus } = apiResult;
+  if (!uidStatus) return; // Chỉ xử lý khi có kết quả liên quan đến UID
 
-  if (actionType === "findUid" || (actionType === "sendMessage" && uidStatus)) {
-    if (uidStatus === "found_new" && targetUid) {
-      updatePayload.uid = targetUid;
-    } else if (uidStatus === "provided" && actionStatus === "error") {
-      updatePayload.uid = null;
-    } else if (uidStatus === "not_found") {
-      if (actionMessage && actionMessage.includes("quá nhiều lần")) {
-        if (!customer.uid || !/^\d+$/.test(customer.uid)) {
-          updatePayload.uid = null;
-        }
-      } else {
-        updatePayload.uid = actionMessage || "Lỗi không xác định";
-      }
-    } else if (actionType === "findUid" && actionStatus === "error") {
-      updatePayload.uid = actionMessage || "Lỗi thực thi script";
-    }
+  let uidValue;
+  if (uidStatus === "found_new" && targetUid) {
+    uidValue = targetUid;
+  } else if (uidStatus === "provided" && actionStatus === "error") {
+    uidValue = "Lỗi: UID cung cấp không hợp lệ";
+  } else if (uidStatus === "not_found") {
+    uidValue =
+      actionMessage && actionMessage.includes("quá nhiều lần")
+        ? "Lỗi: Rate limit"
+        : "Lỗi: Không tìm thấy";
+  } else if (actionType === "findUid" && actionStatus === "error") {
+    uidValue = actionMessage || "Lỗi: Script không thực thi được";
+  } else {
+    return; // Không có gì để cập nhật
   }
 
-  if (Object.keys(updatePayload).length > 0) {
-    await Customer.updateOne({ _id: customerId }, { $set: updatePayload });
+  // Logic cập nhật mảng uid mới
+  const updateResult = await Customer.updateOne(
+    {
+      _id: customerId,
+      "uid.zaloId": zaloAccountId,
+    },
+    {
+      $set: { "uid.$.uid": uidValue },
+    },
+  );
+
+  // Nếu không tìm thấy (modifiedCount = 0), có nghĩa là chưa có entry cho zaloId này
+  if (updateResult.modifiedCount === 0) {
+    await Customer.updateOne(
+      { _id: customerId },
+      {
+        $push: {
+          uid: {
+            zaloId: zaloAccountId,
+            uid: uidValue,
+          },
+        },
+      },
+    );
   }
 };
 
@@ -237,7 +263,7 @@ export const GET = async () => {
     for (const job of timedOutJobs) {
       const tasksToFail = job.tasks.filter(
         (t) =>
-          t.status === "processing" && new Date(t.processedAt) < fiveMinutesAgo,
+          t.status === "processing" && new Date(t.processedAt) < tenMinutesAgo,
       );
       if (tasksToFail.length > 0) {
         const taskIdsToFail = tasksToFail.map((t) => t._id);
@@ -392,12 +418,18 @@ export const GET = async () => {
     ]);
 
     if (dueTasks.length === 0) {
-      // Logic dọn dẹp job bị treo vẫn giữ nguyên
-      const lingeringJobs = await ScheduledJob.find({
-        $where:
-          "this.statistics.total > 0 && (this.statistics.completed + this.statistics.failed) >= this.statistics.total",
-      });
-      for (const job of lingeringJobs) {
+      // ** MODIFIED: THAY THẾ $where BẰNG $expr ĐỂ SỬA LỖI **
+      const lingeringJobsOnEmpty = await ScheduledJob.find({
+        "statistics.total": { $gt: 0 },
+        $expr: {
+          $gte: [
+            { $add: ["$statistics.completed", "$statistics.failed"] },
+            "$statistics.total",
+          ],
+        },
+      }).lean(); // ++ ADDED: .lean() để tăng hiệu suất
+
+      for (const job of lingeringJobsOnEmpty) {
         console.log(`🧹 Dọn dẹp job bị treo (hết task): ${job.jobName}`);
         await archiveAndCleanupJob(job);
       }
@@ -432,6 +464,12 @@ export const GET = async () => {
         if (!jobUpdate) continue;
 
         let executionResult;
+        const uidArray = Array.isArray(task.person.uid) ? task.person.uid : [];
+        const relevantUidEntry = uidArray.find(
+          (entry) =>
+            entry.zaloId.toString() === jobUpdate.zaloAccount._id.toString(),
+        );
+        const uidForAction = relevantUidEntry ? relevantUidEntry.uid : null;
 
         try {
           const scriptResponse = await executeExternalScript(
@@ -440,6 +478,7 @@ export const GET = async () => {
             task.person,
             jobUpdate.config,
             allVariants,
+            uidForAction,
           );
           executionResult = {
             ...scriptResponse.scriptResult,
@@ -500,6 +539,12 @@ export const GET = async () => {
             statusName,
             executionResult,
             finalMessage: executionResult.finalMessage,
+          }),
+          updateDataAfterExecution({
+            actionType: jobUpdate.actionType,
+            apiResult: executionResult,
+            customerId: task.person._id,
+            zaloAccountId: jobUpdate.zaloAccount._id,
           }),
           Object.keys(customerUpdatePayload).length > 0
             ? Customer.updateOne(

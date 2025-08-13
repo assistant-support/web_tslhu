@@ -1,5 +1,21 @@
 import { Schema, model, models } from "mongoose";
 
+// ++ ADDED: Định nghĩa schema con cho mỗi mục UID
+const UidEntrySchema = new Schema(
+  {
+    zaloId: {
+      type: Schema.Types.ObjectId,
+      ref: "zaloaccount",
+      required: true,
+    },
+    uid: {
+      type: String,
+      required: true,
+    },
+  },
+  { _id: false },
+);
+
 const ActionRefSchema = new Schema(
   {
     job: { type: Schema.Types.ObjectId, ref: "scheduledjob", required: true },
@@ -56,7 +72,11 @@ const CustomerSchema = new Schema(
   {
     name: { type: String },
     phone: { type: String, required: true },
-    uid: { type: String },
+    // ** MODIFIED: Thay đổi cấu trúc của trường uid
+    uid: {
+      type: [UidEntrySchema],
+      default: [],
+    },
     status: {
       type: Schema.Types.ObjectId,
       ref: "status",
@@ -72,7 +92,7 @@ const CustomerSchema = new Schema(
   },
   {
     timestamps: true,
-    strict: false, // Vẫn giữ strict: false để lưu dữ liệu xét tuyển
+    strict: false,
   },
 );
 

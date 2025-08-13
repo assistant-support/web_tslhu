@@ -8,6 +8,7 @@ import Status from "@/models/status";
 import User from "@/models/users";
 import { revalidateTag } from "next/cache";
 import ActionHistory from "@/models/history";
+
 import { Types } from "mongoose";
 
 export async function Data_Client(searchParams = {}) {
@@ -17,84 +18,82 @@ export async function Data_Client(searchParams = {}) {
     const page = parseInt(searchParams.page) || 1;
     const limit = parseInt(searchParams.limit) || 50;
     const skip = (page - 1) * limit;
+    const { query: searchQuery, status, uidStatus, zaloActive } = searchParams;
 
-    const query = {};
+    // ** MODIFIED: Khởi tạo mảng $and để kết hợp các điều kiện
+    const queryConditions = [];
 
-    // ++ ADDED: LOGIC LỌC MỚI THEO UID FINDER
-    if (
-      searchParams.uidFinder &&
-      Types.ObjectId.isValid(searchParams.uidFinder)
-    ) {
-      // 1. Tìm các hành động tìm UID thành công gần nhất cho mỗi khách hàng
-      const latestFinds = await ActionHistory.aggregate([
-        {
-          $match: {
-            action: "DO_SCHEDULE_FIND_UID",
-            "status.status": "SUCCESS",
-          },
-        },
-        { $sort: { time: -1 } },
-        {
-          $group: {
-            _id: "$customer", // Nhóm theo ID khách hàng
-            lastFinder: { $first: "$zalo" }, // Lấy Zalo account của hành động gần nhất
-          },
-        },
-        {
-          $match: {
-            // 2. Lọc ra những nhóm mà Zalo account gần nhất trùng với bộ lọc
-            lastFinder: new Types.ObjectId(searchParams.uidFinder),
-          },
-        },
-        {
-          $project: {
-            _id: 1, // Chỉ lấy ra ID khách hàng
-          },
-        },
-      ]);
-
-      // 3. Lấy ra mảng các ID khách hàng hợp lệ
-      const customerIds = latestFinds.map((item) => item._id);
-
-      // Nếu không tìm thấy khách hàng nào, trả về mảng rỗng để không hiển thị gì
-      if (customerIds.length === 0) {
-        return {
-          data: [],
-          pagination: { page, limit, total: 0, totalPages: 1 },
-        };
-      }
-
-      // 4. Thêm điều kiện này vào query chính
-      query._id = { $in: customerIds };
-    }
-    // -- KẾT THÚC LOGIC LỌC MỚI --
-
-    if (searchParams.status) {
-      if (searchParams.status === "none") {
-        query.status = { $in: [null] };
+    if (status) {
+      if (status === "none") {
+        queryConditions.push({ status: { $in: [null, undefined] } });
       } else {
-        query.status = searchParams.status;
+        queryConditions.push({ status: new Types.ObjectId(status) });
       }
     }
 
-    if (searchParams.query) {
-      const searchRegex = new RegExp(searchParams.query, "i");
-      query.$or = [{ name: searchRegex }, { phone: searchRegex }];
+    if (searchQuery) {
+      const searchRegex = new RegExp(searchQuery, "i");
+      queryConditions.push({
+        $or: [{ name: searchRegex }, { phone: searchRegex }],
+      });
     }
 
-    if (searchParams.uidStatus) {
-      switch (searchParams.uidStatus) {
-        case "found":
-          query.uid = { $regex: /^\d+$/ };
-          break;
-        case "pending":
-          query.uid = { $in: [null, ""] };
-          break;
-        case "error":
-          query.uid = { $type: "string", $ne: "", $not: /^\d+$/ };
-          break;
+    // ** MODIFIED: Logic lọc UID hoàn toàn mới
+    if (uidStatus) {
+      if (zaloActive && Types.ObjectId.isValid(zaloActive)) {
+        // --- Lọc khi có tài khoản Zalo active ---
+        const zaloObjectId = new Types.ObjectId(zaloActive);
+        switch (uidStatus) {
+          case "found":
+            queryConditions.push({
+              uid: {
+                $elemMatch: {
+                  zaloId: zaloObjectId,
+                  uid: { $regex: /^\d+$/ },
+                },
+              },
+            });
+            break;
+          case "error":
+            queryConditions.push({
+              uid: {
+                $elemMatch: {
+                  zaloId: zaloObjectId,
+                  uid: { $not: /^\d+$/ },
+                },
+              },
+            });
+            break;
+          case "pending":
+            // Tìm những khách hàng KHÔNG CÓ entry nào khớp với zaloId này
+            queryConditions.push({ "uid.zaloId": { $ne: zaloObjectId } });
+            break;
+        }
+      } else {
+        // --- Trường hợp 2: Lọc TỔNG HỢP (không có Zalo active) ---
+        switch (uidStatus) {
+          case "found":
+            // Có ít nhất MỘT entry là UID hợp lệ
+            queryConditions.push({
+              uid: { $elemMatch: { uid: { $regex: /^\d+$/ } } },
+            });
+            break;
+          case "error":
+            // Có ít nhất MỘT entry là lỗi VÀ KHÔNG có entry nào là UID hợp lệ
+            queryConditions.push({
+              uid: { $elemMatch: { uid: { $not: /^\d+$/ } } },
+            });
+            break;
+          case "pending":
+            // Mảng uid rỗng
+            queryConditions.push({ uid: { $size: 0 } });
+            break;
+        }
       }
     }
+
+    // ** MODIFIED: Xây dựng query cuối cùng từ mảng điều kiện
+    const query = queryConditions.length > 0 ? { $and: queryConditions } : {};
 
     const clientsQuery = Client.find(query)
       .populate({ path: "status", model: Status, select: "name" })
@@ -112,7 +111,7 @@ export async function Data_Client(searchParams = {}) {
     // Thực thi cả hai truy vấn song song để tối ưu
     const [clientsFromDB, totalClients] = await Promise.all([
       clientsQuery,
-      Client.countDocuments(query), // Đảm bảo count cũng dùng chung query
+      Client.countDocuments(query),
     ]);
 
     clientsFromDB.forEach((client) => {

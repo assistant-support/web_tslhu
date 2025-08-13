@@ -84,6 +84,7 @@ const Row = React.memo(function Row({
   onRowClick,
   isUpdated,
   isActive,
+  activeZaloId,
 }) {
   const getLookupStatusType = (tinhTrang) => {
     if (tinhTrang === "Không có thông tin" || tinhTrang === "Lỗi tra cứu")
@@ -93,27 +94,69 @@ const Row = React.memo(function Row({
     if (tinhTrang) return "found";
     return "not-found";
   };
-  const renderUidBadge = (uid) => {
-    // Trường hợp 1: Có UID hợp lệ
-    if (uid && /^\d+$/.test(uid)) {
+  const renderUidBadge = (uidArray) => {
+    // ++ ADDED: Dòng code cốt lõi để sửa lỗi
+    // Nếu uidArray không phải là một mảng, hãy coi nó là một mảng rỗng.
+    const safeUidArray = Array.isArray(uidArray) ? uidArray : [];
+
+    // Trường hợp 1: Có tài khoản Zalo đang active
+    if (activeZaloId) {
+      // ** MODIFIED: Sử dụng mảng đã được làm sạch
+      const entry = safeUidArray.find((u) => u.zaloId === activeZaloId);
+      if (!entry) {
+        return (
+          <p className={styles.uidBadge} data-found="false">
+            - Chưa tìm
+          </p>
+        );
+      }
+      if (entry.uid && /^\d+$/.test(entry.uid)) {
+        return (
+          <p className={styles.uidBadge} data-found="true" title={entry.uid}>
+            ✅ Đã có
+          </p>
+        );
+      }
       return (
-        <p className={styles.uidBadge} data-found="true" title={uid}>
-          ✅ Đã có
+        <p className={styles.uidBadge} data-found="error" title={entry.uid}>
+          ❌ Lỗi
         </p>
       );
     }
-    // Trường hợp 2: Chưa tìm hoặc bị rate limit
-    if (uid === null || uid === "") {
+
+    // Trường hợp 2: Không có tài khoản Zalo active (tổng hợp)
+    // ** MODIFIED: Sử dụng mảng đã được làm sạch
+    if (safeUidArray.length === 0) {
       return (
         <p className={styles.uidBadge} data-found="false">
           - Chưa tìm
         </p>
       );
     }
-    // Trường hợp 3: Có lỗi tìm kiếm
+
+    // ** MODIFIED: Sử dụng mảng đã được làm sạch
+    const foundCount = safeUidArray.filter((u) => /^\d+$/.test(u.uid)).length;
+    const errorExists = safeUidArray.some((u) => !/^\d+$/.test(u.uid));
+
+    if (errorExists) {
+      return (
+        <p className={styles.uidBadge} data-found="error">
+          ❌ Lỗi ({safeUidArray.length})
+        </p>
+      );
+    }
+
+    if (foundCount > 0) {
+      return (
+        <p className={styles.uidBadge} data-found="true">
+          ✅ Đã có ({foundCount})
+        </p>
+      );
+    }
+
     return (
-      <p className={styles.uidBadge} data-found="error" title={uid}>
-        ❌ Lỗi
+      <p className={styles.uidBadge} data-found="false">
+        - Chưa tìm
       </p>
     );
   };
@@ -255,6 +298,7 @@ export default function ClientPage({
       if (name !== "page") {
         params.set("page", "1");
       }
+
       startTransition(() => {
         router.push(`${pathname}?${params.toString()}`);
       });
@@ -705,6 +749,7 @@ export default function ClientPage({
                   onRowClick={handleRowClick}
                   isUpdated={updatedIds.has(r._id)}
                   isActive={isActive}
+                  activeZaloId={user?.zaloActive?._id} // ++ ADDED: Truyền zaloActive ID xuống
                 />
               );
             },
