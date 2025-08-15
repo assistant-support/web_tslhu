@@ -36,15 +36,19 @@ export async function getZaloAccounts({ page = 1, limit = 0 } = {}) {
       query.skip(skip).limit(limit);
     }
 
-    const [accounts, total] = await Promise.all([
+    const [accountsFromDB, total] = await Promise.all([
       query.lean(),
       ZaloAccount.countDocuments({}),
     ]);
 
+    // ** ADDED: Thêm bước làm sạch dữ liệu để loại bỏ các bản ghi null/undefined
+    // Đây là lớp bảo vệ quan trọng nhất để sửa lỗi.
+    const cleanAccounts = accountsFromDB.filter(Boolean);
+
     return {
       success: true,
-      data: JSON.parse(JSON.stringify(accounts)),
-      // Pagination chỉ có ý nghĩa khi có limit
+      // ** MODIFIED: Trả về dữ liệu đã được làm sạch
+      data: JSON.parse(JSON.stringify(cleanAccounts)),
       pagination:
         limit > 0
           ? { page, limit, total, totalPages: Math.ceil(total / limit) }

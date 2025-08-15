@@ -4,9 +4,8 @@ import Customer from "@/models/customer";
 import ScheduledJob from "@/models/schedule";
 import ArchivedJob from "@/models/archivedJob";
 import Variant from "@/models/variant";
-import { revalidateTag } from "next/cache";
 import ZaloAccount from "@/models/zalo";
-import Lock from "@/models/lock"; // ++ ADDED: Import model Lock mới
+import Lock from "@/models/lock";
 import {
   logExecuteScheduleTask,
   logAutoCancelTask,
@@ -92,7 +91,7 @@ const executeExternalScript = async (
     if (e instanceof SyntaxError) {
       throw new Error(`Lỗi hệ thống: ${e.toString()}${textResponse}`);
     }
-    throw e; // Ném lại lỗi ban đầu nếu không phải lỗi parse
+    throw e;
   }
 };
 
@@ -100,10 +99,10 @@ const updateDataAfterExecution = async ({
   actionType,
   apiResult,
   customerId,
-  zaloAccountId, // ++ ADDED: Thêm zaloAccountId để biết ai đã tìm
+  zaloAccountId,
 }) => {
   const { uidStatus, targetUid, actionMessage, actionStatus } = apiResult;
-  if (!uidStatus) return; // Chỉ xử lý khi có kết quả liên quan đến UID
+  if (!uidStatus) return;
 
   let uidValue;
   if (uidStatus === "found_new" && targetUid) {
@@ -118,7 +117,7 @@ const updateDataAfterExecution = async ({
   } else if (actionType === "findUid" && actionStatus === "error") {
     uidValue = actionMessage || "Lỗi: Script không thực thi được";
   } else {
-    return; // Không có gì để cập nhật
+    return;
   }
 
   // Logic cập nhật mảng uid mới
@@ -175,11 +174,9 @@ const archiveAndCleanupJob = async (
       );
     }
 
-    // Bước 2: Lưu trữ job
     const archiveData = {
-      ...completedJob, // **MODIFIED: Chấp nhận cả object thuần
+      ...completedJob,
       _id: completedJob._id,
-      // ** MODIFIED: Sử dụng trạng thái cuối cùng được truyền vào
       status: finalStatus,
       completedAt: new Date(),
     };
@@ -194,6 +191,7 @@ const archiveAndCleanupJob = async (
       `[ARCHIVE FAILED] Lỗi khi lưu trữ Job ${completedJob._id}:`,
       error,
     );
+    throw error;
   } finally {
     if (!existingSession) session.endSession();
   }
@@ -204,7 +202,7 @@ const LOCK_TIMEOUT_MS = 15 * 60 * 1000;
 
 const acquireLock = async () => {
   const now = new Date();
-  const lock = await Lock.findOneAndUpdate(
+  const result = await Lock.updateOne(
     {
       _id: LOCK_ID,
       $or: [
@@ -215,7 +213,9 @@ const acquireLock = async () => {
     { $set: { isLocked: true, lockedAt: now } },
     { upsert: true, new: true },
   );
-  return !!lock;
+
+  // Nếu modifiedCount > 0, có nghĩa là chúng ta đã cập nhật và khóa thành công.
+  return result.modifiedCount > 0;
 };
 
 const releaseLock = async () => {
@@ -223,9 +223,8 @@ const releaseLock = async () => {
 };
 
 export const GET = async () => {
-  // ** MODIFIED: Di chuyển connectDB() lên trước acquireLock() **
   try {
-    await connectDB(); // <--- BƯỚC 1: KẾT NỐI DB TRƯỚC TIÊN
+    await connectDB();
 
     if (!(await acquireLock())) {
       console.log("CRON SKIPPED: Một tiến trình khác đang chạy.");
@@ -508,11 +507,7 @@ export const GET = async () => {
                   $inc: { "statistics.failed": 1 },
                 },
               );
-              await handleZaloTokenFailure(
-                jobUpdate, // Truyền vào toàn bộ object `jobUpdate`
-                task, // Truyền vào object `task`
-                e.message,
-              );
+              await handleZaloTokenFailure(jobUpdate, task, e.message);
               continue;
             }
           }
@@ -521,30 +516,20 @@ export const GET = async () => {
             executionResult.actionStatus === "success" ? "SUCCESS" : "FAILED";
           const resultMessage = executionResult.actionMessage || statusName;
 
-          // ** MODIFIED: Tái cấu trúc logic xử lý kết quả
-          const { uidStatus, targetUid, actionMessage } = executionResult;
-          const customerUpdatePayload = {};
-          if (uidStatus === "found_new" && targetUid) {
-            customerUpdatePayload.uid = targetUid;
-          } else if (uidStatus === "provided" && statusName === "FAILED") {
-            customerUpdatePayload.uid = null;
-          } else if (
-            uidStatus === "not_found" ||
-            (jobUpdate.actionType === "findUid" && statusName === "FAILED")
-          ) {
-            customerUpdatePayload.uid = actionMessage || "Lỗi không xác định";
-          }
-          const jobInfoForLogging = {
-            ...item,
-            zaloAccountId: item.zaloAccount,
-            jobId: item.jobId,
-          };
+          await ScheduledJob.updateOne(
+            { _id: jobId },
+            { $set: { lastExecutionResult: resultMessage } },
+          );
 
           // Thực hiện ghi log và cập nhật UID song song
           await Promise.all([
             logExecuteScheduleTask({
-              jobInfo: jobInfoForLogging,
-              task: task,
+              jobInfo: {
+                ...item,
+                zaloAccountId: item.zaloAccount,
+                jobId: item.jobId,
+              },
+              task,
               customerId: task.person._id,
               statusName,
               executionResult,
@@ -556,12 +541,6 @@ export const GET = async () => {
               customerId: task.person._id,
               zaloAccountId: jobUpdate.zaloAccount._id,
             }),
-            Object.keys(customerUpdatePayload).length > 0
-              ? Customer.updateOne(
-                  { _id: task.person._id },
-                  { $set: customerUpdatePayload },
-                )
-              : Promise.resolve(),
             Customer.updateOne(
               { _id: task.person._id },
               { $pull: { action: { job: jobId } } },
@@ -608,10 +587,6 @@ export const GET = async () => {
                       cancelScope,
                     );
                   }
-                  await ScheduledJob.updateOne(
-                    { _id: jobId },
-                    { $set: { lastExecutionResult: resultMessage } },
-                  );
 
                   await ScheduledJob.updateOne(
                     { _id: jobUpdate._id },
@@ -711,12 +686,21 @@ export const GET = async () => {
         { message: "Lỗi nghiêm trọng trong CRON job.", error: err.message },
         { status: 500 },
       );
-    } finally {
-      // ** MODIFIED: LUÔN LUÔN NHẢ KHÓA **
-      await releaseLock();
-      console.log("CRON FINISHED: Đã giải phóng khóa.");
     }
-  } catch (err) {
-    console.error("CRON JOB FAILED:", err);
+    // --- Kết thúc logic xử lý CRON JOB ---
+  } catch (initialError) {
+    // Bắt các lỗi xảy ra ở tầng cao nhất (như lỗi kết nối DB)
+    console.error("CRITICAL CRON ERROR:", initialError);
+    return NextResponse.json(
+      {
+        message: "Lỗi nghiêm trọng không thể bắt đầu CRON job.",
+        error: initialError.message,
+      },
+      { status: 500 },
+    );
+  } finally {
+    // ** MODIFIED: Đảm bảo giải phóng khóa dù có lỗi hay không
+    await releaseLock();
+    console.log("CRON FINISHED: Đã giải phóng khóa.");
   }
 };

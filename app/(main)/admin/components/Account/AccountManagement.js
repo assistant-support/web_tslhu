@@ -62,7 +62,10 @@ export default function AccountManagement() {
   const [pagination, setPagination] = useState({});
   const [isLoading, setIsLoading] = useState(true);
 
-  // ** MODIFIED: fetchData giờ sẽ xử lý phân trang từ server
+  // ** MODIFIED: Thêm bộ lọc để loại bỏ các giá trị không hợp lệ
+  const validAccounts = useMemo(() => accounts.filter(Boolean), [accounts]);
+
+  // ... (fetchData và các hàm xử lý khác không đổi)
   const fetchData = useCallback(async (page = 1, limit = 10) => {
     setIsLoading(true);
     const result = await getZaloAccounts({ page, limit });
@@ -104,7 +107,7 @@ export default function AccountManagement() {
       props: {
         accountId: account._id,
         onClose: () => closePanel(panelId),
-        onUpdate: handleSuccess, // Callback để làm mới danh sách sau khi gán user
+        onUpdate: handleSuccess,
       },
     });
   };
@@ -118,7 +121,7 @@ export default function AccountManagement() {
       props: {
         // Không truyền accountId để panel hiểu là đang ở chế độ "tạo mới"
         onClose: () => closePanel(panelId),
-        onUpdate: fetchData, // Tải lại bảng sau khi tạo thành công
+        onUpdate: fetchData,
       },
     });
   };
@@ -198,13 +201,15 @@ export default function AccountManagement() {
       <div style={{ flexGrow: 1, minHeight: 0 }}>
         <DataTable
           columns={columns}
-          data={accounts}
+          // ** MODIFIED: Truyền vào danh sách đã được lọc sạch
+          data={validAccounts}
           onRowClick={handleOpenDetails}
           activeRowId={activeAccountIds}
           showActions={true}
           onAddItem={handleAddItem}
           onDeleteItem={(id) => {
-            const itemToDelete = accounts.find((acc) => acc._id === id);
+            // ** MODIFIED: Tìm kiếm trên mảng gốc `accounts`
+            const itemToDelete = accounts.find((acc) => acc && acc._id === id);
             if (itemToDelete) handleDeleteItem(itemToDelete);
           }}
         />
