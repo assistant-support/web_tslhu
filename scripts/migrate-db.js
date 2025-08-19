@@ -649,7 +649,7 @@ async function runMigration() {
     // await standardizeZaloLimits();
     // await migrateScheduleIds();
     await fixMismatchedHistoryIds();
-    // await migrateAndCleanupHungJobs();
+    // await migrateAndCleanupHungJobs(); !!!
     await migrateCustomerUids();
     // await migrateUserRoles();
     // await migrateStatuses();
@@ -663,4 +663,4 @@ async function runMigration() {
 }
 
 // Chạy hàm di trú chính
-runMigration();
+// runMigration();

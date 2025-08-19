@@ -14,15 +14,9 @@ export default async function Page({ searchParams }) {
       getZaloAccounts(),
     ]);
 
-  // ** MODIFIED: Sửa lại cách truy cập searchParams cho đúng cú pháp
-  // searchParams ở đây là một plain object, không có phương thức .get()
-  const finalSearchParams = {
-    page: searchParams.page,
-    limit: searchParams.limit,
-    status: searchParams.status,
-    query: searchParams.query,
-    uidStatus: searchParams.uidStatus,
-  };
+  // ** MODIFIED: Truyền thẳng searchParams, không truy cập trực tiếp
+  // Tạo một bản sao để có thể thêm thuộc tính zaloActive
+  const finalSearchParams = await { ...searchParams };
 
   if (userData?.zaloActive?._id) {
     finalSearchParams.zaloActive = userData.zaloActive._id.toString();

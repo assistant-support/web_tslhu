@@ -12,7 +12,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import styles from "./index.module.css";
 import Setting from "./ui/setting";
 import { usePanels } from "@/contexts/PanelContext";
-import CustomerDetails from "./ui/details/CustomerDetails"; // Import nội dung chi tiết khách hàng
+import CustomerDetails from "./ui/details/CustomerDetails";
 import StageIndicator from "@/components/(ui)/progress/StageIndicator";
 import Loading from "@/components/(ui)/(loading)/loading";
 import dynamic from "next/dynamic";
@@ -317,7 +317,7 @@ export default function ClientPage({
         alert(
           `Trang không hợp lệ. Vui lòng nhập số từ 1 đến ${serverTotalPages}.`,
         );
-        setPageInput(serverPage); // Reset về trang hiện tại
+        setPageInput(serverPage);
       }
     }
   };
@@ -449,8 +449,7 @@ export default function ClientPage({
         title: `Chi tiết: ${customer.name}`,
         props: {
           customerData: customer,
-          onUpdateCustomer: handleUpdateAndReEnrich, // Truyền hàm xử lý duy nhất này
-          //... các props khác không đổi
+          onUpdateCustomer: handleUpdateAndReEnrich,
           statuses: initialStatuses,
           user: user,
           initialLabels: initialLabels,
@@ -606,7 +605,7 @@ export default function ClientPage({
           <label className="text_6">Lọc theo TK tìm UID:</label>
           <select
             className="input"
-            style={{ width: 250, padding: "6px 10px" }} // Tăng chiều rộng một chút
+            style={{ width: 250, padding: "6px 10px" }}
             value={searchParams.get("uidFinder") || ""}
             onChange={(e) => handleNavigation("uidFinder", e.target.value)}
           >
@@ -676,8 +675,8 @@ export default function ClientPage({
             <select
               id="statusFilter"
               className={styles.filterSelect}
-              value={searchParams.get("status") || ""}
-              onChange={(e) => handleNavigation("status", e.target.value)}
+              value={searchParams.get("filterStatus") || ""}
+              onChange={(e) => handleNavigation("filterStatus", e.target.value)}
             >
               <option value="">-- Tất cả --</option>
               <option value="none">Chưa có</option>
@@ -749,7 +748,7 @@ export default function ClientPage({
                   onRowClick={handleRowClick}
                   isUpdated={updatedIds.has(r._id)}
                   isActive={isActive}
-                  activeZaloId={user?.zaloActive?._id} // ++ ADDED: Truyền zaloActive ID xuống
+                  activeZaloId={user?.zaloActive?._id}
                 />
               );
             },
